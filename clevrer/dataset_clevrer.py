@@ -11,8 +11,8 @@ import torch
 from jacinle.utils.tqdm import tqdm
 from nscl.datasets.definition import gdef
 from nscl.datasets.common.vocab import Vocab
-
-set_debugger()
+torch.multiprocessing.set_sharing_strategy('file_system')
+#set_debugger()
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
