@@ -60,6 +60,8 @@ class NSCLDatasetUnwrapped(FilterableDatasetUnwrapped):
             self.vocab = gen_vocab(self)
 
     def _get_metainfo(self, index):
+        #import pdb
+        #pdb.set_trace()
         question = gdef.translate_question(self.questions[index])
         scene = gdef.translate_scene(self.scenes[question['image_index']])
         question['scene'] = scene
@@ -92,6 +94,21 @@ class NSCLDatasetUnwrapped(FilterableDatasetUnwrapped):
 
     def __getitem__(self, index):
         metainfo = GView(self.get_metainfo(index))
+        #import pdb
+        #pdb.set_trace()
+        new_index  = index
+        tar_prog_flag = False
+        tar_name = 'relate'
+
+        while not tar_prog_flag:
+            for pg in metainfo.program:
+                if tar_name in pg['function']:
+                    tar_prog_flag = True
+                    break
+            if not tar_prog_flag:
+                new_index +=1
+                metainfo = GView(self.get_metainfo(new_index))
+
         feed_dict = GView()
 
         # metainfo annotations

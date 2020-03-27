@@ -30,6 +30,7 @@ from jactorch.train import TrainerEnv
 from jactorch.utils.meta import as_float
 
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
+from clevrer.dataset_clevrer import build_clevrer_dataset  
 
 logger = get_logger(__file__)
 
@@ -67,7 +68,7 @@ parser.add_argument('--start-epoch', type=int, default=0, metavar='N', help='man
 parser.add_argument('--save-interval', type=int, default=2, metavar='N', help='model save interval (epochs) (default: 10)')
 
 # data related
-parser.add_argument('--dataset', required=True, choices=get_available_datasets(), help='dataset')
+parser.add_argument('--dataset', required=True, choices=['clevrer'], help='dataset')
 parser.add_argument('--data-dir', required=True, type='checked_dir', metavar='DIR', help='data directory')
 parser.add_argument('--data-trim', type=float, default=0, metavar='F', help='trim the dataset')
 parser.add_argument('--data-split',type=float, default=0.75, metavar='F', help='fraction / numer of training samples')
@@ -79,13 +80,21 @@ parser.add_argument('--extra-data-dir', type='checked_dir', metavar='DIR', help=
 parser.add_argument('--extra-data-scenes-json', type='checked_file', nargs='+', default=None, metavar='FILE', help='extra scene json file for validation')
 parser.add_argument('--extra-data-questions-json', type='checked_file', nargs='+', default=None, metavar='FILE', help='extra question json file for validation')
 
-parser.add_argument('--data-workers', type=int, default=0, metavar='N', help='the num of workers that input training data')
+parser.add_argument('--data-workers', type=int, default=4, metavar='N', help='the num of workers that input training data')
 
 # misc
 parser.add_argument('--use-gpu', type='bool', default=True, metavar='B', help='use GPU or not')
 parser.add_argument('--use-tb', type='bool', default=False, metavar='B', help='use tensorboard or not')
 parser.add_argument('--embed', action='store_true', help='entering embed after initialization')
 parser.add_argument('--force-gpu', action='store_true', help='force the script to use GPUs, useful when there exists on-the-ground devices')
+
+# for clevrer dataset
+parser.add_argument('--question_path', default='/home/zfchen/code/nsclClevrer/clevrer/questions')
+parser.add_argument('--tube_prp_path', default='/home/zfchen/code/nsclClevrer/clevrer/tubeProposals/1.0_1.0') 
+parser.add_argument('--frm_prp_path', default='/home/zfchen/code/nsclClevrer/clevrer/proposals')
+parser.add_argument('--frm_img_path', default='/home/zfchen/code/nsclClevrer/clevrer') 
+parser.add_argument('--frm_img_num', type=int, default=4)
+parser.add_argument('--img_size', type=int, default=256)
 
 args = parser.parse_args()
 
@@ -135,7 +144,6 @@ def main():
         )
     ))
 
-    #pdb.set_trace()
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -156,30 +164,19 @@ def main():
             args.tb_dir_root = ensure_path(osp.join(args.dump_dir, 'tensorboard'))
             args.tb_dir = ensure_path(osp.join(args.tb_dir_root, args.run_name))
 
-
     initialize_dataset(args.dataset)
-    build_dataset = get_dataset_builder(args.dataset)
-
-    dataset = build_dataset(args, configs, args.data_image_root, args.data_scenes_json, args.data_questions_json)
-    aa = dataset.__getitem__(0)
-    dataset_trim = int(len(dataset) * args.data_trim) if args.data_trim <= 1 else int(args.data_trim)
-    if dataset_trim > 0:
-        dataset = dataset.trim_length(dataset_trim)
-
-    dataset_split = int(len(dataset) * args.data_split) if args.data_split <= 1 else int(args.data_split)
-    train_dataset, validation_dataset = dataset.split_trainval(dataset_split)
-
+    # to replace dataset
+    train_dataset = build_clevrer_dataset(args, 'train')
+    #train_dataset.parse_program_dict()
+    #pdb.set_trace()
+    validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
-    if args.extra_data_dir is not None:
-        extra_dataset = build_dataset(args, configs, args.extra_data_image_root, args.extra_data_scenes_json, args.extra_data_questions_json)
-
     main_train(train_dataset, validation_dataset, extra_dataset)
 
 
 def main_train(train_dataset, validation_dataset, extra_dataset=None):
     logger.critical('Building the model.')
-    #pdb.set_trace()
-    model = desc.make_model(args, train_dataset.unwrapped.vocab)
+    model = desc.make_model(args, train_dataset.vocab)
 
     if args.use_gpu:
         model.cuda()
@@ -289,9 +286,9 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
                     logger.critical('Building the data loader. Curriculum = {}/{}, length = {}.'.format(*s[1:], len(this_train_dataset)))
                     break
 
+        #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
         train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=True, nr_workers=args.data_workers)
 
-        #pdb.set_trace()
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
 
@@ -335,12 +332,11 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
 
     trainer.trigger_event('epoch:before', trainer, epoch)
     train_iter = iter(train_dataloader)
-    #pdb.set_trace()
     end = time.time()
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
             feed_dict = next(train_iter)
-
+            #pdb.set_trace()
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
@@ -350,7 +346,7 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
             loss, monitors, output_dict, extra_info = trainer.step(feed_dict, cast_tensor=False)
             step_time = time.time() - end; end = time.time()
 
-            n = feed_dict['image'].size(0)
+            n = len(feed_dict)
             meters.update(loss=loss, n=n)
             meters.update(monitors, n=n)
             meters.update({'time/data': data_time, 'time/step': step_time})

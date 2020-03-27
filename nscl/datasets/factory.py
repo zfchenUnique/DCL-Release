@@ -40,18 +40,26 @@ class DatasetRegistry(RegistryGroup):
     __base_class__ = CallbackRegistry
 
 
+#import pdb
+#pdb.set_trace()
 dataset_registry = DatasetRegistry()
 
 
 def initialize_dataset(dataset):
     from nscl.datasets.definition import set_global_definition
-    def_class = dataset_registry.lookup('definition', dataset, fallback=False)
+    if dataset=='clevrer':
+        from  clevrer.definition_clevrer import CLEVRERDefinition
+        def_class = CLEVRERDefinition
+    else:
+        def_class = dataset_registry.lookup('definition', dataset, fallback=False)
     if def_class is None:
         raise ValueError('Unknown dataset: {}.'.format(dataset))
     set_global_definition(def_class())
 
 
 def get_available_datasets():
+    #import pdb
+    #pdb.set_trace()
     return dataset_registry['dataset'].keys()
 
 

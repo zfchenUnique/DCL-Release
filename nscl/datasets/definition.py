@@ -15,7 +15,7 @@ __all__ = ['DatasetDefinitionBase', 'get_global_definition', 'set_global_definit
 
 
 class DatasetDefinitionBase(object):
-    parameter_types = ['concept', 'relational_concept', 'attribute']
+    parameter_types = ['concept', 'relational_concept', 'attribute', 'temporal_concept']
     variable_types = ['object', 'object_set']
     return_types = ['word', 'integer', 'bool']
 
@@ -115,9 +115,12 @@ class GlobalDefinitionWrapper(object):
         return getattr(get_global_definition(), item)
 
     def __setattr__(self, key, value):
+        import pdb
+        pdb.set_trace()
         raise AttributeError('Cannot set the attr of `gdef`.')
 
-
+#import pdb
+#pdb.set_trace()
 gdef = GlobalDefinitionWrapper()
 
 
@@ -131,6 +134,8 @@ def get_global_definition():
 
 
 def set_global_definition(def_):
+    #import pdb
+    #pdb.set_trace()
     global _GLOBAL_DEF
     assert _GLOBAL_DEF is None
     _GLOBAL_DEF = def_

@@ -1,63 +1,49 @@
-#! /usr/bin/env python3
-# -*- coding: utf-8 -*-
-# File   : definition.py
-# Author : Jiayuan Mao
-# Email  : maojiayuan@gmail.com
-# Date   : 09/29/2018
-#
-# This file is part of NSCL-PyTorch.
-# Distributed under terms of the MIT license.
-
-"""
-Basic concepts in the CLEVR dataset.
-"""
-
-import six
-import numpy as np
-
-from jacinle.logging import get_logger
 from nscl.datasets.definition import DatasetDefinitionBase
-from .program_translator import clevr_to_nsclseq
+from jacinle.logging import get_logger
 
 logger = get_logger(__file__)
 
-__all__ = [
-    'CLEVRDefinition',
-    'build_clevr_dataset', 'build_symbolic_clevr_dataset',
-    'build_concept_retrieval_clevr_dataset', 'build_concept_quantization_clevr_dataset'
-]
 
-
-class CLEVRDefinition(DatasetDefinitionBase):
+class CLEVRERDefinition(DatasetDefinitionBase):
     operation_signatures = [
-        # Part 1: CLEVR dataset.
+        # Part 1: CLEVRER dataset.
         ('scene', [], [], 'object_set'),
         ('filter', ['concept'], ['object_set'], 'object_set'),
         ('relate', ['relational_concept'], ['object'], 'object_set'),
         ('relate_attribute_equal', ['attribute'], ['object'], 'object_set'),
         ('intersect', [], ['object_set', 'object_set'], 'object_set'),
         ('union', [], ['object_set', 'object_set'], 'object_set'),
+        
+        ('filter_order', ['concept'], ['object_set'], 'object_set'),
+        ('negate', [], ['bool'], 'bool'),
+        ('belong_to', [], ['object_set', 'object_set'], 'bool'),
+        ('end', [], ['object_set', 'object_set'], 'obejct_set'),
+        ('start', [], ['object_set', 'object_set'], 'obejct_set'),
+        ('filter_temporal', ['concept'], ['object_set'], 'object_set'),
 
         ('query', ['attribute'], ['object'], 'word'),
-        ('query_attribute_equal', ['attribute'], ['object', 'object'], 'bool'),
         ('exist', [], ['object_set'], 'bool'),
         ('count', [], ['object_set'], 'integer'),
         ('count_less', [], ['object_set', 'object_set'], 'bool'),
         ('count_equal', [], ['object_set', 'object_set'], 'bool'),
         ('count_greater', [], ['object_set', 'object_set'], 'bool'),
-        
     ]
 
     attribute_concepts = {
         'color': ['gray', 'red', 'blue', 'green', 'brown', 'purple', 'cyan', 'yellow'],
         'material': ['rubber', 'metal'],
-        'shape': ['cube', 'sphere', 'cylinder'],
-        'size': ['small', 'large']
+        'shape': ['cube', 'sphere', 'cylinder']
     }
 
     relational_concepts = {
-        'spatial_relation': ['left', 'right', 'front', 'behind']
+        'spatial_relation': ['left', 'right', 'front', 'behind'],
+        'events': ['collision']
     }
+
+    temporal_concepts ={
+        'events': ['moving', 'out', 'after', 'in', 'stationary', 'end', 'before', 'start'],
+        'order': ['first', 'second', 'last']
+            }
 
     synonyms = {
         "thing": ["thing", "object"],
@@ -153,68 +139,4 @@ class CLEVRDefinition(DatasetDefinitionBase):
             collate_guide['question_' + param_type + 's'] = 'skip'
         collate_guide['program_parserv1_groundtruth_qstree'] = 'skip'
         collate_guide['program_parserv1_candidates_qstree'] = 'skip'
-
-
-def build_clevr_dataset(args, configs, image_root, scenes_json, questions_json):
-    import jactorch.transforms.bbox as T
-    image_transform = T.Compose([
-        T.NormalizeBbox(),
-        T.Resize(configs.data.image_size),
-        T.DenormalizeBbox(),
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    from nscl.datasets.datasets import NSCLDataset
-    dataset = NSCLDataset(
-        scenes_json, questions_json,
-        image_root=image_root, image_transform=image_transform,
-        vocab_json=args.data_vocab_json
-    )
-
-    return dataset
-
-
-def build_concept_retrieval_clevr_dataset(args, configs, program, image_root, scenes_json):
-    import jactorch.transforms.bbox as T
-    image_transform = T.Compose([
-        T.NormalizeBbox(),
-        T.Resize(configs.data.image_size),
-        T.DenormalizeBbox(),
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    from nscl.datasets.datasets import ConceptRetrievalDataset
-    dataset = ConceptRetrievalDataset(
-        program, scenes_json,
-        image_root=image_root, image_transform=image_transform
-    )
-    return dataset
-
-
-def build_concept_quantization_clevr_dataset(args, configs, image_root, scenes_json):
-    import jactorch.transforms.bbox as T
-    image_transform = T.Compose([
-        T.NormalizeBbox(),
-        T.Resize(configs.data.image_size),
-        T.DenormalizeBbox(),
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-
-    from nscl.datasets.datasets import ConceptQuantizationDataset
-    dataset = ConceptQuantizationDataset(scenes_json, image_root=image_root, image_transform=image_transform)
-    return dataset
-
-
-def build_symbolic_clevr_dataset(args):
-    from nscl.datasets.datasets import NSCLDataset
-    dataset = NSCLDataset(
-        args.data_scenes_json, args.data_questions_json,
-        image_root=None, image_transform=None,
-        vocab_json=args.data_vocab_json
-    )
-
-    return dataset
 

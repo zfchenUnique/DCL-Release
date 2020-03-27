@@ -53,7 +53,8 @@ def nscltree_to_nsclseq(tree_program):
 def nsclseq_to_nsclqsseq(seq_program):
     qs_seq = deepcopy(seq_program)
     cached = defaultdict(list)
-
+    #import pdb
+    #pdb.set_trace()
     for sblock in qs_seq:
         for param_type in gdef.parameter_types:
             if param_type in sblock:
