@@ -79,6 +79,7 @@ class Model(ReasoningV1ModelForCLEVRER):
         else:
             outputs['monitors'] = monitors_list 
             outputs['buffers'] = buffers_list 
+            outputs['answer'] = buffers_list 
             return outputs
 
 
