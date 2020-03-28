@@ -145,7 +145,7 @@ def main():
         )
     ))
     if args.normalized_boxes:
-        args.dump_dir + args.dump_dir + '_norm_box'
+        args.dump_dir = args.dump_dir + '_norm_box'
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -290,7 +290,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
                     break
 
         #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
-        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=True, nr_workers=args.data_workers)
+        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
 
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
