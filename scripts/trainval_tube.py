@@ -375,24 +375,26 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                     feed_dict = async_copy_to(feed_dict, 0)
 
             data_time = time.time() - end; end = time.time()
-
-            output_dict, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
-            monitors = {meter_prefix + '/' + k: v for k, v in as_float(output_dict['monitors']).items()}
+            #pdb.set_trace()
+            output_dict_list, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
+            
             step_time = time.time() - end; end = time.time()
+            for idx, mon_dict  in enumerate(output_dict_list['monitors']): 
+                monitors = {meter_prefix + '/' + k: v for k, v in as_float(mon_dict).items()}
 
-            n = feed_dict['image'].size(0)
-            meters.update(monitors, n=n)
-            meters.update({'time/data': data_time, 'time/step': step_time})
+                n = len(feed_dict[idx]['answer'])
+                meters.update(monitors, n=n)
+                meters.update({'time/data': data_time, 'time/step': step_time})
 
-            if args.use_tb:
-                meters.flush()
+                if args.use_tb:
+                    meters.flush()
 
-            pbar.set_description(meters.format_simple(
-                'Epoch {} (validation)'.format(epoch),
-                {k: v for k, v in meters.val.items() if k.startswith('validation') and k.count('/') <= 2},
-                compressed=True
-            ))
-            pbar.update()
+                pbar.set_description(meters.format_simple(
+                    'Epoch {} (validation)'.format(epoch),
+                    {k: v for k, v in meters.val.items() if k.startswith('validation') and k.count('/') <= 2},
+                    compressed=True
+                ))
+                pbar.update()
 
             end = time.time()
 
