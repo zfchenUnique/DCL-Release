@@ -101,9 +101,12 @@ class SceneGraph(nn.Module):
             box_seq = feed_dict['tube_info']['box_seq']['tubes'][obj_id]
             box_list = []
             for box_id, box in enumerate(box_seq):
-                if box==[0, 0, 1, 1]:
-                    box =[0.0, 0, 0, 0]
-                box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
+                if isinstance(box, list):
+                    if box==[0, 0, 1, 1]:
+                        box =[0.0, 0, 0, 0]
+                    box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
+                elif isinstance(box, torch.Tensor):
+                    box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
                 box_list.append(box_tensor)
             box_seq_tensor = torch.stack(box_list, dim=0)
             tube_list.append(box_seq_tensor)

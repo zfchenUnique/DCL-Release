@@ -35,6 +35,8 @@ class clevrerDataset(Dataset):
         question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
         self.question_ann = jsonload(question_ann_full_path)
         self.vocab = gen_vocab(self)
+        self.W = 480
+        self.H = 320
 
     def parse_concepts_and_attributes(self):
         word_list = []
@@ -159,6 +161,26 @@ class clevrerDataset(Dataset):
             frm_list +=frm_ids  
         frm_list_unique = list(set(frm_list))
         tube_box_dict['frm_list'] = frm_list_unique  
+
+        if self.args.normalized_boxes:
+            
+            for tube_id, tmp_tube in enumerate(tube_info['tubes']):
+                tmp_dict = {}
+                frm_num = len(tmp_tube) 
+                for frm_id in range(frm_num):
+                    tmp_box = tmp_tube[frm_id]
+                    if tmp_box == [0, 0, 1, 1]:
+                        tmp_box = [0, 0, 0, 0]
+                    x_c = (tmp_box[0] + tmp_box[2])* 0.5
+                    y_c = (tmp_box[1] + tmp_box[3])* 0.5
+                    w = tmp_box[2] - tmp_box[0]
+                    h = tmp_box[3] - tmp_box[1]
+                    tmp_array = torch.tensor([x_c, y_c, w, h])
+                    tmp_array[0] = tmp_array[0] / self.W
+                    tmp_array[1] = tmp_array[1] / self.H
+                    tmp_array[2] = tmp_array[2] / self.W
+                    tmp_array[3] = tmp_array[3] / self.H
+                    tube_info['tubes'][tube_id][frm_id] = tmp_array 
         tube_box_dict['box_seq'] = tube_info  
 
         return tube_box_dict 

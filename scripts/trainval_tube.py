@@ -89,12 +89,13 @@ parser.add_argument('--embed', action='store_true', help='entering embed after i
 parser.add_argument('--force-gpu', action='store_true', help='force the script to use GPUs, useful when there exists on-the-ground devices')
 
 # for clevrer dataset
-parser.add_argument('--question_path', default='/home/zfchen/code/nsclClevrer/clevrer/questions')
-parser.add_argument('--tube_prp_path', default='/home/zfchen/code/nsclClevrer/clevrer/tubeProposals/1.0_1.0') 
-parser.add_argument('--frm_prp_path', default='/home/zfchen/code/nsclClevrer/clevrer/proposals')
-parser.add_argument('--frm_img_path', default='/home/zfchen/code/nsclClevrer/clevrer') 
+parser.add_argument('--question_path', default='../clevrer/questions')
+parser.add_argument('--tube_prp_path', default='../clevrer/tubeProposals/1.0_1.0') 
+parser.add_argument('--frm_prp_path', default='../clevrer/proposals')
+parser.add_argument('--frm_img_path', default='../clevrer') 
 parser.add_argument('--frm_img_num', type=int, default=4)
 parser.add_argument('--img_size', type=int, default=256)
+parser.add_argument('--normalized_boxes', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -143,7 +144,8 @@ def main():
             ('-' + args.expr if args.expr is not None else '')
         )
     ))
-
+    if args.normalized_boxes:
+        args.dump_dir + args.dump_dir + '_norm_box'
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -168,6 +170,7 @@ def main():
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
     #train_dataset.parse_program_dict()
+    #train_dataset.__getitem__(0)
     #pdb.set_trace()
     validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
