@@ -175,7 +175,7 @@ class clevrerDataset(Dataset):
                     y_c = (tmp_box[1] + tmp_box[3])* 0.5
                     w = tmp_box[2] - tmp_box[0]
                     h = tmp_box[3] - tmp_box[1]
-                    tmp_array = torch.tensor([x_c, y_c, w, h])
+                    tmp_array = np.array([x_c, y_c, w, h])
                     tmp_array[0] = tmp_array[0] / self.W
                     tmp_array[1] = tmp_array[1] / self.H
                     tmp_array[2] = tmp_array[2] / self.W

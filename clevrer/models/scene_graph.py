@@ -22,7 +22,7 @@ import jactorch.nn as jacnn
 from . import functional
 
 import pdb
-
+import numpy as np
 
 DEBUG = bool(int(os.getenv('DEBUG_SCENE_GRAPH', 0)))
 
@@ -105,7 +105,7 @@ class SceneGraph(nn.Module):
                     if box==[0, 0, 1, 1]:
                         box =[0.0, 0, 0, 0]
                     box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
-                elif isinstance(box, torch.Tensor):
+                elif isinstance(box, torch.Tensor) or  isinstance(box, np.ndarray) :
                     box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
                 box_list.append(box_tensor)
             box_seq_tensor = torch.stack(box_list, dim=0)
