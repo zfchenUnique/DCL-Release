@@ -139,7 +139,7 @@ class SceneGraph(nn.Module):
             boxes_tensor = torch.stack(boxes_list, 0).cuda()
             return boxes_tensor, tube_id_list
  
-       # pdb.set_trace()
+        #pdb.set_trace()
         for i in range(input.size(0)):
             boxes, tube_id_list = parse_boxes_for_frm(feed_dict, i)
 

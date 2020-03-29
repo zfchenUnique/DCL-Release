@@ -96,6 +96,7 @@ parser.add_argument('--frm_img_path', default='../clevrer')
 parser.add_argument('--frm_img_num', type=int, default=4)
 parser.add_argument('--img_size', type=int, default=256)
 parser.add_argument('--normalized_boxes', type=int, default=0)
+parser.add_argument('--even_smp_flag', type=int, default=0)
 
 args = parser.parse_args()
 

@@ -85,7 +85,10 @@ class clevrerDataset(Dataset):
        
        # getting image frames 
         tube_info = self.sample_tube_frames(scene_idx)
-        frm_dict = self.sample_frames(tube_info, self.args.frm_img_num)   
+        if self.args.even_smp_flag:
+            frm_dict = self.sample_frames_v2(tube_info, self.args.frm_img_num)   
+        else:
+            frm_dict = self.sample_frames(tube_info, self.args.frm_img_num)   
         frm_list = frm_dict['frm_list']
         H=0
         W=0
@@ -160,6 +163,63 @@ class clevrerDataset(Dataset):
             tube_box_dict[tube_id] = tmp_dict 
             frm_list +=frm_ids  
         frm_list_unique = list(set(frm_list))
+        frm_list_unique.sort()
+        tube_box_dict['frm_list'] = frm_list_unique  
+
+        if self.args.normalized_boxes:
+            
+            for tube_id, tmp_tube in enumerate(tube_info['tubes']):
+                tmp_dict = {}
+                frm_num = len(tmp_tube) 
+                for frm_id in range(frm_num):
+                    tmp_box = tmp_tube[frm_id]
+                    if tmp_box == [0, 0, 1, 1]:
+                        tmp_box = [0, 0, 0, 0]
+                    x_c = (tmp_box[0] + tmp_box[2])* 0.5
+                    y_c = (tmp_box[1] + tmp_box[3])* 0.5
+                    w = tmp_box[2] - tmp_box[0]
+                    h = tmp_box[3] - tmp_box[1]
+                    tmp_array = np.array([x_c, y_c, w, h])
+                    tmp_array[0] = tmp_array[0] / self.W
+                    tmp_array[1] = tmp_array[1] / self.H
+                    tmp_array[2] = tmp_array[2] / self.W
+                    tmp_array[3] = tmp_array[3] / self.H
+                    tube_info['tubes'][tube_id][frm_id] = tmp_array 
+        tube_box_dict['box_seq'] = tube_info  
+
+        return tube_box_dict 
+
+    def sample_frames_v2(self, tube_info, img_num):
+        tube_box_dict = {}
+        frm_num = len(tube_info['tubes'][0]) 
+        smp_diff = int(frm_num/img_num)
+        frm_list = list(range(0, frm_num, smp_diff))
+        for tube_id, tmp_tube in enumerate(tube_info['tubes']):
+            tmp_dict = {}
+            tmp_list = []
+            count_idx = 0
+            frm_ids = []
+            for frm_id in frm_list:
+                if tmp_tube[frm_id] == [0, 0, 1, 1]:
+                    continue 
+                tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
+                frm_ids.append(frm_id)
+                count_idx +=1
+            # make sure each tube has at least one rgb
+            if count_idx == 0:
+                for frm_id in range(frm_num):
+                    if tmp_tube[frm_id] == [0, 0, 1, 1]:
+                        continue 
+                    tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
+                    frm_ids.append(frm_id)
+                    count_idx +=1
+                    frm_list.append(frm_id) 
+
+            tmp_dict['boxes'] = tmp_list
+            tmp_dict['frm_name'] = frm_ids  
+            tube_box_dict[tube_id] = tmp_dict 
+        frm_list_unique = list(set(frm_list))
+        frm_list_unique.sort()
         tube_box_dict['frm_list'] = frm_list_unique  
 
         if self.args.normalized_boxes:
