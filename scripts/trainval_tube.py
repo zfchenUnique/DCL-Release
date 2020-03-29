@@ -150,6 +150,8 @@ def main():
         args.dump_dir = args.dump_dir + '_norm_box'
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_even_smp'
+    if args.even_smp_flag:
+        args.dump_dir = args.dump_dir + 'col_box_ftr'
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
