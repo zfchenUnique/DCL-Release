@@ -147,6 +147,8 @@ def main():
     ))
     if args.normalized_boxes:
         args.dump_dir = args.dump_dir + '_norm_box'
+    if args.even_smp_flag:
+        args.dump_dir = args.dump_dir + '_even_smp'
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
