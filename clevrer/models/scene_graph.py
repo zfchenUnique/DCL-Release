@@ -30,12 +30,16 @@ __all__ = ['SceneGraph']
 
 
 class SceneGraph(nn.Module):
-    def __init__(self, feature_dim, output_dims, downsample_rate):
+    def __init__(self, feature_dim, output_dims, downsample_rate, args=None):
         super().__init__()
         self.pool_size = 7
         self.feature_dim = feature_dim
         self.output_dims = output_dims
         self.downsample_rate = downsample_rate
+        self.args = args 
+
+        if self.args.rel_box_flag:
+            self.col_fuse = nn.Linear(128*4*4, output_dims[1]) 
 
         self.object_roi_pool = jacnn.PrRoIPool2D(self.pool_size, self.pool_size, 1.0 / downsample_rate)
         self.context_roi_pool = jacnn.PrRoIPool2D(self.pool_size, self.pool_size, 1.0 / downsample_rate)
@@ -112,8 +116,23 @@ class SceneGraph(nn.Module):
             tube_list.append(box_seq_tensor)
         tube_tensor = torch.stack(tube_list, dim=0).view(obj_num, -1)
         box_dim = min(128*4, tube_tensor.shape[1])
-        box_ftr[:,:box_dim] = tube_tensor 
-        return None, self._norm(obj_ftr), self._norm(rel_ftr), box_ftr  
+        box_ftr[:,:box_dim] = tube_tensor
+
+        rel_ftr_norm = self._norm(rel_ftr)
+        if self.args.rel_box_flag: 
+            rel_ftr_box = torch.zeros(obj_num, obj_num, 128*4*4, \
+                    dtype=outputs[0][1].dtype, device=outputs[0][1].device)
+            for obj_id1 in range(obj_num):
+                for obj_id2 in range(obj_num):
+                    tmp_ftr_minus = box_ftr[obj_id1] - box_ftr[obj_id2]
+                    tmp_ftr_mul = box_ftr[obj_id1] * box_ftr[obj_id2]
+                    tmp_ftr = torch.cat([tmp_ftr_minus, tmp_ftr_mul, box_ftr[obj_id1] , box_ftr[obj_id2]], dim=0)
+                    rel_ftr_box[obj_id1, obj_id2] = tmp_ftr 
+
+            rel_ftr_box_v2 = self.col_fuse(rel_ftr_box) 
+            rel_ftr_norm = torch.cat([rel_ftr_norm, rel_ftr_box_v2], dim=-1)
+
+        return None, self._norm(obj_ftr), rel_ftr_norm, box_ftr  
 
     def forward(self, input, feed_dict):
         object_features = input

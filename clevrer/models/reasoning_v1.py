@@ -67,9 +67,14 @@ class ReasoningV1ModelForCLEVRER(nn.Module):
 
         import clevrer.models.scene_graph as sng
         # number of channels = 256; downsample rate = 16.
-        self.scene_graph = sng.SceneGraph(256, configs.model.sg_dims, 16)
+        #pdb.set_trace()
+        self.scene_graph = sng.SceneGraph(256, configs.model.sg_dims, 16, args=configs)
+
+        #pdb.set_trace()
 
         import clevrer.models.quasi_symbolic as qs
+        if configs.rel_box_flag:
+            self.scene_graph.output_dims[2] = self.scene_graph.output_dims[2]*2
         self.reasoning = qs.DifferentiableReasoning(
             self._make_vse_concepts(configs.model.vse_large_scale, configs.model.vse_known_belong),
             self.scene_graph.output_dims, configs.model.vse_hidden_dims

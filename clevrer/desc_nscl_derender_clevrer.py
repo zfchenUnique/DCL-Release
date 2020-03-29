@@ -22,7 +22,8 @@ configs.train.qa_add_supervision = True
 import pdb
 
 class Model(ReasoningV1ModelForCLEVRER):
-    def __init__(self, vocab):
+    def __init__(self, vocab, args):
+        configs.rel_box_flag = args.rel_box_flag 
         super().__init__(vocab, configs)
 
     def forward(self, feed_dict_list):
@@ -84,4 +85,4 @@ class Model(ReasoningV1ModelForCLEVRER):
 
 
 def make_model(args, vocab):
-    return Model(vocab)
+    return Model(vocab, args)
