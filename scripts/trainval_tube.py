@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-# -*- coding: utf-8 -*-
+## -*- coding: utf-8 -*-
 # File   : trainval.py
 # Author : Jiayuan Mao
 # Email  : maojiayuan@gmail.com
@@ -140,18 +140,14 @@ args.configs.apply(configs)
 def main():
     args.dump_dir = ensure_path(osp.join(
         'dumps', args.series_name, args.desc_name, (
-            args.training_target +
-            ('-curriculum_' + args.curriculum) +
-            ('-qtrans_' + args.question_transform if args.question_transform is not None else '') +
-            ('-' + args.expr if args.expr is not None else '')
-        )
+            args.training_target)
     ))
     if args.normalized_boxes:
         args.dump_dir = args.dump_dir + '_norm_box'
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_even_smp'
     if args.even_smp_flag:
-        args.dump_dir = args.dump_dir + 'col_box_ftr'
+        args.dump_dir = args.dump_dir + '_col_box_ftr'
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
