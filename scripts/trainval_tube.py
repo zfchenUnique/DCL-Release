@@ -145,7 +145,7 @@ def main():
     if args.normalized_boxes:
         args.dump_dir = args.dump_dir + '_norm_box'
     if args.even_smp_flag:
-        args.dump_dir = args.dump_dir + '_even_smp'
+        args.dump_dir = args.dump_dir + '_even_smp'+str(args.frm_img_num)
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_col_box_ftr'
 
