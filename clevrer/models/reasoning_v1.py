@@ -30,13 +30,13 @@ def make_reasoning_v1_configs():
     configs.data.add_full_image_bbox = False
 
     # model configs for scene graph
-    configs.model.sg_dims = [None, 256, 256, 512]
+    configs.model.sg_dims = [None, 256, 256, 512, 512]
 
     # model ocnfigs for visual-semantic embeddings
     configs.model.vse_known_belong = False
     configs.model.vse_large_scale = False
     configs.model.vse_ls_load_concept_embeddings = False
-    configs.model.vse_hidden_dims = [None, 64, 64, 64]
+    configs.model.vse_hidden_dims = [None, 64, 64, 64, 128]
 
     # model configs for parser
     configs.model.word_embedding_dim = 300
@@ -75,6 +75,8 @@ class ReasoningV1ModelForCLEVRER(nn.Module):
         import clevrer.models.quasi_symbolic as qs
         if configs.rel_box_flag:
             self.scene_graph.output_dims[2] = self.scene_graph.output_dims[2]*2
+        if configs.dynamic_ftr_flag:
+            self.scene_graph.output_dims[2] = self.scene_graph.output_dims[2] + self.scene_graph.output_dims[3]*4
         self.reasoning = qs.DifferentiableReasoning(
             self._make_vse_concepts(configs.model.vse_large_scale, configs.model.vse_known_belong),
             self.scene_graph.output_dims, configs.model.vse_hidden_dims
@@ -114,6 +116,13 @@ class ReasoningV1ModelForCLEVRER(nn.Module):
                 'concepts': [
                     (v, k if known_belong else None)
                     for k, vs in gdef.temporal_concepts.items() for v in vs
+                ]
+            },
+            'time': {
+                'attributes': list(gdef.time_concepts.keys()),
+                'concepts': [
+                    (v, k if known_belong else None)
+                    for k, vs in gdef.time_concepts.items() for v in vs
                 ]
             }
         }

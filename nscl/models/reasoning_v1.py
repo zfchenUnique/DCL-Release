@@ -14,6 +14,8 @@ import jactorch.nn as jacnn
 from jacinle.logging import get_logger
 from nscl.configs.common import make_base_configs
 from nscl.datasets.definition import gdef
+import pdb
+
 
 logger = get_logger(__file__)
 
@@ -56,6 +58,8 @@ class ReasoningV1Model(nn.Module):
     def __init__(self, vocab, configs):
         super().__init__()
         self.vocab = vocab
+        
+        #pdb.set_trace()
 
         import jactorch.models.vision.resnet as resnet
         self.resnet = resnet.resnet34(pretrained=True, incl_gap=False, num_classes=None)

@@ -17,16 +17,20 @@ class CLEVRERDefinition(DatasetDefinitionBase):
         ('filter_order', ['concept'], ['object_set'], 'object_set'),
         ('negate', [], ['bool'], 'bool'),
         ('belong_to', [], ['object_set', 'object_set'], 'bool'),
-        ('end', [], ['object_set', 'object_set'], 'obejct_set'),
-        ('start', [], ['object_set', 'object_set'], 'obejct_set'),
-        ('filter_temporal', ['concept'], ['object_set'], 'object_set'),
+        ('filter_temporal', ['concept'], ['object_set', 'time_set'], 'object_set'),
 
         ('query', ['attribute'], ['object'], 'word'),
         ('exist', [], ['object_set'], 'bool'),
         ('count', [], ['object_set'], 'integer'),
-        ('count_less', [], ['object_set', 'object_set'], 'bool'),
-        ('count_equal', [], ['object_set', 'object_set'], 'bool'),
-        ('count_greater', [], ['object_set', 'object_set'], 'bool'),
+        ('get_frame', [], ['object_set', 'time_set'], 'object_set'),
+        ('filter_in', [], ['object'], 'time_set'),
+        ('filter_out', [], ['object'], 'time_set'),
+        ('filter_before', [], ['time_set'], ['object_set, time_set']),
+        ('filter_after', [], ['time_set'], ['object_set, time_set']),
+        ('end', [], ['object_set'], 'time_set'),
+        ('start', [], ['object_set'], 'time_set'),
+        ('filter_collision', [], ['time_set'], ['object_set, time_set']),
+        ('get_col_partner', [], ['object', 'col_set'], ['object_set']),
     ]
 
     attribute_concepts = {
@@ -36,14 +40,19 @@ class CLEVRERDefinition(DatasetDefinitionBase):
     }
 
     relational_concepts = {
-        'spatial_relation': ['left', 'right', 'front', 'behind'],
+        #'spatial_relation': ['left', 'right', 'front', 'behind'],
+        'order': ['first', 'second', 'last'],
         'events': ['collision']
     }
 
     temporal_concepts ={
-        'events': ['moving', 'out', 'after', 'in', 'stationary', 'end', 'before', 'start'],
-        'order': ['first', 'second', 'last']
+        'events': ['moving', 'after', 'stationary', 'before'],
+        'order': ['first', 'second', 'last'],
+        'scene': ['in', 'out' ]
             }
+    time_concepts ={
+        'time': ['start', 'end'],
+        }
 
     synonyms = {
         "thing": ["thing", "object"],

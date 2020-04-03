@@ -18,9 +18,10 @@ import json
 import numpy as np
 
 from PIL import Image
+import pdb
 
-DEBUG = os.getenv('REASONING_DEBUG', 'OFF').upper()
-
+DEBUG = os.getenv('REASONING_DEBUG', 'OFF').upper() 
+DEBUG='ALL'
 __all__ = ['make_debug_ctx', 'embed']
 
 
@@ -64,8 +65,11 @@ def embed(self, i, buffer, result, fd):
             p = p.argmax(-1).item()
             idx2word = {v: k for k, v in word2idx.items()}
             p = idx2word[p]
-        else:
+        elif fd['question_type'][i] == 'exist':
             p, l = int((p > 0).item()), int(l)
+        else:
+            p, l = int(p.item()), int(l)
+
 
         gogogo = False
         if p == l:
@@ -73,11 +77,14 @@ def embed(self, i, buffer, result, fd):
             if DEBUG in ('ALL', 'CORRECT'):
                 gogogo = True
         else:
-            print('Wrong: ', p, l)
+            #print('Wrong: ', p, l)
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
+                print('%s'%(fd['meta_ann']['questions'][i]['question']))
+                print('%s'%(fd['meta_ann']['questions'][i]['program']))
+                #pdb.set_trace()
 
-        if gogogo:
+        if gogogo and 0:
             print('Starting the tracker.')
             ctx = make_debug_ctx(fd, buffer, i)
             from IPython import embed; embed()

@@ -112,6 +112,7 @@ class SceneGraph(nn.Module):
                 elif isinstance(box, torch.Tensor) or  isinstance(box, np.ndarray) :
                     box_tensor = torch.tensor(box, dtype=outputs[0][1].dtype, device=outputs[0][1].device)
                 box_list.append(box_tensor)
+            # 128 * 4
             box_seq_tensor = torch.stack(box_list, dim=0)
             tube_list.append(box_seq_tensor)
         tube_tensor = torch.stack(tube_list, dim=0).view(obj_num, -1)

@@ -24,6 +24,7 @@ import pdb
 class Model(ReasoningV1ModelForCLEVRER):
     def __init__(self, vocab, args):
         configs.rel_box_flag = args.rel_box_flag 
+        configs.dynamic_ftr_flag = args.dynamic_ftr_flag 
         super().__init__(vocab, configs)
 
     def forward(self, feed_dict_list):
@@ -51,7 +52,8 @@ class Model(ReasoningV1ModelForCLEVRER):
             programs.append(tmp_prog)
         programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, fd=feed_dict_list)
         monitors_list = [] 
-        output_list = [] 
+        output_list = []
+        #pdb.set_trace()
         for idx, buffers  in enumerate(buffers_list): 
             monitors, outputs = {}, {}
             

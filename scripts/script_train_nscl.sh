@@ -3,7 +3,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube.py --desc clevrer/desc_nscl_derender_cl
     --training-target derender --curriculum all\
     --dataset clevrer --data-dir ../clevrer\
     --batch-size 4 --epoch 100 --validation-interval 5\
-    --save-interval 5 --data-split 0.95 --data-workers 2 \
+    --save-interval 2 --data-split 0.95 --data-workers 2 \
     --normalized_boxes 1 --frm_img_num 12 --even_smp_flag 1\
-    --rel_box_flag 1
+    --rel_box_flag 0 --acc-grad 4 --dynamic_ftr_flag 1 --version v4
 

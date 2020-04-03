@@ -32,6 +32,10 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
+from clevrer.utils import set_debugger
+
+set_debugger()
+
 logger = get_logger(__file__)
 
 parser = JacArgumentParser(description=__doc__.strip())
@@ -98,6 +102,8 @@ parser.add_argument('--img_size', type=int, default=256)
 parser.add_argument('--normalized_boxes', type=int, default=0)
 parser.add_argument('--even_smp_flag', type=int, default=0)
 parser.add_argument('--rel_box_flag', type=int, default=0)
+parser.add_argument('--dynamic_ftr_flag', type=int, default=0)
+parser.add_argument('--version', type=str, default='v0')
 
 args = parser.parse_args()
 
@@ -148,6 +154,7 @@ def main():
         args.dump_dir = args.dump_dir + '_even_smp'+str(args.frm_img_num)
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_col_box_ftr'
+    args.dump_dir +=  '_' + args.version 
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -172,8 +179,14 @@ def main():
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
     #train_dataset.parse_program_dict()
-    #train_dataset.__getitem__(0)
-    #pdb.set_trace()
+    #for ii in range(100):
+    #    feed_dict = train_dataset.__getitem__(ii)
+    #    for ques_info in feed_dict['meta_ann']['questions']:
+    #        for op in ques_info['program']:
+    #            if 'program_cl' not in ques_info.keys():
+    #                continue 
+    #            if 'collision' in op:
+    #                pdb.set_trace()
     validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
@@ -290,13 +303,14 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
                         this_train_dataset = this_train_dataset.filter_program_size_raw(max_program_size)
                     logger.critical('Building the data loader. Curriculum = {}/{}, length = {}.'.format(*s[1:], len(this_train_dataset)))
                     break
-
-        #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
+        #print('no shuffling')
+        #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=True, nr_workers=args.data_workers)
         train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
 
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
 
+        #if epoch % args.validation_interval == 0 or epoch==1:
         if epoch % args.validation_interval == 0:
             model.eval()
             validate_epoch(epoch, trainer, validation_dataloader, meters)

@@ -92,6 +92,12 @@ class ConceptBlock(nn.Module):
         return embedding
 
     @property
+    def softmax_normalized_embedding(self):
+        """softmax-normalized embedding in all spaces."""
+        embedding = F.softmax(self.embedding, dim=-1)
+        return embedding 
+
+    @property
     def log_normalized_belong(self):
         """Log-softmax-normalized belong vector."""
         return F.log_softmax(self.belong, dim=-1)

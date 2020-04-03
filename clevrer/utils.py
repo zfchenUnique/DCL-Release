@@ -41,7 +41,7 @@ def clevrer_to_nsclseq(clevr_program_ori):
     # remove useless program
     clevr_program = []
     for pg_idx, pg in enumerate(clevr_program_ori):
-        if pg=='get_col_partner':
+        if pg=='get_col_partner' and 0:
             if clevr_program[-1]=='unique':
                 uni_op = clevr_program.pop()
                 filter_op = clevr_program.pop()
@@ -62,6 +62,9 @@ def clevrer_to_nsclseq(clevr_program_ori):
     mapping = dict()
     exe_stack = []
     inputs_idx = 0
+    col_idx = -1
+    obj_num = 0
+    obj_stack = None
     for block_id, block in enumerate(clevr_program):
         if block == 'scene':
             current = dict(op='scene')
@@ -78,19 +81,44 @@ def clevrer_to_nsclseq(clevr_program_ori):
         elif block.startswith('filter_order'):
             concept = exe_stack.pop()
             current = dict(op=block, temporal_concept=[concept])
+            if len(nscl_program)>0:
+                last = nscl_program[-1]
+                if last['op']=='filter_collision':
+                    col_idx = inputs_idx +1 
         elif block.startswith('end'):
-            current = dict(op=block, temporal_concept=['end'])
+            current = dict(op=block, time_concept=['end'])
         elif block.startswith('start'):
-            current = dict(op=block, temporal_concept=['start'])
+            current = dict(op=block, time_concept=['start'])
         elif block.startswith('filter_collision'):
-            current = dict(op='relate', relational_concept=['collision'])
-        elif block.startswith('filter_in') or block.startswith('filter_out') or block.startswith('filter_after') or block == 'filter_before' or block == 'filter_stationary' or block == 'filter_moving':
+            current = dict(op='filter_collision', relational_concept=['collision'])
+            col_idx = inputs_idx + 1
+        elif block.startswith('filter_in') or block.startswith('filter_out'):
+            concept = block.split('_')[-1]
+            current = dict(op=block, time_concept=[concept])
+        elif block.startswith('filter_after') or block == 'filter_before':
+            concept = block.split('_')[-1]
+            current = dict(op=block, time_concept=[concept])
+        elif block == 'filter_stationary' or block == 'filter_moving':
             concept = block.split('_')[-1]
             current = dict(op='filter_temporal', temporal_concept=[concept])
         elif block.startswith('filter'):
             current = dict(op=block)
-        elif block == 'unique' or block == 'events' or block == 'objects' or block == 'get_col_partner' or block== 'get_frame' or block == 'all_events' or block == 'null' or block == 'get_object':
+        elif block == 'unique' or block == 'events' or block == 'all_events' or block == 'null' or block == 'get_object':
             continue 
+        elif block == 'get_frame':
+            if not (nscl_program[-1]['op']=='start' or nscl_program[-1]['op']=='end'):
+                continue 
+            current = dict(op=block)
+        elif block == 'objects': # fix bug on fitlering time
+            if len(clevr_program)>(block_id+1): 
+                next_op = clevr_program[block_id+1]
+                if next_op=='filter_collision':
+                    continue
+            current = dict(op=block)
+            obj_num +=1
+            if obj_num>1:
+                obj_stack = inputs_idx
+
         elif block in ALL_CONCEPTS:
             exe_stack.append(block)
             continue 
@@ -111,11 +139,20 @@ def clevrer_to_nsclseq(clevr_program_ori):
         if current is None:
             assert len(block['inputs']) == 1
         else:
-            current['inputs'] = [len(nscl_program) - 1]
-
-            if '_output' in block:
-                current['output'] = deepcopy(block['_output'])
-
+            if block =='end' or block == 'start':
+                current['inputs'] = []
+            elif block =='get_frame':
+                current['inputs'] = [inputs_idx - 1, inputs_idx ]
+            elif block =='get_col_partner':
+                current['inputs'] = [inputs_idx, col_idx]
+            elif block == 'filter_stationary' or block == 'filter_moving':
+                if obj_stack is not None: 
+                    current['inputs'] = [obj_stack, inputs_idx]
+                else:
+                    current['inputs'] = [inputs_idx]
+            else:
+                current['inputs'] = [inputs_idx]
+            inputs_idx +=1 
             nscl_program.append(current)
 
     return nscl_program
