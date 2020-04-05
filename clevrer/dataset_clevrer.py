@@ -2,7 +2,7 @@ from torch.utils.data import Dataset, DataLoader
 import pdb
 import os
 import sys
-from .utils import jsonload, pickleload, pickledump, transform_conpcet_forms_for_nscl, set_debugger     
+from .utils import jsonload, pickleload, pickledump, transform_conpcet_forms_for_nscl, set_debugger, decode_mask_to_xyxy      
 import argparse 
 from PIL import Image
 import copy
@@ -11,8 +11,11 @@ import torch
 from jacinle.utils.tqdm import tqdm
 from nscl.datasets.definition import gdef
 from nscl.datasets.common.vocab import Vocab
+import operator
+
 torch.multiprocessing.set_sharing_strategy('file_system')
 #set_debugger()
+_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -27,6 +30,59 @@ def gen_vocab(dataset):
 
     return vocab
 
+def mapping_detected_tubes_to_objects(tube_key_dict, gt_obj_list):
+    prp_id_to_gt_id = {}
+    gt_id_to_prp_id = {} 
+    for gt_obj in gt_obj_list:
+        max_score = -1
+        match_obj_id = -1
+        for obj_id, obj_prp in tube_key_dict.items():
+            match_score = 0
+            for attr, concept in obj_prp.items():
+                if concept == gt_obj[attr]:
+                    match_score +=1
+            if match_score >max_score:
+                match_obj_id =  obj_id #gt_obj['object_id']
+                max_score = match_score 
+        #prp_id_to_gt_id[obj_id] = match_obj_id  
+        gt_id_to_prp_id[gt_obj['object_id']] = match_obj_id 
+
+    for gt_id, prp_id in gt_id_to_prp_id.items():
+        prp_id_to_gt_id[prp_id] = gt_id 
+
+    return  prp_id_to_gt_id, gt_id_to_prp_id  
+
+def parse_static_attributes_for_tubes(tube_info, mask_gt, ratio):
+    tube_to_attribute ={}
+    for t_id, t_info in tube_info.items():
+        if not isinstance(t_id, int):
+            continue 
+        attr_dict = gdef.all_concepts_clevrer['attribute'] 
+        attr_dict_dict = {}
+        tube_to_attribute[t_id] ={}
+        for  attr_name, concept_list in attr_dict.items():
+            attr_dict_dict[attr_name] = {} 
+            for concept in concept_list:
+                attr_dict_dict[attr_name][concept] = 0
+
+        for f_idx, frm_id in enumerate(tube_info[t_id]['frm_name']):
+            frm_mask_info = mask_gt['frames'][frm_id]
+
+            for obj_info in frm_mask_info['objects']:
+                obj_bbx = decode_mask_to_xyxy(obj_info['mask'])
+                obj_bbx = torch.tensor(obj_bbx).float()
+                if torch.abs(obj_bbx*ratio-tube_info[t_id]['boxes'][f_idx]).sum()<1:
+                    for attr_name in attr_dict.keys():
+                        concept_name = obj_info[attr_name]
+                        attr_dict_dict[attr_name][concept_name] +=1
+                    break 
+        for attr_name, concept_dict in attr_dict_dict.items():
+            max_concept = max(concept_dict.items(), key=operator.itemgetter(1))[0]
+            tube_to_attribute[t_id][attr_name] = max_concept 
+
+    return tube_to_attribute  
+
+
 class clevrerDataset(Dataset):
     def __init__(self, args, phase, img_transform=None):
         self.args = args
@@ -35,8 +91,9 @@ class clevrerDataset(Dataset):
         question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
         self.question_ann = jsonload(question_ann_full_path)
         self.vocab = gen_vocab(self)
-        self.W = 480
-        self.H = 320
+        self.W = 480; self.H = 320
+        self._filter_program_types()
+
 
     def parse_concepts_and_attributes(self):
         word_list = []
@@ -71,8 +128,34 @@ class clevrerDataset(Dataset):
             #if op.startswith('query'):
             #    continue
             tar_list.append(op)
-
         pdb.set_trace()
+
+    def _filter_program_types(self):
+        new_question_ann = []
+        ori_ques_num = 0
+        filt_ques_num = 0
+        #pdb.set_trace()
+        for idx, meta_ann in enumerate(self.question_ann):
+            meta_new = copy.deepcopy(meta_ann)
+            meta_new['questions'] = []
+            for ques_info in meta_ann['questions']:
+                valid_flag = True
+                for pg in ques_info['program']:
+                    if pg in _ignore_list:
+                        valid_flag = False
+                        break
+                if not valid_flag:
+                    continue
+                if 'answer' not in ques_info.keys():
+                    continue 
+                meta_new['questions'].append(ques_info)
+            if len(meta_new['questions'])>0:
+                new_question_ann.append(meta_new)
+            filt_ques_num  +=len(meta_new['questions'])
+            ori_ques_num +=len(meta_ann['questions'])
+        print('Videos: oriinal: %d, target: %d\n'%(len(self.question_ann), len(new_question_ann)))
+        print('Questions: oriinal: %d, target: %d\n'%(ori_ques_num, filt_ques_num))
+        self.question_ann = new_question_ann 
 
     def __getitem__(self, index):
         #pdb.set_trace()
@@ -90,8 +173,7 @@ class clevrerDataset(Dataset):
         else:
             frm_dict = self.sample_frames(tube_info, self.args.frm_img_num)   
         frm_list = frm_dict['frm_list']
-        H=0
-        W=0
+        H=0; W=0
         img_list = []
         for i, frm in enumerate(frm_list): 
             img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm+1)+'.png')
@@ -116,15 +198,12 @@ class clevrerDataset(Dataset):
         
         # getting programs
         for q_id, ques_info in enumerate(meta_ann['questions']):
-            # ignoring temporal reasoning
-            ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
             valid_flag = True
             for pg in ques_info['program']:
-                if pg in ignore_list:
+                if pg in _ignore_list:
                     valid_flag = False
                     break
             if not valid_flag:
-                del meta_ann['questions'][q_id]
                 continue
             if 'answer' not in ques_info.keys():
                 continue 
@@ -138,7 +217,45 @@ class clevrerDataset(Dataset):
             meta_ann['questions'][q_id]['answer'] = ques_info['answer']
 
         data['meta_ann'] = meta_ann 
-        #data['meta_ann'] = meta_used 
+       
+        # adding scene supervision
+        if self.args.scene_supervision_flag:
+            mask_gt_path = os.path.join(self.args.mask_gt_path, 'proposal_'+str(scene_idx).zfill(5)+'.json') 
+            sub_idx = int(scene_idx/1000)
+            sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+            ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
+            scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
+            scene_gt = jsonload(scene_gt_path)
+            mask_gt = jsonload(mask_gt_path)
+            tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
+            # TODO: this may raise bug since it hack the data property for gt
+            prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+            for attri_group, attribute in gdef.all_concepts_clevrer.items():
+                if attri_group=='attribute':
+                    for attr, concept_group in attribute.items(): 
+                        attr_list = []
+                        obj_num = len(data['tube_info']) -2 
+                        for t_id in range(obj_num):
+                            concept_index = concept_group.index(tube_key_dict[t_id][attr])
+                            attr_list.append(concept_index)
+                        attr_key = attri_group + '_' + attr 
+                        data[attr_key] = torch.tensor(attr_list)
+                        #pdb.set_trace()
+                elif attri_group=='relation':
+                    for attr, concept_group in attribute.items(): 
+                        if attr=='events':
+                            obj_num = len(data['tube_info']) -2 
+                            rela_coll = torch.zeros(obj_num, obj_num)
+
+                            for event_id, event in enumerate(scene_gt['collision']):
+                                obj_id_pair = event['object_ids']
+                                gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
+                                prp_id1 = gt_id_to_prp_id[gt_id1]
+                                prp_id2 = gt_id_to_prp_id[gt_id2]
+                                rela_coll[prp_id1, prp_id2] = 1
+                                rela_coll[prp_id2, prp_id1] = 1
+                            attr_key = attri_group + '_' + 'collision'
+                            data[attr_key] = rela_coll 
         return data 
 
     def sample_frames(self, tube_info, img_num):
@@ -247,6 +364,9 @@ class clevrerDataset(Dataset):
 
     def sample_tube_frames(self, index):
         prp_full_path = os.path.join(self.args.tube_prp_path, 'proposal_' + str(index).zfill(5)+'.pk') 
+        # using gt proposal
+        if not os.path.isfile(prp_full_path):
+            prp_full_path = prp_full_path.replace('proposal', 'annotation')
         tube_info = pickleload(prp_full_path)
         return tube_info 
 

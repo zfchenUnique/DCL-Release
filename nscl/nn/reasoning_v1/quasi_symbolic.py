@@ -26,6 +26,7 @@ from nscl.datasets.common.program_executor import ParameterResolutionMode
 from nscl.datasets.definition import gdef
 from . import concept_embedding, concept_embedding_ls
 from . import quasi_symbolic_debug
+import pdb
 
 logger = get_logger(__file__)
 
@@ -338,7 +339,7 @@ class ProgramExecutorContext(nn.Module):
 class DifferentiableReasoning(nn.Module):
     def __init__(self, used_concepts, input_dims, hidden_dims, parameter_resolution='deterministic', vse_attribute_agnostic=False):
         super().__init__()
-
+        #pdb.set_trace()
         self.used_concepts = used_concepts
         self.input_dims = input_dims
         self.hidden_dims = hidden_dims
@@ -372,7 +373,7 @@ class DifferentiableReasoning(nn.Module):
 
     def forward(self, batch_features, progs, fd=None):
         assert len(progs) == len(batch_features)
-
+        #pdb.set_trace()
         programs = []
         buffers = []
         result = []
@@ -408,6 +409,7 @@ class DifferentiableReasoning(nn.Module):
                 elif op == 'filter_most':
                     buffer.append(ctx.filter_most(*inputs, block['relational_concept_idx'], block['relational_concept_values']))
                 elif op == 'relate':
+                    #pdb.set_trace()
                     buffer.append(ctx.relate(*inputs, block['relational_concept_idx'], block['relational_concept_values']))
                 elif op == 'relate_attribute_equal':
                     buffer.append(ctx.relate_ae(*inputs, block['attribute_idx'], block['attribute_values']))
@@ -428,16 +430,20 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'query_attribute_equal':
                         buffer.append(ctx.query_ae(*inputs, block['attribute_idx'], block['attribute_values']))
                     elif op == 'exist':
+                        pdb.set_trace()
                         buffer.append(ctx.exist(*inputs))
                     elif op == 'belong_to':
                         buffer.append(ctx.belong_to(*inputs))
                     elif op == 'count':
                         buffer.append(ctx.count(*inputs))
                     elif op == 'count_greater':
+                        pdb.set_trace()
                         buffer.append(ctx.count_greater(*inputs))
                     elif op == 'count_less':
+                        pdb.set_trace()
                         buffer.append(ctx.count_less(*inputs))
                     elif op == 'count_equal':
+                        pdb.set_trace()
                         buffer.append(ctx.count_equal(*inputs))
                     else:
                         raise NotImplementedError('Unsupported operation: {}.'.format(op))

@@ -47,7 +47,8 @@ def make_reasoning_v1_configs():
 
     # supervision configs
     configs.train.discount = 0.9
-    configs.train.scene_add_supervision = False
+    #configs.train.scene_add_supervision = False
+    configs.train.scene_add_supervision = True
     configs.train.qa_add_supervision = False
     configs.train.parserv1_reward_shape = 'loss'
 
@@ -55,10 +56,10 @@ def make_reasoning_v1_configs():
 
 
 class ReasoningV1ModelForCLEVRER(nn.Module):
-    def __init__(self, vocab, configs):
+    def __init__(self, vocab, configs, args=None):
         super().__init__()
         self.vocab = vocab
-        
+        self.args=args 
         #pdb.set_trace()
 
         import jactorch.models.vision.resnet as resnet
@@ -75,15 +76,18 @@ class ReasoningV1ModelForCLEVRER(nn.Module):
         import clevrer.models.quasi_symbolic as qs
         if configs.rel_box_flag:
             self.scene_graph.output_dims[2] = self.scene_graph.output_dims[2]*2
-        if configs.dynamic_ftr_flag:
+        if configs.dynamic_ftr_flag and (not self.args.box_only_for_collision_flag):
             self.scene_graph.output_dims[2] = self.scene_graph.output_dims[2] + self.scene_graph.output_dims[3]*4
+        elif configs.dynamic_ftr_flag and  self.args.box_only_for_collision_flag:
+            self.scene_graph.output_dims[2] = self.scene_graph.output_dims[3]*4
+        
         self.reasoning = qs.DifferentiableReasoning(
             self._make_vse_concepts(configs.model.vse_large_scale, configs.model.vse_known_belong),
-            self.scene_graph.output_dims, configs.model.vse_hidden_dims
+            self.scene_graph.output_dims, configs.model.vse_hidden_dims, args=self.args 
         )
 
         import clevrer.losses as vqa_losses
-        self.scene_loss = vqa_losses.SceneParsingLoss(gdef.all_concepts, add_supervision=configs.train.scene_add_supervision)
+        self.scene_loss = vqa_losses.SceneParsingLoss(gdef.all_concepts_clevrer, add_supervision=configs.train.scene_add_supervision, args=self.args)
         self.qa_loss = vqa_losses.QALoss(add_supervision=configs.train.qa_add_supervision)
 
     def train(self, mode=True):

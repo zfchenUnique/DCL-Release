@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from jacinle.utils.enum import JacEnum
 from nscl.nn.losses import MultitaskLossBase
 from nscl.datasets.definition import gdef
+from clevrer.models.quasi_symbolic import fuse_box_ftr 
 import pdb
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
@@ -24,12 +25,13 @@ __all__ = ['SceneParsingLoss', 'QALoss', 'ParserV1Loss']
 
 
 class SceneParsingLoss(MultitaskLossBase):
-    def __init__(self, used_concepts, add_supervision=False):
+    def __init__(self, used_concepts, add_supervision=False, args=None):
         super().__init__()
         self.used_concepts = used_concepts
         self.add_supervision = add_supervision
+        self.args = args
 
-    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding):
+    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, buffer=None):
         outputs, monitors = dict(), dict()
 
         #pdb.set_trace()
@@ -47,6 +49,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 all_scores.append(this_score)
 
             all_scores = torch.stack(all_scores, dim=-1)
+            #pdb.set_trace()
             all_labels = feed_dict['attribute_' + attribute]
 
             if all_labels.dim() == all_scores.dim() - 1:
@@ -77,50 +80,32 @@ class SceneParsingLoss(MultitaskLossBase):
                     for loss_key in ['loss/scene/attribute/' + attribute, 'loss/scene']:
                         monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
 
-            if 'attribute_relation_' + attribute not in feed_dict:
-                continue
 
-            cross_scores = []
-            for f in f_sng:
-                cross_scores.append(attribute_embedding.cross_similarity(f[1], attribute).view(-1))
-            cross_scores = torch.cat(cross_scores)
-            cross_labels = feed_dict['attribute_relation_' + attribute]
-
-            acc_key = 'acc/scene/attribute-relation/' + attribute
-            monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
-
-            # TODO(Jiayuan Mao @ 07/31): clean up these lines if we have confirmed that we don't need this.
-            if self.training and self.add_supervision:
-                this_loss = self._bce_loss(cross_scores, cross_labels.float())
-                if DEBUG_SCENE_LOSS and torch.isnan(this_loss).any():
-                    print('NAN! in object_same_loss. Starting the debugger')
-                    from IPython import embed; embed()
-                for loss_key in ['loss/scene/attribute-relation/' + attribute, 'loss/scene']:
-                    monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
-
-        if len(self.used_concepts['relation']) > 0:
-            relations = [f[2].view(-1, f[2].size(2)) for f in f_sng]
-            all_f = torch.cat(relations)
-            for relation, concepts in self.used_concepts['relation'].items():
-                if 'relation_' + relation not in feed_dict:
+        for relation, concepts in self.used_concepts['relation'].items():
+            for concept in concepts:
+                if 'relation_' + concept not in feed_dict:
                     continue
+                cross_scores = []
+                for f in f_sng:
+                    rel_box_ftr = fuse_box_ftr(f[3])
+                    if self.args.box_only_for_collision_flag and concept=='collision':
+                        rel_ftr_norm = rel_box_ftr
+                    else:
+                        rel_ftr_norm = torch.cat([f[2], rel_box_ftr], dim=-1)
+                    coll_mat = relation_embedding.similarity(rel_ftr_norm, concept)
+                    coll_mat +=coll_mat.transpose(1, 0)
+                    cross_scores.append(0.5*coll_mat.view(-1))
+                cross_scores = torch.cat(cross_scores)
+                cross_labels = feed_dict['relation_' + concept].view(-1)
 
-                all_scores = []
-                for v in concepts:
-                    this_score = relation_embedding.similarity(all_f, v)
-                    all_scores.append(this_score)
-                all_scores = torch.stack(all_scores, dim=-1)
-                all_labels = feed_dict['relation_' + relation]
-
-                acc_key = 'acc/scene/relation/' + relation
-                monitors[acc_key] = ((all_scores > 0).long() == all_labels.long()).float().mean()
-
+                acc_key = 'acc/scene/relation/' + concept
+                monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
                 if self.training and self.add_supervision:
-                    this_loss = self._bce_loss(all_scores, all_labels.float())
+                    this_loss = self._bce_loss(cross_scores, cross_labels.float())
                     if DEBUG_SCENE_LOSS and torch.isnan(this_loss).any():
-                        print('NAN! in relation_loss. Starting the debugger')
+                        print('NAN! in object_same_loss. Starting the debugger')
                         from IPython import embed; embed()
-                    for loss_key in ['loss/scene/relation/' + relation, 'loss/scene']:
+                    for loss_key in ['loss/scene/relation/' + concept, 'loss/scene']:
                         monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
 
         return monitors, outputs

@@ -39,6 +39,20 @@ __all__ = ['ConceptQuantizationContext', 'ProgramExecutorContext', 'Differentiab
 _apply_self_mask = {'relate': True, 'relate_ae': True}
 _fixed_start_end = True
 time_win = 10
+_symmetric_collision_flag=True
+
+
+def fuse_box_ftr(box_ftr):
+    obj_num, ftr_dim = box_ftr.shape
+    rel_ftr_box = torch.zeros(obj_num, obj_num, ftr_dim*4, \
+            dtype=box_ftr.dtype, device=box_ftr.device)
+    for obj_id1 in range(obj_num):
+        for obj_id2 in range(obj_num):
+            tmp_ftr_minus = box_ftr[obj_id1] - box_ftr[obj_id2]
+            tmp_ftr_mul = box_ftr[obj_id1] * box_ftr[obj_id2]
+            tmp_ftr = torch.cat([tmp_ftr_minus, tmp_ftr_mul, box_ftr[obj_id1] , box_ftr[obj_id2]], dim=0)
+            rel_ftr_box[obj_id1, obj_id2] = tmp_ftr 
+    return rel_ftr_box 
 
 def set_apply_self_mask(key, value):
     logger.warning('Set {}.apply_self_mask[{}] to {}.'.format(set_apply_self_mask.__module__, key, value))
@@ -55,9 +69,12 @@ class InferenceQuantizationMethod(JacEnum):
     NONE = 0
     STANDARD = 1
     EVERYTHING = 2
+    
 
 
 _test_quantize = InferenceQuantizationMethod.STANDARD
+#_test_quantize = InferenceQuantizationMethod.NONE
+#_test_quantize = InferenceQuantizationMethod.EVERYTHING 
 
 
 def set_test_quantize(mode):
@@ -138,9 +155,9 @@ class ConceptQuantizationContext(nn.Module):
 
 
 class ProgramExecutorContext(nn.Module):
-    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, training=True):
+    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, training=True, args=None):
         super().__init__()
-
+        self.args = args 
         self.features = features
         self.parameter_resolution = ParameterResolutionMode.from_string(parameter_resolution)
 
@@ -177,18 +194,20 @@ class ProgramExecutorContext(nn.Module):
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
                     return (selected > 0).float().sum()
+                #print('Debuging!')
                 return torch.sigmoid(selected).sum(dim=-1).round()
         elif len(selected.shape)==2:  # for collision
             # mask out the diag elelments for collisions
             obj_num = selected.shape[0]
             self_mask = 1- torch.eye(obj_num, dtype=selected.dtype, device=selected.device)
-            count_conf = self_mask * (selected+selected.transpose(1, 0))
+            count_conf = self_mask * (selected+selected.transpose(1, 0))*0.5
             if self.training:
-                return torch.sigmoid(count_conf).sum()/2
+                return torch.sigmoid(count_conf).sum()
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
-                    return (count_conf > 0).float().sum()/2
-                return torch.sigmoid(0.5*count_conf).sum().round()
+                    return (count_conf > 0).float().sum()
+                #print('Debuging!')
+                return torch.sigmoid(count_conf).sum().round()
 
     _count_margin = 0.25
     _count_tau = 0.25
@@ -443,20 +462,11 @@ class ProgramExecutorContext(nn.Module):
                 ftr = self.features[3]
             ftr = ftr.view(obj_num, -1)
 
-            def fuse_box_ftr(box_ftr):
-                obj_num, ftr_dim = box_ftr.shape
-                rel_ftr_box = torch.zeros(obj_num, obj_num, ftr_dim*4, \
-                        dtype=box_ftr.dtype, device=box_ftr.device)
-                for obj_id1 in range(obj_num):
-                    for obj_id2 in range(obj_num):
-                        tmp_ftr_minus = box_ftr[obj_id1] - box_ftr[obj_id2]
-                        tmp_ftr_mul = box_ftr[obj_id1] * box_ftr[obj_id2]
-                        tmp_ftr = torch.cat([tmp_ftr_minus, tmp_ftr_mul, box_ftr[obj_id1] , box_ftr[obj_id2]], dim=0)
-                        rel_ftr_box[obj_id1, obj_id2] = tmp_ftr 
-                return rel_ftr_box 
-
             rel_box_ftr = fuse_box_ftr(ftr)
-            rel_ftr_norm = torch.cat([self.features[k], rel_box_ftr], dim=-1)
+            if not self.args.box_only_for_collision_flag:
+                rel_ftr_norm = torch.cat([self.features[k], rel_box_ftr], dim=-1)
+            else:
+                rel_ftr_norm =  rel_box_ftr 
             # concatentate
             masks = list()
             for cg in concept_groups:
@@ -466,6 +476,9 @@ class ProgramExecutorContext(nn.Module):
                 for c in cg:
                     new_mask = self.taxnomy[k].similarity(rel_ftr_norm, c)
                     mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                    if _symmetric_collision_flag:
+                        mask = 0.5*(mask + mask.transpose(1, 0))
+                        #pdb.set_trace()
                 if k == 2 and _apply_self_mask['relate']:
                     mask = do_apply_self_mask(mask)
                 masks.append(mask)
@@ -545,12 +558,13 @@ class ProgramExecutorContext(nn.Module):
 
 
 class DifferentiableReasoning(nn.Module):
-    def __init__(self, used_concepts, input_dims, hidden_dims, parameter_resolution='deterministic', vse_attribute_agnostic=False):
+    def __init__(self, used_concepts, input_dims, hidden_dims, parameter_resolution='deterministic', vse_attribute_agnostic=False, args=None):
         super().__init__()
         self.used_concepts = used_concepts
         self.input_dims = input_dims
         self.hidden_dims = hidden_dims
         self.parameter_resolution = parameter_resolution
+        self.args= args 
         #pdb.set_trace()
 
         for i, nr_vars in enumerate(['attribute', 'relation', 'temporal', 'time']):
@@ -600,7 +614,7 @@ class DifferentiableReasoning(nn.Module):
 
                 ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
                         self.embedding_temporal, self.embedding_time, ctx_features,\
-                        parameter_resolution=self.parameter_resolution, training=self.training)
+                        parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
 
                 for block_id, block in enumerate(prog):
                     op = block['op']
@@ -663,7 +677,13 @@ class DifferentiableReasoning(nn.Module):
 
                     if not self.training and _test_quantize.value > InferenceQuantizationMethod.STANDARD.value:
                         if block_id != len(prog) - 1:
-                            buffer[-1] = -10 + 20 * (buffer[-1] > 0).float()
+                            if not isinstance(buffer[-1], tuple):
+                                buffer[-1] = -10 + 20 * (buffer[-1] > 0).float()
+                            else:
+                                buffer[-1] = list(buffer[-1])
+                                for out_id, out_value in enumerate(buffer[-1]):
+                                    buffer[-1][out_id] = -10 + 20 * (buffer[-1][out_id] > 0).float()
+                                buffer[-1] = tuple(buffer[-1])
 
                 result.append((op, buffer[-1]))
 

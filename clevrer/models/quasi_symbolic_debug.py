@@ -21,7 +21,6 @@ from PIL import Image
 import pdb
 
 DEBUG = os.getenv('REASONING_DEBUG', 'OFF').upper() 
-DEBUG='ALL'
 __all__ = ['make_debug_ctx', 'embed']
 
 
@@ -58,7 +57,9 @@ def make_debug_ctx(fd, buffer, i):
 
 
 def embed(self, i, buffer, result, fd):
+    DEBUG='ALL'
     if not self.training and DEBUG != 'OFF':
+    #if True:
         p, l = result[i][1], fd['answer'][i]
         if isinstance(p, tuple):
             p, word2idx = p
@@ -75,13 +76,15 @@ def embed(self, i, buffer, result, fd):
         if p == l:
             print('Correct:', p)
             if DEBUG in ('ALL', 'CORRECT'):
+                print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 gogogo = True
+                #pdb.set_trace()
         else:
-            #print('Wrong: ', p, l)
+            print('Wrong: ', p, l)
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
                 print('%s'%(fd['meta_ann']['questions'][i]['question']))
-                print('%s'%(fd['meta_ann']['questions'][i]['program']))
+                #print('%s'%(fd['meta_ann']['questions'][i]['program']))
                 #pdb.set_trace()
 
         if gogogo and 0:

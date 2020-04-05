@@ -86,6 +86,7 @@ parser.add_argument('--use-gpu', type='bool', default=True, metavar='B', help='u
 parser.add_argument('--use-tb', type='bool', default=False, metavar='B', help='use tensorboard or not')
 parser.add_argument('--embed', action='store_true', help='entering embed after initialization')
 parser.add_argument('--force-gpu', action='store_true', help='force the script to use GPUs, useful when there exists on-the-ground devices')
+parser.add_argument('--force-gpu', action='store_true', help='force the script to use GPUs, useful when there exists on-the-ground devices')
 
 args = parser.parse_args()
 

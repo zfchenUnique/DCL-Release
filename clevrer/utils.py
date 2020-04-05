@@ -18,6 +18,13 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
+
+def decode_mask_to_xyxy(mask):
+    bbx_xyxy = cocoMask.toBbox(mask)
+    bbx_xyxy[2] =  bbx_xyxy[2] + bbx_xyxy[0]
+    bbx_xyxy[3] =  bbx_xyxy[3] + bbx_xyxy[1]
+    return bbx_xyxy  
+
 def transform_conpcet_forms_for_nscl(pg_list):
     nsclseq = clevrer_to_nsclseq(pg_list)
     nsclqsseq  = nsclseq_to_nsclqsseq(nsclseq)

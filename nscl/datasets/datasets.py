@@ -95,7 +95,7 @@ class NSCLDatasetUnwrapped(FilterableDatasetUnwrapped):
     def __getitem__(self, index):
         metainfo = GView(self.get_metainfo(index))
         #import pdb
-        #pdb.set_trace()
+        pdb.set_trace()
         new_index  = index
         tar_prog_flag = False
         tar_name = 'relate'

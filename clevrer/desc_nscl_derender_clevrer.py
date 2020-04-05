@@ -25,7 +25,9 @@ class Model(ReasoningV1ModelForCLEVRER):
     def __init__(self, vocab, args):
         configs.rel_box_flag = args.rel_box_flag 
         configs.dynamic_ftr_flag = args.dynamic_ftr_flag 
-        super().__init__(vocab, configs)
+        configs.train.scene_add_supervision = args.scene_add_supervision 
+        self.args = args
+        super().__init__(vocab, configs, args)
 
     def forward(self, feed_dict_list):
         #feed_dict = GView(feed_dict)
@@ -45,6 +47,8 @@ class Model(ReasoningV1ModelForCLEVRER):
             for ques in feed_dict['meta_ann']['questions']:
                 if 'answer' not in ques.keys():
                     continue 
+                if 'program_cl' not in ques.keys():
+                    continue 
                 if 'program_cl' in ques.keys():
                     tmp_prog.append(ques['program_cl'])
                 feed_dict['answer'].append(ques['answer'])
@@ -62,7 +66,7 @@ class Model(ReasoningV1ModelForCLEVRER):
             feed_dict = feed_dict_list[idx]
             f_sng = [f_sng_list[idx]]
             answers = answers_list[idx]
-
+            
             update_from_loss_module(monitors, outputs, self.scene_loss(
                 feed_dict, f_sng,
                 self.reasoning.embedding_attribute, self.reasoning.embedding_relation
@@ -72,11 +76,11 @@ class Model(ReasoningV1ModelForCLEVRER):
             monitors_list.append(monitors)
             output_list.append(outputs)
 
-        loss = 0 
+        loss = 0
         if self.training:
             for monitors in monitors_list:
                 loss += monitors['loss/qa']
-                if configs.train.scene_add_supervision:
+                if self.args.scene_add_supervision:
                     loss = loss + monitors['loss/scene']
             return loss/len(monitors_list), monitors, outputs
         else:

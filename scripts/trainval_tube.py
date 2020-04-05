@@ -104,6 +104,11 @@ parser.add_argument('--even_smp_flag', type=int, default=0)
 parser.add_argument('--rel_box_flag', type=int, default=0)
 parser.add_argument('--dynamic_ftr_flag', type=int, default=0)
 parser.add_argument('--version', type=str, default='v0')
+parser.add_argument('--scene_supervision_flag', type=int, default=0)
+parser.add_argument('--scene_gt_path', type=str, default='../clevrer')
+parser.add_argument('--mask_gt_path', type=str, default='../clevrer/proposals/')
+parser.add_argument('--box_only_for_collision_flag', type=int, default=0)
+parser.add_argument('--scene_add_supervision', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -179,8 +184,9 @@ def main():
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
     #train_dataset.parse_program_dict()
-    #for ii in range(100):
+    #for ii in range(1, 100):
     #    feed_dict = train_dataset.__getitem__(ii)
+    #    pdb.set_trace()
     #    for ques_info in feed_dict['meta_ann']['questions']:
     #        for op in ques_info['program']:
     #            if 'program_cl' not in ques_info.keys():
@@ -387,7 +393,8 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
 
 def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validation'):
     end = time.time()
-    with tqdm_pbar(total=len(val_dataloader)) as pbar:
+    #pdb.set_trace()
+    with tqdm_pbar(total=len(val_dataloader)*val_dataloader.batch_size) as pbar:
         for feed_dict in val_dataloader:
             if args.use_gpu:
                 if not args.gpu_parallel:
@@ -416,7 +423,7 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                 pbar.update()
 
             end = time.time()
-
+    #pdb.set_trace()
 
 if __name__ == '__main__':
     main()

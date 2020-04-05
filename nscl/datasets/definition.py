@@ -15,13 +15,22 @@ __all__ = ['DatasetDefinitionBase', 'get_global_definition', 'set_global_definit
 
 
 class DatasetDefinitionBase(object):
-    parameter_types = ['concept', 'relational_concept', 'attribute', 'temporal_concept']
+    parameter_types = ['concept', 'relational_concept', 'attribute', 'temporal_concept', 'time_concept']
     variable_types = ['object', 'object_set']
     return_types = ['word', 'integer', 'bool']
 
     extra_embeddings = list()
 
     operation_signatures = dict()
+
+    @cached_property
+    def all_concepts_clevrer(self):
+        return {
+            'attribute': self.attribute_concepts,
+            'relation': self.relational_concepts,
+            'temporal': self.temporal_concepts,
+            'time': self.time_concepts
+        }
 
     @cached_property
     def operation_signatures_dict(self):

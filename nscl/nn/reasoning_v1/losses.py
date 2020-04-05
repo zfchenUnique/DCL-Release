@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from jacinle.utils.enum import JacEnum
 from nscl.nn.losses import MultitaskLossBase
 from nscl.datasets.definition import gdef
+import pdb
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
@@ -30,6 +31,8 @@ class SceneParsingLoss(MultitaskLossBase):
 
     def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding):
         outputs, monitors = dict(), dict()
+
+        pdb.set_trace()
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)
@@ -175,6 +178,7 @@ class QALoss(MultitaskLossBase):
                 gt = word2idx[gt]
                 loss = self._xent_loss
             elif response_query_type == 'bool':
+                #pdb.set_trace()
                 argmax = int((a > 0).item())
                 outputs['answer'].append(argmax)
                 gt = int(gt)

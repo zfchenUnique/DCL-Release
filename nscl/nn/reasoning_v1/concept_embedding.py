@@ -179,7 +179,6 @@ class ConceptEmbedding(nn.Module):
 
         margin = self._margin
         logits = ((query_mapped * reference).sum(dim=-1) - 1 + margin) / margin / self._tau
-
         belong = jactorch.add_dim_as_except(concept.log_normalized_belong, logits, -1)
         logits = jactorch.logsumexp(logits + belong, dim=-1)
 

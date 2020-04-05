@@ -40,7 +40,6 @@ class CLEVRERDefinition(DatasetDefinitionBase):
     }
 
     relational_concepts = {
-        #'spatial_relation': ['left', 'right', 'front', 'behind'],
         'order': ['first', 'second', 'last'],
         'events': ['collision']
     }
