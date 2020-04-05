@@ -15,7 +15,8 @@ import operator
 
 torch.multiprocessing.set_sharing_strategy('file_system')
 #set_debugger()
-_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
+#_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
+_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_moving', 'filter_stationary', 'filter_order']
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -366,7 +367,10 @@ class clevrerDataset(Dataset):
         prp_full_path = os.path.join(self.args.tube_prp_path, 'proposal_' + str(index).zfill(5)+'.pk') 
         # using gt proposal
         if not os.path.isfile(prp_full_path):
-            prp_full_path = prp_full_path.replace('proposal', 'annotation')
+            if 'proposal' in prp_full_path:
+                prp_full_path = prp_full_path.replace('proposal', 'annotation')
+            elif 'annotation' in prp_full_path:
+                prp_full_path = prp_full_path.replace('annotation', 'proposal')
         tube_info = pickleload(prp_full_path)
         return tube_info 
 
