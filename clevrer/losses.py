@@ -85,7 +85,7 @@ class SceneParsingLoss(MultitaskLossBase):
             for concept in concepts:
                 if 'relation_' + concept not in feed_dict:
                     continue
-                pdb.set_trace()
+                #pdb.set_trace()
                 cross_scores = []
                 for f in f_sng:
                     rel_box_ftr = fuse_box_ftr(f[3])
