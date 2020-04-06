@@ -61,8 +61,13 @@ class MultitaskLossBase(nn.Module):
     def _mse_loss(self, pred, label):
         return (pred - label).abs()
 
-    def _bce_loss(self, pred, label):
-        return -( jactorch.log_sigmoid(pred) * label + jactorch.log_sigmoid(-pred) * (1 - label) ).mean()
+    def _bce_loss(self, pred, label, label_weight=None):
+        if label_weight is None:
+            return -( jactorch.log_sigmoid(pred) * label + jactorch.log_sigmoid(-pred) * (1 - label) ).mean()
+        else:
+            return -( jactorch.log_sigmoid(pred) * label*label_weight[1] + \
+                    jactorch.log_sigmoid(-pred) * (1 - label) * label_weight[0]).mean()
+
 
     def _xent_loss(self, pred, label):
         logp = F.log_softmax(pred, dim=-1)

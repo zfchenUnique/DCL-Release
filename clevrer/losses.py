@@ -85,6 +85,7 @@ class SceneParsingLoss(MultitaskLossBase):
             for concept in concepts:
                 if 'relation_' + concept not in feed_dict:
                     continue
+                pdb.set_trace()
                 cross_scores = []
                 for f in f_sng:
                     rel_box_ftr = fuse_box_ftr(f[3])
@@ -101,7 +102,11 @@ class SceneParsingLoss(MultitaskLossBase):
                 acc_key = 'acc/scene/relation/' + concept
                 monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
                 if self.training and self.add_supervision:
-                    this_loss = self._bce_loss(cross_scores, cross_labels.float())
+                    label_len = cross_labels.shape[0]
+                    pos_num = cross_labels.sum()
+                    neg_num = label_len - pos_num 
+                    label_weight = [pos_num*1.0/label_len, neg_num*1.0/label_len]
+                    this_loss = self._bce_loss(cross_scores, cross_labels.float(), label_weight)
                     if DEBUG_SCENE_LOSS and torch.isnan(this_loss).any():
                         print('NAN! in object_same_loss. Starting the debugger')
                         from IPython import embed; embed()
