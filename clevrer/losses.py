@@ -93,7 +93,7 @@ class SceneParsingLoss(MultitaskLossBase):
                         rel_ftr_norm = rel_box_ftr
                     else:
                         rel_ftr_norm = torch.cat([f[2], rel_box_ftr], dim=-1)
-                    coll_mat = relation_embedding.similarity(rel_ftr_norm, concept)
+                    coll_mat = relation_embedding.similarity_collision(rel_ftr_norm, concept)
                     coll_mat +=coll_mat.transpose(1, 0)
                     cross_scores.append(0.5*coll_mat.view(-1))
                 cross_scores = torch.cat(cross_scores)

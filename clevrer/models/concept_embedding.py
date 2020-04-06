@@ -175,7 +175,7 @@ class ConceptEmbedding(nn.Module):
     _tau = 0.25
 
 
-    def similarity_video(self, query, identifier):
+    def similarity_collision(self, query, identifier):
 
         #pdb.set_trace()
 
@@ -188,6 +188,8 @@ class ConceptEmbedding(nn.Module):
         reference = jactorch.add_dim_as_except(concept.normalized_embedding, query_mapped, -2, -1)
 
         margin = self._margin
+        margin = 1
+        self._tau = 0.2
         logits = ((query_mapped * reference).sum(dim=-1) - 1 + margin) / margin / self._tau
 
         belong = jactorch.add_dim_as_except(concept.log_normalized_belong, logits, -1)

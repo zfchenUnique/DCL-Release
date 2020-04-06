@@ -215,7 +215,7 @@ class ProgramExecutorContext(nn.Module):
     def relate(self, selected, group, concept_groups):
         if isinstance(selected, tuple):
             selected = selected[0]
-        pdb.set_trace()
+        #pdb.set_trace()
         mask = self._get_concept_groups_masks(concept_groups, 2)
         mask = (mask * selected.unsqueeze(-1).unsqueeze(0)).sum(dim=-2)
         if torch.is_tensor(group):
@@ -474,7 +474,7 @@ class ProgramExecutorContext(nn.Module):
                     cg = [cg]
                 mask = None
                 for c in cg:
-                    new_mask = self.taxnomy[k].similarity(rel_ftr_norm, c)
+                    new_mask = self.taxnomy[k].similarity_collision(rel_ftr_norm, c)
                     mask = torch.min(mask, new_mask) if mask is not None else new_mask
                     if _symmetric_collision_flag:
                         mask = 0.5*(mask + mask.transpose(1, 0))
@@ -654,6 +654,7 @@ class DifferentiableReasoning(nn.Module):
                         #pdb.set_trace()
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'filter_collision':
+                        #pdb.set_trace()
                         buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values']))
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
