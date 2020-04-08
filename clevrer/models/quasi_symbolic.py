@@ -41,6 +41,13 @@ _fixed_start_end = True
 time_win = 10
 _symmetric_collision_flag=True
 
+def Guaussin_smooth(x):
+    # Create gaussian kernels
+    kernel = torch.tensor((0.006, 0.061, 0.242, 0.383, 0.242, 0.061, 0.006), dtype=x.dtype, device=x.device)
+    # Apply smoothing
+    x_smooth = F.conv1d(x.unsqueeze(0).unsqueeze(0), kernel.unsqueeze(0).unsqueeze(0), padding=3)
+    #pdb.set_trace()
+    return x_smooth.squeeze()
 
 def fuse_box_ftr(box_ftr):
     obj_num, ftr_dim = box_ftr.shape
@@ -164,6 +171,7 @@ class ProgramExecutorContext(nn.Module):
         # None, attributes, relations
         self.taxnomy = [None, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy]
         self._concept_groups_masks = [None, None, None, None, None]
+        self._time_buffer_masks = None
 
         self._attribute_groups_masks = None
         self._attribute_query_masks = None
@@ -330,23 +338,88 @@ class ProgramExecutorContext(nn.Module):
         else:
             selected = None
         k = 4
-        max_weight = torch.argmax(time_weight)
-        time_step = len(time_weight)
-        time_mask = torch.zeros([time_step], device = time_weight.device)
-        assert len(concept_groups[group])==1
-        if concept_groups[group]==['before']:
-            time_mask[:max_weight] = 1.0
-        elif concept_groups[group] == ['after']:
-            time_mask[max_weight:] = 1.0
+        #pdb.set_trace()
+        naive_weight = True
+        if naive_weight:
+            max_weight = torch.argmax(time_weight)
+            time_step = len(time_weight)
+            time_mask = torch.zeros([time_step], device = time_weight.device)
+            assert len(concept_groups[group])==1
+            if concept_groups[group]==['before']:
+                time_mask[:max_weight] = 1.0
+            elif concept_groups[group] == ['after']:
+                time_mask[max_weight:] = 1.0
+        else:
+            time_step = len(time_weight)
+            time_weight = Guaussin_smooth(time_weight)
+            max_weight = torch.max(time_weight)
+            norm_time_weight = (time_weight/max_weight)**100
+            after_weight = torch.cumsum(norm_time_weight, dim=-1)
+            after_weight = after_weight/torch.max(after_weight)
+            assert len(concept_groups[group])==1
+            if concept_groups[group]==['before']:
+                time_mask = 1 - after_weight 
+            elif concept_groups[group] == ['after']:
+                time_mask = after_weight 
         # update obejct state
-        mask = self._get_time_concept_groups_masks(concept_groups, 3, time_weight)
+        mask = self._get_time_concept_groups_masks(concept_groups, 3, time_mask)
         if selected is not None:
             mask = torch.min(selected.unsqueeze(0), mask)
         # update features
-        box_dim = int(self.features[3].shape[1]/time_step)
-        time_mask_exp = time_mask.unsqueeze(1).expand(time_step, box_dim).contiguous().view(1, time_step*box_dim)
-        self.features[3] = self.features[3] * time_mask_exp 
+        #box_dim = int(self.features[3].shape[1]/time_step)
+        #time_mask_exp = time_mask.unsqueeze(1).expand(time_step, box_dim).contiguous().view(1, time_step*box_dim)
+        #print('Bug!!!')
+        #self.features[3] = self.features[3] * time_mask_exp 
+        self._time_buffer_masks = time_mask 
         return mask[group], time_mask 
+
+
+    def filter_in_out_rule(self, selected, group, concept_groups):
+        if isinstance(selected, tuple):
+            selected = selected[0]
+        
+        # update obejct state
+        mask = self._get_time_concept_groups_masks(concept_groups, 3, None)
+        mask = torch.min(selected.unsqueeze(0), mask)
+
+        # find the in/out time for the target object
+        k = 4
+        obj_num, ftr_dim = self.features[3].shape
+        box_dim = 4
+        time_step = int(ftr_dim/box_dim) 
+        box_thre = 0.0001
+        min_frm = 5
+
+        masks = []
+            #time_mask = None
+        for c in concept_groups[group]:
+            tar_obj_id = torch.argmax(mask[group])
+            tar_ftr = self.features[3][tar_obj_id].view(time_step, box_dim)
+            #ftr_diff = torch.zeros(time_step, box_dim, dtype=tar_ftr.dtype, \
+            #device=tar_ftr.device)
+            time_weight =  torch.zeros(time_step, dtype=tar_ftr.dtype, device=tar_ftr.device)
+            tar_area = tar_ftr[:, 2] * tar_ftr[:, 3]
+            if c=='in':
+                for t_id in range(time_step):
+                    end_id = min(t_id + min_frm, time_step-1)
+                    if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
+                        time_weight[t_id:end_id] = 1
+                        break 
+                    if t_id== time_step - 1:
+                        time_weight[0] = 1
+            elif c=='out':
+                for t_id in range(time_step, -1, -1):
+                    st_id = max(t_id - min_frm, 0)
+                    if torch.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
+                        time_weight[st_id:t_id] = 1
+                        break
+                    if t_id == 0:
+                        time_weight[time_step-1] = 1
+            masks.append(time_weight)
+        #pdb.set_trace()
+        self._time_buffer_masks = torch.stack(masks, dim=0)[0]
+        return mask[group], self._time_buffer_masks
+
 
     def filter_in_out(self, selected, group, concept_groups):
         if isinstance(selected, tuple):
@@ -356,6 +429,7 @@ class ProgramExecutorContext(nn.Module):
         box_dim = 4
         time_step = int(ftr_dim/box_dim) 
         ftr = self.features[3].view(obj_num, time_step, box_dim)
+        pdb.set_trace()
         # time_step* box_dim
         tar_ftr = (selected.view(obj_num, 1, 1) * ftr).sum(dim=0) 
         ftr_diff = torch.zeros(time_step, box_dim, dtype=ftr.dtype, \
@@ -366,24 +440,19 @@ class ProgramExecutorContext(nn.Module):
         for cg in concept_groups:
             if isinstance(cg, six.string_types):
                 cg = [cg]
-            mask = None
             for c in cg:
                 if c=='in':
                     time_weight = self.taxnomy[k].filter_in(ftr_diff)
                 elif c=='out':
                     time_weight = self.taxnomy[k].filter_out(ftr_diff)
                 time_weight = F.softmax(time_weight, dim=-1)
-                mask = torch.min(mask, time_weight) if mask is not None else time_weight 
-                masks.append(mask)
-        if self._concept_groups_masks[k] is None: 
-            self._concept_groups_masks[k] = torch.stack(masks, dim=0)
-        else:
-            self._concept_groups_masks[k] = torch.min(self._concept_groups_masks[k], \
-                    torch.stack(masks, dim=0))
+                masks.append(time_mask)
+        self._time_buffer_masks = torch.stack(masks, dim=0)
         # update obejct state
         mask = self._get_time_concept_groups_masks(concept_groups, 3, self._concept_groups_masks[k][group])
         mask = torch.min(selected.unsqueeze(0), mask)
-        return mask[group], self._concept_groups_masks[k][group]
+        
+        return mask[group], self._time_buffer_masks[group]
 
     def filter_start_end(self, group, concept_groups):
         #pdb.set_trace()
@@ -414,7 +483,8 @@ class ProgramExecutorContext(nn.Module):
         time_step = len(time_weight.squeeze())
         ftr = self.features[3].view(obj_num, time_step, 4) * time_weight.view(1, time_step, 1)
         ftr = ftr.view(obj_num, -1)
-        obj_weight = torch.tanh(self.taxnomy[4].exist_object(ftr))
+        # enlarging the scores for object filtering
+        obj_weight = torch.tanh(self.taxnomy[4].exist_object(ftr))*5
         mask = torch.min(selected, obj_weight.squeeze())
         return mask
 
@@ -495,17 +565,17 @@ class ProgramExecutorContext(nn.Module):
             ftr = ftr.view(obj_num, -1)
         else:
             ftr = self.features[3]
-        if self._concept_groups_masks[k] is None:
-            masks = list()
-            for cg in concept_groups:
-                if isinstance(cg, six.string_types):
-                    cg = [cg]
-                mask = None
-                for c in cg:
-                    new_mask = self.taxnomy[k].similarity(ftr, c)
-                    mask = torch.min(mask, new_mask) if mask is not None else new_mask
-                masks.append(mask)
-            self._concept_groups_masks[k] = torch.stack(masks, dim=0)
+        #if self._concept_groups_masks[k] is None:
+        masks = list()
+        for cg in concept_groups:
+            if isinstance(cg, six.string_types):
+                cg = [cg]
+            mask = None
+            for c in cg:
+                new_mask = self.taxnomy[k].similarity(ftr, c)
+                mask = torch.min(mask, new_mask) if mask is not None else new_mask
+            masks.append(mask)
+        self._concept_groups_masks[k] = torch.stack(masks, dim=0)
         return self._concept_groups_masks[k]
 
     def _get_attribute_groups_masks(self, attribute_groups):
@@ -646,7 +716,9 @@ class DifferentiableReasoning(nn.Module):
                     elif op =='get_frame':
                         buffer.append(ctx.filter_time_object(*inputs))
                     elif op == 'filter_in' or op == 'filter_out':
-                        buffer.append(ctx.filter_in_out(*inputs, block['time_concept_idx'],\
+                        #print(feed_dict['meta_ann']['questions'][i]['question'])
+                        #pdb.set_trace()
+                        buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
                                 block['time_concept_values']))
                     elif op == 'filter_before' or op == 'filter_after':
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))

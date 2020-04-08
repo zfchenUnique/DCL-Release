@@ -69,7 +69,8 @@ class Model(ReasoningV1ModelForCLEVRER):
             
             update_from_loss_module(monitors, outputs, self.scene_loss(
                 feed_dict, f_sng,
-                self.reasoning.embedding_attribute, self.reasoning.embedding_relation
+                self.reasoning.embedding_attribute, self.reasoning.embedding_relation,
+                self.reasoning.embedding_temporal 
             ))
             update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
             canonize_monitors(monitors)
@@ -81,7 +82,7 @@ class Model(ReasoningV1ModelForCLEVRER):
             for monitors in monitors_list:
                 loss += monitors['loss/qa']
                 if self.args.scene_add_supervision:
-                    loss = loss + monitors['loss/scene']
+                    loss = loss +  self.args.scene_supervision_weight * monitors['loss/scene']
             return loss/len(monitors_list), monitors, outputs
         else:
             outputs['monitors'] = monitors_list 

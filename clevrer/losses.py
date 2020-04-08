@@ -31,13 +31,16 @@ class SceneParsingLoss(MultitaskLossBase):
         self.add_supervision = add_supervision
         self.args = args
 
-    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, buffer=None):
+    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None):
         outputs, monitors = dict(), dict()
 
         #pdb.set_trace()
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)
+        
+        obj_box = [f[3] for f in f_sng]
+        all_f_box = torch.cat(obj_box)
 
         for attribute, concepts in self.used_concepts['attribute'].items():
             if 'attribute_' + attribute not in feed_dict:
@@ -103,7 +106,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
                 if self.training and self.add_supervision:
                     label_len = cross_labels.shape[0]
-                    pos_num = cross_labels.sum()
+                    pos_num = cross_labels.sum().float()
                     neg_num = label_len - pos_num 
                     label_weight = [pos_num*1.0/label_len, neg_num*1.0/label_len]
                     this_loss = self._bce_loss(cross_scores, cross_labels.float(), label_weight)
@@ -111,6 +114,36 @@ class SceneParsingLoss(MultitaskLossBase):
                         print('NAN! in object_same_loss. Starting the debugger')
                         from IPython import embed; embed()
                     for loss_key in ['loss/scene/relation/' + concept, 'loss/scene']:
+                        monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
+
+        for attribute, concepts in self.used_concepts['temporal'].items():
+            
+            if attribute != 'scene':
+                continue
+            for v in concepts:
+                if 'temporal_' + v not in feed_dict:
+                    continue
+                this_score = temporal_embedding.similarity(all_f_box, v)
+
+                if v =='in':
+                    cross_labels = feed_dict['temporal_' + v]>0
+                elif v =='out':
+                    cross_labels = feed_dict['temporal_' + v]<128
+
+                acc_key = 'acc/scene/temporal/' + v
+                monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
+
+                if self.training and self.add_supervision:
+            
+                    label_len = cross_labels.shape[0]
+                    pos_num = cross_labels.sum().float()
+                    neg_num = label_len - pos_num 
+                    label_weight = [pos_num*1.0/label_len, neg_num*1.0/label_len]
+                    this_loss = self._bce_loss(this_score, cross_labels.float(), label_weight)
+                    if DEBUG_SCENE_LOSS and torch.isnan(this_loss).any():
+                        print('NAN! in object_same_loss. Starting the debugger')
+                        from IPython import embed; embed()
+                    for loss_key in ['loss/scene/temporal/' + v, 'loss/scene']:
                         monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
 
         return monitors, outputs

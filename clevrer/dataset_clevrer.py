@@ -13,10 +13,10 @@ from nscl.datasets.definition import gdef
 from nscl.datasets.common.vocab import Vocab
 import operator
 
-torch.multiprocessing.set_sharing_strategy('file_system')
+#torch.multiprocessing.set_sharing_strategy('file_system')
 #set_debugger()
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
-_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_moving', 'filter_stationary', 'filter_order']
+_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -231,6 +231,7 @@ class clevrerDataset(Dataset):
             tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
             # TODO: this may raise bug since it hack the data property for gt
             prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+            #pdb.set_trace()
             for attri_group, attribute in gdef.all_concepts_clevrer.items():
                 if attri_group=='attribute':
                     for attr, concept_group in attribute.items(): 
@@ -241,7 +242,6 @@ class clevrerDataset(Dataset):
                             attr_list.append(concept_index)
                         attr_key = attri_group + '_' + attr 
                         data[attr_key] = torch.tensor(attr_list)
-                        #pdb.set_trace()
                 elif attri_group=='relation':
                     for attr, concept_group in attribute.items(): 
                         if attr=='events':
@@ -256,7 +256,45 @@ class clevrerDataset(Dataset):
                                 rela_coll[prp_id1, prp_id2] = 1
                                 rela_coll[prp_id2, prp_id1] = 1
                             attr_key = attri_group + '_' + 'collision'
-                            data[attr_key] = rela_coll 
+                            data[attr_key] = rela_coll
+                elif attri_group=='temporal':
+                    for attr, concept_group in attribute.items(): 
+                        if attr=='scene':
+                            obj_num = len(data['tube_info']) -2 
+                            attr_frm_id_st = []
+                            attr_frm_id_ed = []
+                            min_frm = 2
+                            box_thre = 0.0001
+
+                            for t_id in range(obj_num):
+                                box_seq = data['tube_info']['box_seq']['tubes'][t_id]
+                                box_seq_np = np.stack(box_seq, axis=0)
+                                tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
+                                
+                                time_step = len(tar_area)
+                                # filter_in 
+                                for t_id in range(time_step):
+                                    end_id = min(t_id + min_frm, time_step-1)
+                                    if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
+                                        attr_frm_id_st.append(t_id)
+                                        #pdb.set_trace()
+                                        break 
+                                    if t_id == time_step - 1:
+                                        attr_frm_id_st.append(0)
+                                # filter out
+                                for t_id in range(time_step, -1, -1):
+                                    st_id = max(t_id - min_frm, 0)
+                                    if np.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
+                                        attr_frm_id_ed.append(t_id)
+                                        break 
+                                    if t_id == 0:
+                                        attr_frm_id_ed.append(time_step-1)
+
+                            attr_key = attri_group + '_in'
+                            data[attr_key] = torch.tensor(attr_frm_id_st)
+                            attr_key = attri_group + '_out'
+                            data[attr_key] = torch.tensor(attr_frm_id_ed)
+                            #pdb.set_trace()
         return data 
 
     def sample_frames(self, tube_info, img_num):
