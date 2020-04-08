@@ -7,16 +7,20 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] Features for collisions
 
 ## Reasons for failure cases
-- [x] New operation for 'start' and 'end' 
-- [x] Filter for multiple path reasoning
 - [ ] Fail to track the object
 - [ ] Filter Order: 'first' and 'second' 
 - [ ] Filter for events: 'collisions'
+- [ ] Filter for events: 'stationary' or 'moving' at a moment
+- [ ] Filter for objects: 'in' or 'out' at a moment
 
 ## Tto do list:
 - [x] Temporal operations for 'start', 'end', 'in', 'out', 'before' and 'end'
 - [x] New operations for 'collisions' and  'get_col_partner' 
+- [x] Temporal feature filtering 'start' and 'end' the box sequences
+- [x] More complicated feature representations for box seq
+- [ ] IoU for collision, Diff for stationary and moving
 - [ ] Temporal operation for 'first', 'second' and 'last'
+- [ ] Conflict value between default [0, 0, 0, 0] and mask out values [0, 0, 0, 0]
 
 ## Temporal reasoning
 - [ ] Design neoral operations for temporal reasoning programs
