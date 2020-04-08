@@ -18,7 +18,8 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] New operations for 'collisions' and  'get_col_partner' 
 - [x] Temporal feature filtering 'start' and 'end' the box sequences
 - [x] More complicated feature representations for box seq
-- [ ] IoU for collision, Diff for stationary and moving
+- [x] IoU for collision
+- [ ] Diff/RGB for stationary and moving
 - [ ] Temporal operation for 'first', 'second' and 'last'
 - [ ] Conflict value between default [0, 0, 0, 0] and mask out values [0, 0, 0, 0]
 
