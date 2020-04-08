@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from jacinle.utils.enum import JacEnum
 from nscl.nn.losses import MultitaskLossBase
 from nscl.datasets.definition import gdef
-from clevrer.models.quasi_symbolic import fuse_box_ftr 
+from clevrer.models.quasi_symbolic import fuse_box_ftr, fuse_box_overlap  
 import pdb
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
@@ -96,6 +96,11 @@ class SceneParsingLoss(MultitaskLossBase):
                         rel_ftr_norm = rel_box_ftr
                     else:
                         rel_ftr_norm = torch.cat([f[2], rel_box_ftr], dim=-1)
+                    
+                    if  self.args.box_iou_for_collision_flag:
+                        box_iou_ftr  = fuse_box_overlap(f[3])
+                        rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr], dim=-1)
+
                     coll_mat = relation_embedding.similarity_collision(rel_ftr_norm, concept)
                     coll_mat +=coll_mat.transpose(1, 0)
                     cross_scores.append(0.5*coll_mat.view(-1))

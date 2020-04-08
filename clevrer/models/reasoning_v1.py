@@ -81,6 +81,10 @@ class ReasoningV1ModelForCLEVRER(nn.Module):
         elif configs.dynamic_ftr_flag and  self.args.box_only_for_collision_flag:
             self.scene_graph.output_dims[2] = self.scene_graph.output_dims[3]*4
         
+        if  self.args.box_iou_for_collision_flag:
+            box_dim = 4
+            self.scene_graph.output_dims[2] += int(self.scene_graph.output_dims[3]/box_dim) 
+        
         self.reasoning = qs.DifferentiableReasoning(
             self._make_vse_concepts(configs.model.vse_large_scale, configs.model.vse_known_belong),
             self.scene_graph.output_dims, configs.model.vse_hidden_dims, args=self.args 

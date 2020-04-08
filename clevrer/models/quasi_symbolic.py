@@ -40,6 +40,42 @@ _apply_self_mask = {'relate': True, 'relate_ae': True}
 _fixed_start_end = True
 time_win = 10
 _symmetric_collision_flag=True
+EPS = 1e-10
+
+def compute_IoU(bbox1_xyhw, bbox2_xyhw):
+    bbox1_area = bbox1_xyhw[:, 2] * bbox1_xyhw[:, 3]
+    bbox2_area = bbox2_xyhw[:, 2] * bbox2_xyhw[:, 3]
+    
+    bbox1_x1 = bbox1_xyhw[:,0] - bbox1_xyhw[:, 2]*0.5 
+    bbox1_x2 = bbox1_xyhw[:,0] + bbox1_xyhw[:, 2]*0.5 
+    bbox1_y1 = bbox1_xyhw[:,1] - bbox1_xyhw[:, 3]*0.5 
+    bbox1_y2 = bbox1_xyhw[:,1] + bbox1_xyhw[:, 3]*0.5 
+
+    bbox2_x1 = bbox2_xyhw[:,0] - bbox2_xyhw[:, 2]*0.5 
+    bbox2_x2 = bbox2_xyhw[:,0] + bbox2_xyhw[:, 2]*0.5 
+    bbox2_y1 = bbox2_xyhw[:,1] - bbox2_xyhw[:, 3]*0.5 
+    bbox2_y2 = bbox2_xyhw[:,1] + bbox2_xyhw[:, 3]*0.5 
+
+    w = torch.clamp(torch.min(bbox1_x2, bbox2_x2) - torch.max(bbox1_x1, bbox2_x1), min=0)
+    h = torch.clamp(torch.min(bbox1_y2, bbox2_y2) - torch.max(bbox1_y1, bbox2_y1), min=0)
+    
+    inter = w * h
+    ovr = inter / (bbox1_area + bbox2_area - inter+EPS)
+    return ovr
+
+def fuse_box_overlap(box_ftr):
+    obj_num, ftr_dim = box_ftr.shape
+    box_dim = 4
+    time_step = int(ftr_dim / 4)
+    rel_ftr_box = torch.zeros(obj_num, obj_num, time_step, \
+            dtype=box_ftr.dtype, device=box_ftr.device)
+    for obj_id1 in range(obj_num):
+        for obj_id2 in range(obj_id1+1, obj_num):
+            rel_ftr_box[obj_id1, obj_id2] = compute_IoU(box_ftr[obj_id1].view(time_step, box_dim),\
+                    box_ftr[obj_id2].view(time_step, box_dim))
+            rel_ftr_box[obj_id2, obj_id1] = rel_ftr_box[obj_id1, obj_id2]
+        #pdb.set_trace()
+    return rel_ftr_box 
 
 def Guaussin_smooth(x):
     # Create gaussian kernels
@@ -533,11 +569,16 @@ class ProgramExecutorContext(nn.Module):
             ftr = ftr.view(obj_num, -1)
 
             rel_box_ftr = fuse_box_ftr(ftr)
+            # concatentate
             if not self.args.box_only_for_collision_flag:
                 rel_ftr_norm = torch.cat([self.features[k], rel_box_ftr], dim=-1)
             else:
                 rel_ftr_norm =  rel_box_ftr 
-            # concatentate
+            if self.args.box_iou_for_collision_flag:
+                #pdb.set_trace()
+                box_iou_ftr  = fuse_box_overlap(ftr)
+                rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr], dim=-1)
+
             masks = list()
             for cg in concept_groups:
                 if isinstance(cg, six.string_types):
