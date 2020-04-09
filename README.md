@@ -10,6 +10,7 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [ ] Fail to track the object
 - [ ] Filter Order: 'first' and 'second' 
 - [ ] Filter for events: 'collisions'
+- [x] Bugs for stationary/moving
 - [ ] Filter for events: 'stationary' or 'moving' at a moment
 - [ ] Filter for objects: 'in' or 'out' at a moment
 
@@ -19,7 +20,8 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] Temporal feature filtering 'start' and 'end' the box sequences
 - [x] More complicated feature representations for box seq
 - [x] IoU for collision
-- [ ] Diff/RGB for stationary and moving
+- [ ] Diff for stationary and moving
+- [ ] RGB for stationary and moving
 - [ ] Temporal operation for 'first', 'second' and 'last'
 - [ ] Conflict value between default [0, 0, 0, 0] and mask out values [0, 0, 0, 0]
 

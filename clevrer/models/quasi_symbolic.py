@@ -439,18 +439,30 @@ class ProgramExecutorContext(nn.Module):
                 for t_id in range(time_step):
                     end_id = min(t_id + min_frm, time_step-1)
                     if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
-                        time_weight[t_id:end_id] = 1
+                        if self.args.diff_for_moving_stationary_flag:
+                            time_weight[t_id] = 1
+                        else:
+                            time_weight[t_id:end_id] = 1
                         break 
                     if t_id== time_step - 1:
-                        time_weight[0] = 1
+                        if self.args.diff_for_moving_stationary_flag:
+                            time_weight[0] = 1
+                        else:
+                            time_weight[0:min_frm] = 1
             elif c=='out':
-                for t_id in range(time_step, -1, -1):
+                for t_id in range(time_step-1, -1, -1):
                     st_id = max(t_id - min_frm, 0)
                     if torch.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
-                        time_weight[st_id:t_id] = 1
+                        if self.args.diff_for_moving_stationary_flag:
+                            time_weight[t_id] = 1
+                        else: 
+                            time_weight[st_id:t_id] = 1
                         break
                     if t_id == 0:
-                        time_weight[time_step-1] = 1
+                        if self.args.diff_for_moving_stationary_flag:
+                            time_weight[time_step-1] = 1
+                        else:
+                            time_weight[time_step-1-min_frm:] = 1
             masks.append(time_weight)
         #pdb.set_trace()
         self._time_buffer_masks = torch.stack(masks, dim=0)[0]
@@ -511,6 +523,7 @@ class ProgramExecutorContext(nn.Module):
                             mask[:,-time_win:] = 1
                         #pdb.set_trace() 
                     masks.append(mask)
+            self._time_buffer_masks = mask 
             self._concept_groups_masks[k] = torch.stack(masks, dim=0)
         return self._concept_groups_masks[k][group]
 
@@ -597,15 +610,42 @@ class ProgramExecutorContext(nn.Module):
             self.features[2] = rel_ftr_norm 
         return self._concept_groups_masks[k]
 
+    def further_prepare_for_moving_stationary(self, ftr_ori, time_mask, concept):
+        obj_num, ftr_dim = ftr_ori.shape 
+        box_dim = 4
+        time_step = int(ftr_dim/box_dim)
+        if time_mask is None and (self._time_buffer_masks is not None):
+            time_mask = self._time_buffer_masks 
+            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+        elif time_mask is None:
+            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim)
+        elif time_mask is not None:
+            #pdb.set_trace()
+            max_idx = torch.argmax(time_mask)
+            st_idx = max(int(max_idx-time_win*0.5), 0)
+            ed_idx = min(int(max_idx+time_win*0.5), time_step-1)
+            time_mask[st_idx:ed_idx] = 1
+            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+        ftr_diff = torch.zeros(obj_num, time_step, box_dim, dtype=ftr_ori.dtype, \
+                device=ftr_ori.device)
+        ftr_diff[:, :time_step-1, :] = ftr_mask[:, 0:time_step-1, :] - ftr_mask[:, 1:time_step, :]
+        ftr_diff = ftr_diff.view(obj_num, ftr_dim)
+        return ftr_diff 
+
     def _get_time_concept_groups_masks(self, concept_groups, k, time_mask):
         obj_num, ftr_dim = self.features[3].shape
         box_dim = 4
         time_step = int(ftr_dim/box_dim)
+        
         if time_mask is not None:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             ftr = ftr.view(obj_num, -1)
         else:
-            ftr = self.features[3]
+            if self._time_buffer_masks is None:
+                ftr = self.features[3]
+            else:
+                ftr = self.features[3].view(obj_num, time_step, box_dim) * self._time_buffer_masks.view(1, time_step, 1)
+                ftr = ftr.view(obj_num, -1)
         #if self._concept_groups_masks[k] is None:
         masks = list()
         for cg in concept_groups:
@@ -613,6 +653,8 @@ class ProgramExecutorContext(nn.Module):
                 cg = [cg]
             mask = None
             for c in cg:
+                if (c == 'moving' or c == 'stationary') and self.args.diff_for_moving_stationary_flag:
+                    ftr = self.further_prepare_for_moving_stationary(self.features[3], time_mask, c)
                 new_mask = self.taxnomy[k].similarity(ftr, c)
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
             masks.append(mask)
@@ -765,6 +807,7 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op == 'filter_temporal':
                         #pdb.set_trace()
+                        #print(feed_dict['meta_ann']['questions'][i]['question'])
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'filter_collision':
                         #pdb.set_trace()
