@@ -112,6 +112,7 @@ parser.add_argument('--scene_add_supervision', type=int, default=0)
 parser.add_argument('--scene_supervision_weight', type=float, default=1.0)
 parser.add_argument('--box_iou_for_collision_flag', type=int, default=0)
 parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=0)
+parser.add_argument('--new_mask_out_value_flag', type=int, default=0)
 
 args = parser.parse_args()
 

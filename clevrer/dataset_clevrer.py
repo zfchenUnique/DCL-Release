@@ -330,7 +330,10 @@ class clevrerDataset(Dataset):
                 for frm_id in range(frm_num):
                     tmp_box = tmp_tube[frm_id]
                     if tmp_box == [0, 0, 1, 1]:
-                        tmp_box = [0, 0, 0, 0]
+                        if self.args.new_mask_out_value_flag:
+                            tmp_box = [-1*self.W, -1*self.H, -1*self.W, -1*self.H]
+                        else:
+                            tmp_box = [0, 0, 0, 0]
                     x_c = (tmp_box[0] + tmp_box[2])* 0.5
                     y_c = (tmp_box[1] + tmp_box[3])* 0.5
                     w = tmp_box[2] - tmp_box[0]
@@ -386,7 +389,11 @@ class clevrerDataset(Dataset):
                 for frm_id in range(frm_num):
                     tmp_box = tmp_tube[frm_id]
                     if tmp_box == [0, 0, 1, 1]:
-                        tmp_box = [0, 0, 0, 0]
+                        #tmp_box = [0, 0, 0, 0]
+                        if self.args.new_mask_out_value_flag:
+                            tmp_box = [-1*self.W, -1*self.H, -1*self.W, -1*self.H]
+                        else:
+                            tmp_box = [0, 0, 0, 0]
                     x_c = (tmp_box[0] + tmp_box[2])* 0.5
                     y_c = (tmp_box[1] + tmp_box[3])* 0.5
                     w = tmp_box[2] - tmp_box[0]

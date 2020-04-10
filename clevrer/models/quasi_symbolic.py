@@ -438,7 +438,7 @@ class ProgramExecutorContext(nn.Module):
             if c=='in':
                 for t_id in range(time_step):
                     end_id = min(t_id + min_frm, time_step-1)
-                    if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
+                    if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id) and torch.sum(tar_ftr[t_id:end_id,2])>0:
                         if self.args.diff_for_moving_stationary_flag:
                             time_weight[t_id] = 1
                         else:
@@ -452,7 +452,7 @@ class ProgramExecutorContext(nn.Module):
             elif c=='out':
                 for t_id in range(time_step-1, -1, -1):
                     st_id = max(t_id - min_frm, 0)
-                    if torch.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
+                    if torch.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id) and torch.sum(tar_ftr[st_id:t_id])>0:
                         if self.args.diff_for_moving_stationary_flag:
                             time_weight[t_id] = 1
                         else: 
@@ -477,7 +477,7 @@ class ProgramExecutorContext(nn.Module):
         box_dim = 4
         time_step = int(ftr_dim/box_dim) 
         ftr = self.features[3].view(obj_num, time_step, box_dim)
-        pdb.set_trace()
+        #pdb.set_trace()
         # time_step* box_dim
         tar_ftr = (selected.view(obj_num, 1, 1) * ftr).sum(dim=0) 
         ftr_diff = torch.zeros(time_step, box_dim, dtype=ftr.dtype, \
@@ -578,7 +578,10 @@ class ProgramExecutorContext(nn.Module):
             if time_mask is not None:
                 ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             else:
+                #pdb.set_trace()
                 ftr = self.features[3]
+                if self._time_buffer_masks is not None:
+                    pdb.set_trace()
             ftr = ftr.view(obj_num, -1)
 
             rel_box_ftr = fuse_box_ftr(ftr)
@@ -588,7 +591,6 @@ class ProgramExecutorContext(nn.Module):
             else:
                 rel_ftr_norm =  rel_box_ftr 
             if self.args.box_iou_for_collision_flag:
-                #pdb.set_trace()
                 box_iou_ftr  = fuse_box_overlap(ftr)
                 rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr], dim=-1)
 
@@ -641,11 +643,13 @@ class ProgramExecutorContext(nn.Module):
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             ftr = ftr.view(obj_num, -1)
         else:
+            #pdb.set_trace()
             if self._time_buffer_masks is None:
                 ftr = self.features[3]
             else:
                 ftr = self.features[3].view(obj_num, time_step, box_dim) * self._time_buffer_masks.view(1, time_step, 1)
                 ftr = ftr.view(obj_num, -1)
+                time_mask = self._time_buffer_masks.squeeze() 
         #if self._concept_groups_masks[k] is None:
         masks = list()
         for cg in concept_groups:
