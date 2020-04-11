@@ -30,6 +30,8 @@ import pdb
 import jactorch.nn as jacnn
 import torch.nn.functional as F
 import copy
+from scipy import signal 
+import numpy as np
 
 logger = get_logger(__file__)
 
@@ -77,11 +79,40 @@ def fuse_box_overlap(box_ftr):
         #pdb.set_trace()
     return rel_ftr_box 
 
-def Guaussin_smooth(x):
+def Gaussin_smooth(x):
+    '''
+    x: N * timestep * 4
+    '''
     # Create gaussian kernels
-    kernel = torch.tensor((0.006, 0.061, 0.242, 0.383, 0.242, 0.061, 0.006), dtype=x.dtype, device=x.device)
+    win_size = 5
+    std = 1
+    box_dim = 4
+
+    x_mask = x>0
+    x_mask_neg = 1 - x_mask 
+
+    x = x*x_mask.float()
+
+    obj_num, ftr_dim = x.shape
+    time_step = int(ftr_dim / box_dim)
+    x_trans = x.view(obj_num, time_step, box_dim).permute(0, 2, 1)
+
+    pad_size = int((win_size-1)/2) 
+    filter_param = signal.gaussian(win_size, std)
+    filter_param = filter_param/np.sum(filter_param)
+    kernel = torch.tensor(filter_param, dtype=x.dtype, device=x.device)
+    
+    pad_fun = nn.ReplicationPad1d(pad_size)
+    x_trans_pad = pad_fun(x_trans) 
+
     # Apply smoothing
-    x_smooth = F.conv1d(x.unsqueeze(0).unsqueeze(0), kernel.unsqueeze(0).unsqueeze(0), padding=3)
+    x_smooth_trans = F.conv1d(x_trans_pad.contiguous().view(-1, 1, time_step+pad_size*2), kernel.unsqueeze(0).unsqueeze(0), padding=0)
+    x_smooth_trans = x_smooth_trans.view(obj_num, box_dim, time_step) 
+    x_smooth = x_smooth_trans.permute(0, 2, 1)
+    x_smooth = x_smooth.contiguous().view(obj_num, ftr_dim)
+    # remask 
+    x_smooth  = x_smooth * x_mask.float()
+    x_smooth += x_mask_neg.float()*(-1)
     #pdb.set_trace()
     return x_smooth.squeeze()
 
@@ -768,6 +799,9 @@ class DifferentiableReasoning(nn.Module):
                 ctx_features = [None]
                 for f_id in range(1, 4): 
                     ctx_features.append(features[f_id].clone())
+
+                if self.args.apply_gaussian_smooth_flag:
+                    ctx_features[3] = Gaussin_smooth(ctx_features[3])
 
                 ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
                         self.embedding_temporal, self.embedding_time, ctx_features,\
