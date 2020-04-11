@@ -14,7 +14,7 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [ ] Filter Order: 'first' and 'second' 
 - [ ] Filter for events: 'collisions'
 
-## Tto do list:
+## Done List:
 - [x] Temporal operations for 'start', 'end', 'in', 'out', 'before' and 'end'
 - [x] New operations for 'collisions' and  'get_col_partner' 
 - [x] Temporal feature filtering 'start' and 'end' the box sequences
@@ -22,9 +22,13 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] IoU for collision
 - [x] Diff for stationary and moving
 - [x] Conflict value between default [0, 0, 0, 0] and mask out values [0, 0, 0, 0]
+
+## To do list:
 More comprehensive features for temporal concepts 
-- [ ] Gaussion smoothing
-- [ ] Skipping bounding boxes
+    - [x] Gaussion smoothing
+    - [ ] Skipping bounding boxes
+- [ ] New tube proposal generation
+- [ ] Filter order programs
 - [ ] RGB for stationary and moving
 - [ ] Temporal operation for 'first', 'second' and 'last'
 
