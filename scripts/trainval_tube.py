@@ -110,9 +110,10 @@ parser.add_argument('--mask_gt_path', type=str, default='../clevrer/proposals/')
 parser.add_argument('--box_only_for_collision_flag', type=int, default=0)
 parser.add_argument('--scene_add_supervision', type=int, default=0)
 parser.add_argument('--scene_supervision_weight', type=float, default=1.0)
-parser.add_argument('--box_iou_for_collision_flag', type=int, default=0)
-parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=0)
-parser.add_argument('--new_mask_out_value_flag', type=int, default=0)
+parser.add_argument('--box_iou_for_collision_flag', type=int, default=1)
+parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=1)
+parser.add_argument('--new_mask_out_value_flag', type=int, default=1)
+parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -190,12 +191,12 @@ def main():
     #train_dataset.parse_program_dict()
     #for ii in range(1, 100):
     #    feed_dict = train_dataset.__getitem__(ii)
-    #    pdb.set_trace()
     #    for ques_info in feed_dict['meta_ann']['questions']:
     #        for op in ques_info['program']:
     #            if 'program_cl' not in ques_info.keys():
     #                continue 
-    #            if 'collision' in op:
+    #            if 'filter_order' in op:
+    #                print(ques_info['program'])
     #                pdb.set_trace()
     validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
