@@ -89,7 +89,7 @@ def Gaussin_smooth(x):
     box_dim = 4
 
     x_mask = x>0
-    x_mask_neg = 1 - x_mask 
+    x_mask_neg = 1 - x_mask.float() 
 
     x = x*x_mask.float()
 
