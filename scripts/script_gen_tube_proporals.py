@@ -430,8 +430,8 @@ def extract_tube_v0(opt):
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
         if os.path.isfile(out_fn_path):
-            #continue 
-            pass 
+            continue 
+            #pass 
 
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
@@ -443,6 +443,8 @@ def extract_tube_v0(opt):
 
         if opt['use_attr_flag']:
             attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
+            if not os.path.isfile(attr_dict_path):
+                continue 
             attr_dict_list = jsonload(attr_dict_path) 
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute(f_dict, opt, attr_dict_list) 
         else:
