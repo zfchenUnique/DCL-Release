@@ -17,6 +17,7 @@ import operator
 #set_debugger()
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 _ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
+_used_list = ['filter_order']
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -94,7 +95,90 @@ class clevrerDataset(Dataset):
         self.vocab = gen_vocab(self)
         self.W = 480; self.H = 320
         self._filter_program_types()
+        if self.args.extract_region_attr_flag:
+            self.__intialize_frm_ann()
 
+    def __intialize_frm_ann(self):
+        frm_ann = []
+        for index, meta_ann in enumerate(self.question_ann): 
+            scene_idx = meta_ann['scene_index']
+            mask_gt_path = os.path.join(self.args.mask_gt_path, 'proposal_'+str(scene_idx).zfill(5)+'.json') 
+            mask_gt = jsonload(mask_gt_path)
+            for frm_id in range(len(mask_gt['frames'])):
+                frm_ann.append([index, frm_id])
+        self.frm_ann = frm_ann 
+        #pdb.set_trace()
+
+    def __get_video_frame__(self, frm_index):
+        data = {}
+        index = self.frm_ann[frm_index][0]
+        frm_id = self.frm_ann[frm_index][1]
+        meta_ann = self.question_ann[index]
+        scene_idx = meta_ann['scene_index']
+        data['frm_id'] = frm_id 
+        sub_idx = int(scene_idx/1000)
+        sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+        img_full_folder = os.path.join(self.args.frm_img_path, sub_img_folder) 
+       
+        # getting image frames 
+        mask_gt_path = os.path.join(self.args.mask_gt_path, 'proposal_'+str(scene_idx).zfill(5)+'.json') 
+        mask_gt = jsonload(mask_gt_path)
+        tube_info = self.sample_tube_frames(scene_idx)
+        frm_dict = self.sample_frames_v3(mask_gt, tube_info, frm_id)   
+        H=0; W=0
+        img_list = []
+        img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+        img = Image.open(img_full_path).convert('RGB')
+        W, H = img.size
+        img, _ = self.img_transform(img, np.array([0, 0, 1, 1]))
+        img_list.append(img)
+        img_tensor = torch.stack(img_list, 0)
+        data['img'] = img_tensor 
+        
+        # resize frame boxes
+        img_size = self.args.img_size
+        ratio = img_size / min(H, W)
+        for key_id, tube_box_info in frm_dict.items():
+            if not isinstance(key_id, int):
+                continue 
+            for box_id, box in enumerate(tube_box_info['boxes']):
+                tmp_box = torch.tensor(box).float()*ratio
+                tube_box_info['boxes'][box_id] = tmp_box
+            frm_dict[key_id]=tube_box_info 
+        data['tube_info'] = frm_dict  
+        data['meta_ann'] = meta_ann 
+       
+        # adding scene supervision
+        if self.args.scene_supervision_flag:
+            sub_idx = int(scene_idx/1000)
+            sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+            ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
+            scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
+            scene_gt = jsonload(scene_gt_path)
+        
+            gt_id_to_tube_id = {}
+            for attr, concept_group in gdef.all_concepts_clevrer['attribute'].items():
+                attr_list = []
+                for obj_id, obj_info in enumerate(mask_gt['frames'][frm_id]['objects']):
+                    obj_bbx = decode_mask_to_xyxy(obj_info['mask'])
+                    obj_bbx = torch.tensor(obj_bbx).float()
+                    tube_num = len(data['tube_info']) -2 
+                    # get mapping id
+                    for t_id in range(tube_num):
+                        if len(data['tube_info'][t_id]['boxes'])==1:
+                            tube_box = data['tube_info'][t_id]['boxes'][0]
+                        else:
+                            continue 
+                        if torch.abs(obj_bbx*ratio-tube_box).sum()<1:
+                            gt_id_to_tube_id[obj_id] = t_id
+                            break 
+                    # get attribute
+                    concept_index = concept_group.index(obj_info[attr])
+                    attr_list.append(concept_index)
+                attr_key = 'attribute_' + attr
+                data[attr_key] = torch.tensor(attr_list)
+            data['prp_id_to_t_id'] = gt_id_to_tube_id  
+        return data 
 
     def parse_concepts_and_attributes(self):
         word_list = []
@@ -145,6 +229,7 @@ class clevrerDataset(Dataset):
                     if pg in _ignore_list:
                         valid_flag = False
                         break
+                    
                 if not valid_flag:
                     continue
                 if 'answer' not in ques_info.keys():
@@ -159,6 +244,12 @@ class clevrerDataset(Dataset):
         self.question_ann = new_question_ann 
 
     def __getitem__(self, index):
+        if self.args.extract_region_attr_flag:
+            return self.__get_video_frame__(index)
+        else:
+            return self.__getitem__model(index)
+
+    def __getitem__model(self, index):
         #pdb.set_trace()
         data = {}
         meta_ann = self.question_ann[index]
@@ -348,6 +439,54 @@ class clevrerDataset(Dataset):
 
         return tube_box_dict 
 
+    def sample_frames_v3(self, mask_gt, tube_info, frm_id):
+        tube_box_dict = {}
+        frm_num = len(tube_info['tubes'][0]) 
+        tmp_tube = tube_info['tubes'][0]
+        for obj_id, obj_info in enumerate(mask_gt['frames'][frm_id]['objects']):
+            obj_bbx = decode_mask_to_xyxy(obj_info['mask'])
+            #obj_bbx = torch.tensor(obj_bbx).float()
+            tmp_dict = {}
+            tmp_list = []
+            count_idx = 0
+            frm_ids = []
+            frm_list = [frm_id]
+            for frm_id in frm_list:
+                tmp_list.append(obj_bbx)
+                frm_ids.append(frm_id)
+
+            tmp_dict['boxes'] = tmp_list
+            tmp_dict['frm_name'] = frm_ids  
+            tube_box_dict[obj_id] = tmp_dict 
+        frm_list_unique = list(set(frm_list))
+        frm_list_unique.sort()
+        tube_box_dict['frm_list'] = frm_list_unique  
+
+        if self.args.normalized_boxes:
+            new_tube_info = {'tubes': []} 
+            for tube_id, obj_info in enumerate(mask_gt['frames'][frm_id]['objects']):
+                tmp_tube  = copy.deepcopy(tube_info['tubes'][0])
+                tmp_dict = {}
+                frm_num = len(tmp_tube)
+                new_tube_info['tubes'].append([])
+                for frm_id in range(frm_num):
+                    tmp_box = [0, 0, 0, 0]
+                    x_c = (tmp_box[0] + tmp_box[2])* 0.5
+                    y_c = (tmp_box[1] + tmp_box[3])* 0.5
+                    w = tmp_box[2] - tmp_box[0]
+                    h = tmp_box[3] - tmp_box[1]
+                    tmp_array = np.array([x_c, y_c, w, h])
+                    tmp_array[0] = tmp_array[0] / self.W
+                    tmp_array[1] = tmp_array[1] / self.H
+                    tmp_array[2] = tmp_array[2] / self.W
+                    tmp_array[3] = tmp_array[3] / self.H
+                    new_tube_info['tubes'][tube_id].append(tmp_array)
+        tube_box_dict['box_seq'] = new_tube_info  
+
+        return tube_box_dict 
+
+
+
     def sample_frames_v2(self, tube_info, img_num):
         tube_box_dict = {}
         frm_num = len(tube_info['tubes'][0]) 
@@ -420,7 +559,10 @@ class clevrerDataset(Dataset):
         return tube_info 
 
     def __len__(self):
-        return len(self.question_ann)
+        if self.args.extract_region_attr_flag:
+            return len(self.frm_ann)
+        else:
+            return len(self.question_ann)
 
     def make_dataloader(self, batch_size, shuffle, drop_last, nr_workers):
         from jactorch.data.dataloader import JacDataLoader

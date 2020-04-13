@@ -34,8 +34,6 @@ class SceneParsingLoss(MultitaskLossBase):
     def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None):
         outputs, monitors = dict(), dict()
 
-        #pdb.set_trace()
-
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)
         
