@@ -114,6 +114,7 @@ parser.add_argument('--box_iou_for_collision_flag', type=int, default=1)
 parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=1)
 parser.add_argument('--new_mask_out_value_flag', type=int, default=1)
 parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
+parser.add_argument('--start_index', type=int, default=0)
 
 args = parser.parse_args()
 
