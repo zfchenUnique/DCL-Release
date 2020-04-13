@@ -698,6 +698,8 @@ def compute_recall_and_precision(opt):
         gt_tube_dict = pickleload(pk_fn)
         id_str = pk_fn.split('_')[-1].split('.')[0]
         tube_prp_pk_fn = os.path.join(tube_prp_path, 'proposal_'+id_str+'.pk')
+        if not os.path.isfile(tube_prp_pk_fn):
+            continue 
         prp_tube_dict = pickleload(tube_prp_pk_fn)
 
         #iou_mat = np.zeros([len(prp_tube_dict['tubes']), len(gt_tube_dict['tubes'])])
@@ -792,5 +794,6 @@ def extract_tube_per_video_attribute(f_dict, opt, attr_dict_list):
 
 if __name__=='__main__':
     parms, opt = parse_opt()
-    extract_tube_v0(opt)
+    #extract_tube_v0(opt)
+    compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)
