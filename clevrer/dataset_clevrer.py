@@ -100,7 +100,7 @@ class clevrerDataset(Dataset):
 
     def __intialize_frm_ann(self):
         frm_ann = []
-        for index, meta_ann in enumerate(self.question_ann): 
+        for index, meta_ann in enumerate(self.question_ann[self.args.start_index:]): 
             scene_idx = meta_ann['scene_index']
             mask_gt_path = os.path.join(self.args.mask_gt_path, 'proposal_'+str(scene_idx).zfill(5)+'.json') 
             mask_gt = jsonload(mask_gt_path)

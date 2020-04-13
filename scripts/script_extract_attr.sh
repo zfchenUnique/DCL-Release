@@ -8,7 +8,7 @@ jac-crun ${GPU_ID} scripts/script_extract_attribute_for_frames.py --desc clevrer
     --rel_box_flag 0 --evaluate \
     --dynamic_ftr_flag 1 --version v5_gt_sym_col_scene_balance_thre  \
     --scene_supervision_flag 1\
-    --tube_prp_path ../clevrer/tubeProposalsGt\
+    --tube_prp_path ../clevrer/tubeProposals/1.0_1.0\
     --box_only_for_collision_flag 0 \
     --scene_supervision_flag 1\
     --box_iou_for_collision_flag 1 \

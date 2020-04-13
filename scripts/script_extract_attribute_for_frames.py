@@ -114,6 +114,7 @@ parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
 parser.add_argument('--setname', type=str, default='validation')
 parser.add_argument('--extract_region_attr_flag', type=int, default=0)
 parser.add_argument('--output_attr_path', type=str, default='dumps/clevrer/tmpProposalsAttr')
+parser.add_argument('--start_index', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -238,6 +239,10 @@ def validate_attribute(model, val_dataloader, meters, meter_prefix='validation',
             end_frm_flag = False
             #while (not end_frm_flag):
             for idx, feed_dict in enumerate(feed_dict_list):
+                scene_idx = feed_dict['meta_ann']['scene_index']
+                full_path = os.path.join(output_attr_path, 'attribute_'+str(scene_idx).zfill(5)+'.json') 
+                if os.path.isfile(full_path):
+                    continue 
                 if args.use_gpu:
                     if not args.gpu_parallel:
                         feed_dict = async_copy_to(feed_dict, 0)
@@ -264,8 +269,6 @@ def validate_attribute(model, val_dataloader, meters, meter_prefix='validation',
                         meters.update(monitors, n=n)
                         meters.update({'time/data': data_time, 'time/step': step_time})
 
-                    scene_idx = feed_dict['meta_ann']['scene_index']
-                    full_path = os.path.join(output_attr_path, 'attribute_'+str(scene_idx).zfill(5)+'.json') 
                     jsondump(full_path, video_attr_list)
 
                     if args.use_tb:
