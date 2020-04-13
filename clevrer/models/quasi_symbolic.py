@@ -828,6 +828,7 @@ class DifferentiableReasoning(nn.Module):
                     if op == 'filter':
                         buffer.append(ctx.filter(*inputs, block['concept_idx'], block['concept_values']))
                     elif op == 'filter_order':
+                        #print(feed_dict['meta_ann']['questions'][i]['question'])
                         #pdb.set_trace()
                         buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'end' or op == 'start':
