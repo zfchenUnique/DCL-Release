@@ -242,6 +242,7 @@ def validate_attribute(model, val_dataloader, meters, meter_prefix='validation',
                 scene_idx = feed_dict['meta_ann']['scene_index']
                 full_path = os.path.join(output_attr_path, 'attribute_'+str(scene_idx).zfill(5)+'.json') 
                 if os.path.isfile(full_path):
+                    print('File exists. %s\n' %(full_path))
                     continue 
                 if args.use_gpu:
                     if not args.gpu_parallel:
