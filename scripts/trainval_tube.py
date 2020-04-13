@@ -115,6 +115,7 @@ parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=1)
 parser.add_argument('--new_mask_out_value_flag', type=int, default=1)
 parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
 parser.add_argument('--start_index', type=int, default=0)
+parser.add_argument('--extract_region_attr_flag', type=int, default=0)
 
 args = parser.parse_args()
 
@@ -190,7 +191,7 @@ def main():
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
     #train_dataset.parse_program_dict()
-    #for ii in range(1, 100):
+    #for ii in range(1, 200):
     #    feed_dict = train_dataset.__getitem__(ii)
     #    for ques_info in feed_dict['meta_ann']['questions']:
     #        for op in ques_info['program']:
