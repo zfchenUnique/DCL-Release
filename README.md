@@ -27,6 +27,7 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 ## To do list:
 More comprehensive features for temporal concepts 
 - [x] Gaussion smoothing
+- [ ] Multiple choice selection question
 - [ ] Skipping bounding boxes
 - [ ] New tube proposal generation
 - [ ] RGB for stationary and moving
