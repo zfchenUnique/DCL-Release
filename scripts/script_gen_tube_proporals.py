@@ -183,7 +183,7 @@ def visual_tube_proposals(results, f_dict, prp_num, opt):
         #tube_vis_resize = resize_tube_bbx(tube_vis, frmImList_vis)
         vd_name_raw = 'video_%d'%(f_dict['video_index'])
         #out_sub_path = 'sample/'+vd_name_raw + '_' + str(opt['connect_w'])+'_'+str(opt['score_w'])
-        out_sub_path = opt['vis_path'] + vd_name_raw 
+        out_sub_path = opt['vis_path'] + vd_name_raw + '_' + str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'+ str(opt['attr_w'])
         if not os.path.isdir(out_sub_path):
             os.makedirs(out_sub_path)
         out_full_path = os.path.join(out_sub_path, str(prp_num)+'_' + str(ii)+'.gif')
@@ -302,7 +302,7 @@ def compare_attr_score(attr_list1, attr_list2):
             attr_score +=1
     return attr_score 
 
-def get_tubes(det_list_org, alpha, use_attr_flag=False):
+def get_tubes(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
     """
     det_list_org: [score_list, bbx_list]
     alpha: connection weight
@@ -375,7 +375,7 @@ def get_tubes(det_list_org, alpha, use_attr_flag=False):
                                 if concept!='':
                                     attr_score += prevbox_attr[attr_upper][concept] 
                             attr_score  /= timestep 
-                            link_score +=  attr_score * alpha 
+                            link_score +=  attr_score * attr_w  
                     #except:
                     #    pdb.set_trace()
                     
@@ -420,13 +420,13 @@ def extract_tube_v0(opt):
     sample_folder_path= '../clevrer/proposals'
     file_list = get_sub_file_list(sample_folder_path, '.json')
     file_list.sort()
-    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']))
+    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w']))
     if not os.path.isdir(out_path):
         os.makedirs(out_path)
     for file_idx, sample_file in enumerate(file_list):
         
-        if file_idx<10000:
-            continue 
+        #if file_idx<10000:
+        #    continue 
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
         if os.path.isfile(out_fn_path):
@@ -454,7 +454,7 @@ def extract_tube_v0(opt):
         pickledump(out_fn_path, out_dict)
         if file_idx%100==0:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
-        if file_idx<=10100: 
+        if file_idx<=10100 and 0:
             visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
 
 def visual_specific_tube(opt):
@@ -688,7 +688,10 @@ def compute_recall_and_precision(opt):
     prp_num = 0
     gt_num = 0
 
-    tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']))
+    if opt['use_attr_flag']:
+        tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w']))
+    else:
+        tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']))
     out_gt_path = os.path.join(opt['tube_folder_new_path'])
 
     pk_fn_list = get_sub_file_list(out_gt_path, 'pk')
@@ -787,13 +790,13 @@ def extract_tube_per_video_attribute(f_dict, opt, attr_dict_list):
         else:
             bbx_sc_list.append([sc_mat, bbx_mat, attr_list])
 
-    tube_list, score_list = get_tubes(bbx_sc_list, connect_w, opt['use_attr_flag'])
+    tube_list, score_list = get_tubes(bbx_sc_list, connect_w, opt['use_attr_flag'], opt['attr_w'])
     return tube_list, score_list, bbx_sc_list  
 
 
 
 if __name__=='__main__':
     parms, opt = parse_opt()
-    #extract_tube_v0(opt)
+    extract_tube_v0(opt)
     compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)
