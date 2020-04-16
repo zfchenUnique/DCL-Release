@@ -30,6 +30,11 @@ def transform_conpcet_forms_for_nscl(pg_list):
     nsclqsseq  = nsclseq_to_nsclqsseq(nsclseq)
     return nsclqsseq 
 
+def transform_conpcet_forms_for_nscl_v2(pg_list):
+    nsclseq = clevrer_to_nsclseq_v2(pg_list)
+    nsclqsseq  = nsclseq_to_nsclqsseq(nsclseq)
+    return nsclqsseq 
+
 def nsclseq_to_nsclqsseq(seq_program):
     qs_seq = copy.deepcopy(seq_program)
     cached = defaultdict(list)
@@ -125,7 +130,8 @@ def clevrer_to_nsclseq(clevr_program_ori):
             obj_num +=1
             if obj_num>1:
                 obj_stack = inputs_idx
-
+        elif block == 'events':
+            current = dict(op=block)
         elif block in ALL_CONCEPTS:
             exe_stack.append(block)
             continue 
@@ -307,4 +313,116 @@ def pickledump(path, this_dic):
     f = open(path, 'wb')
     this_ans = pickle.dump(this_dic, f)
     f.close()
+
+def clevrer_to_nsclseq_v2(clevr_program_ori):
+    # remove useless program
+    clevr_program = []
+    for pg_idx, pg in enumerate(clevr_program_ori):
+        clevr_program.append(pg)
+
+
+    nscl_program = [{'op': 'scene', 'inputs':[]}] 
+    mapping = dict()
+    exe_stack = []
+    inputs_idx = 0
+    col_idx = -1
+    obj_num = 0
+    obj_stack = None
+    for block_id, block in enumerate(clevr_program):
+        if block == 'scene':
+            current = dict(op='scene')
+        elif block=='filter_shape' or block=='filter_color' or block=='filter_material':
+            concept = exe_stack.pop()
+            if len(nscl_program)>0:
+                last = nscl_program[-1]
+            else:
+                last = {'op': 'padding'}
+            if last['op']=='filter_shape' or last['op']=='filter_color' or last['op']=='filter_material':
+                last['concept'].append(concept)
+            else:
+                current = dict(op='filter', concept=[concept])
+        elif block.startswith('filter_order'):
+            concept = exe_stack.pop()
+            current = dict(op=block, temporal_concept=[concept])
+            if len(nscl_program)>0:
+                last = nscl_program[-1]
+                if last['op']=='filter_collision':
+                    col_idx = inputs_idx +1 
+        elif block.startswith('end'):
+            current = dict(op=block, time_concept=['end'])
+        elif block.startswith('start'):
+            current = dict(op=block, time_concept=['start'])
+        elif block.startswith('filter_collision'):
+            current = dict(op='filter_collision', relational_concept=['collision'])
+            col_idx = inputs_idx + 1
+        elif block.startswith('filter_in') or block.startswith('filter_out'):
+            concept = block.split('_')[-1]
+            current = dict(op=block, time_concept=[concept])
+        elif block.startswith('filter_after') or block == 'filter_before':
+            concept = block.split('_')[-1]
+            current = dict(op=block, time_concept=[concept])
+        elif block == 'filter_stationary' or block == 'filter_moving':
+            concept = block.split('_')[-1]
+            current = dict(op='filter_temporal', temporal_concept=[concept])
+        elif block.startswith('filter'):
+            current = dict(op=block)
+        elif block == 'unique'  or block == 'all_events' or block == 'null' or block == 'get_object':
+            continue 
+        elif block == 'get_frame':
+            if not (nscl_program[-1]['op']=='start' or nscl_program[-1]['op']=='end'):
+                continue 
+            current = dict(op=block)
+        elif block == 'objects': # fix bug on fitlering time
+            if len(clevr_program)>(block_id+1): 
+                next_op = clevr_program[block_id+1]
+                if next_op=='filter_collision':
+                    continue
+            current = dict(op=block)
+            obj_num +=1
+            if obj_num>1:
+
+                obj_stack = inputs_idx
+        elif block in ALL_CONCEPTS:
+            exe_stack.append(block)
+            continue 
+        else:
+            if block.startswith('query'):
+                if block_id == len(clevr_program) - 1:
+                    attribute = get_clevrer_op_attribute(block)
+                    current = dict(op='query', attribute=attribute)
+            elif block == 'exist':
+                current = dict(op='exist')
+            elif block == 'count':
+                if block_id == len(clevr_program) - 1:
+                    current = dict(op='count')
+            else:
+                current = dict(op=block)
+                #raise ValueError('Unknown CLEVR operation: {}.'.format(op))
+
+        if current is None:
+            assert len(block['inputs']) == 1
+        else:
+            if block =='end' or block == 'start':
+                current['inputs'] = []
+            elif block =='get_frame':
+                current['inputs'] = [inputs_idx - 1, inputs_idx ]
+            elif block =='get_col_partner':
+                current['inputs'] = [inputs_idx, col_idx]
+            elif block == 'filter_stationary' or block == 'filter_moving':
+                if obj_stack is not None:
+                    if nscl_program[obj_stack]['op']=='events':
+                        obj_stack -=1
+                    current['inputs'] = [obj_stack, inputs_idx]
+                else:
+                    current['inputs'] = [inputs_idx]
+            else:
+                current['inputs'] = [inputs_idx]
+            inputs_idx +=1 
+            nscl_program.append(current)
+
+    return nscl_program
+
+
+
+
 

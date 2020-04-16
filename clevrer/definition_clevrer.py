@@ -5,18 +5,20 @@ logger = get_logger(__file__)
 
 
 class CLEVRERDefinition(DatasetDefinitionBase):
+    import pdb
+    pdb.set_trace()
     operation_signatures = [
         # Part 1: CLEVRER dataset.
         ('scene', [], [], 'object_set'),
+        ('events', [], [], 'events_set'),
         ('filter', ['concept'], ['object_set'], 'object_set'),
-        ('relate', ['relational_concept'], ['object'], 'object_set'),
-        ('relate_attribute_equal', ['attribute'], ['object'], 'object_set'),
         ('intersect', [], ['object_set', 'object_set'], 'object_set'),
         ('union', [], ['object_set', 'object_set'], 'object_set'),
         
         ('filter_order', ['concept'], ['object_set'], 'object_set'),
         ('negate', [], ['bool'], 'bool'),
         ('belong_to', [], ['object_set', 'object_set'], 'bool'),
+        ('filter_status', ['concept'], ['object_set', 'time_set'], 'object_set'),
         ('filter_temporal', ['concept'], ['object_set', 'time_set'], 'object_set'),
 
         ('query', ['attribute'], ['object'], 'word'),

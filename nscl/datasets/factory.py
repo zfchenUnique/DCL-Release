@@ -45,11 +45,14 @@ class DatasetRegistry(RegistryGroup):
 dataset_registry = DatasetRegistry()
 
 
-def initialize_dataset(dataset):
+def initialize_dataset(dataset, version='v1'):
     from nscl.datasets.definition import set_global_definition
-    if dataset=='clevrer':
+    if dataset=='clevrer' and version !='v2':
         from  clevrer.definition_clevrer import CLEVRERDefinition
         def_class = CLEVRERDefinition
+    elif dataset=='clevrer' and version =='v2':
+        from  clevrer.definition_clevrer_v2 import CLEVRERDefinitionV2
+        def_class = CLEVRERDefinitionV2
     else:
         def_class = dataset_registry.lookup('definition', dataset, fallback=False)
     if def_class is None:

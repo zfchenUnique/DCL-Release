@@ -128,9 +128,9 @@ class GlobalDefinitionWrapper(object):
         pdb.set_trace()
         raise AttributeError('Cannot set the attr of `gdef`.')
 
+gdef = GlobalDefinitionWrapper()
 #import pdb
 #pdb.set_trace()
-gdef = GlobalDefinitionWrapper()
 
 
 _GLOBAL_DEF = None
