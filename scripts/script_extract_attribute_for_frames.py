@@ -224,7 +224,7 @@ def main_train(validation_dataset):
     if not os.path.isdir(args.output_attr_path):
         os.makedirs(args.output_attr_path)
     validate_attribute(model, validation_dataloader, meters, args.setname, logger, args.output_attr_path)
-    logger.critical(meters.format_simple(setname, {k: v for k, v in meters.avg.items() if v != 0}, compressed=False))
+    logger.critical(meters.format_simple(args.setname, {k: v for k, v in meters.avg.items() if v != 0}, compressed=False))
     return meters
 
 
