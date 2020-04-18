@@ -17,8 +17,9 @@ import operator
 #set_debugger()
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
-_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
-_used_list = ['filter_order']
+#_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
+_ignore_list = ['get_counterfact', 'unseen_events']
+#_used_list = ['filter_order']
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -235,7 +236,7 @@ class clevrerDataset(Dataset):
                     
                 if not valid_flag:
                     continue
-                if 'answer' not in ques_info.keys():
+                if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
                     continue 
                 meta_new['questions'].append(ques_info)
             if len(meta_new['questions'])>0:
@@ -303,16 +304,22 @@ class clevrerDataset(Dataset):
                     break
             if not valid_flag:
                 continue
-            if 'answer' not in ques_info.keys():
+            #if 'answer' not in ques_info.keys():
+            if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
                 continue 
-            if ques_info['answer'] == 'no':
+            if 'answer'in ques_info.keys() and ques_info['answer'] == 'no':
                 ques_info['answer'] = False
-            elif ques_info['answer'] == 'yes':
+            elif 'answer' in ques_info.keys() and ques_info['answer'] == 'yes':
                 ques_info['answer'] = True
 
             program_cl = transform_conpcet_forms_for_nscl_v2(ques_info['program'])
             meta_ann['questions'][q_id]['program_cl'] = program_cl 
-            meta_ann['questions'][q_id]['answer'] = ques_info['answer']
+            if 'answer'in ques_info.keys():
+                meta_ann['questions'][q_id]['answer'] = ques_info['answer']
+            else:
+                for choice_id, choice_info in enumerate(meta_ann['questions'][q_id]['choices']):
+                    meta_ann['questions'][q_id]['choices'][choice_id]['program_cl'] = \
+                        transform_conpcet_forms_for_nscl_v2(choice_info['program'])
 
         data['meta_ann'] = meta_ann 
        
@@ -341,7 +348,7 @@ class clevrerDataset(Dataset):
                         data[attr_key] = torch.tensor(attr_list)
                 elif attri_group=='relation':
                     for attr, concept_group in attribute.items(): 
-                        if attr=='events':
+                        if attr=='event1':
                             obj_num = len(data['tube_info']) -2 
                             rela_coll = torch.zeros(obj_num, obj_num)
 
@@ -356,7 +363,7 @@ class clevrerDataset(Dataset):
                             data[attr_key] = rela_coll
                 elif attri_group=='temporal':
                     for attr, concept_group in attribute.items(): 
-                        if attr=='scene':
+                        if attr=='event2':
                             obj_num = len(data['tube_info']) -2 
                             attr_frm_id_st = []
                             attr_frm_id_ed = []

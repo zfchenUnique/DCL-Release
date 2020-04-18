@@ -328,6 +328,7 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
     col_idx = -1
     obj_num = 0
     obj_stack = None
+    buffer_for_ancestor = []
     for block_id, block in enumerate(clevr_program):
         if block == 'scene':
             current = dict(op='scene')
@@ -354,10 +355,14 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
             current = dict(op=block, time_concept=['start'])
         elif block.startswith('filter_collision'):
             current = dict(op='filter_collision', relational_concept=['collision'])
+            buffer_for_ancestor.append(inputs_idx)
+            buffer_for_ancestor.append(inputs_idx+1)
             col_idx = inputs_idx + 1
         elif block.startswith('filter_in') or block.startswith('filter_out'):
             concept = block.split('_')[-1]
             current = dict(op=block, time_concept=[concept])
+            buffer_for_ancestor.append(inputs_idx)
+            buffer_for_ancestor.append(inputs_idx+1)
         elif block.startswith('filter_after') or block == 'filter_before':
             concept = block.split('_')[-1]
             current = dict(op=block, time_concept=[concept])
@@ -380,11 +385,12 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
             current = dict(op=block)
             obj_num +=1
             if obj_num>1:
-
                 obj_stack = inputs_idx
         elif block in ALL_CONCEPTS:
             exe_stack.append(block)
-            continue 
+            continue
+        elif block == 'filter_ancestor':
+            current = dict(op=block)
         else:
             if block.startswith('query'):
                 if block_id == len(clevr_program) - 1:
@@ -397,7 +403,6 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                     current = dict(op='count')
             else:
                 current = dict(op=block)
-                #raise ValueError('Unknown CLEVR operation: {}.'.format(op))
 
         if current is None:
             assert len(block['inputs']) == 1
@@ -415,6 +420,8 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                     current['inputs'] = [obj_stack, inputs_idx]
                 else:
                     current['inputs'] = [inputs_idx]
+            elif block == 'filter_ancestor':
+                current['inputs'] = buffer_for_ancestor 
             else:
                 current['inputs'] = [inputs_idx]
             inputs_idx +=1 

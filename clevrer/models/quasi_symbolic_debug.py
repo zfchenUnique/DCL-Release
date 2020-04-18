@@ -57,7 +57,7 @@ def make_debug_ctx(fd, buffer, i):
 
 
 def embed(self, i, buffer, result, fd):
-    DEBUG='ALL'
+    #DEBUG='ALL'
     if not self.training and DEBUG != 'OFF':
     #if True:
         p, l = result[i][1], fd['answer'][i]

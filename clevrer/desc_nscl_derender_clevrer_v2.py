@@ -41,15 +41,30 @@ class Model(ReasoningV2ModelForCLEVRER):
             tmp_prog = []
             feed_dict['answer'] = [] 
             feed_dict['question_type'] = []
+            feed_dict['question_type_new'] = []
             for ques in feed_dict['meta_ann']['questions']:
-                if 'answer' not in ques.keys():
+                #if 'answer' not in ques.keys():
+                if 'answer' not in ques.keys() and ques['question_type']!='explanatory':
                     continue 
                 if 'program_cl' not in ques.keys():
                     continue 
                 if 'program_cl' in ques.keys():
                     tmp_prog.append(ques['program_cl'])
-                feed_dict['answer'].append(ques['answer'])
-                feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
+                if 'answer' in ques.keys():
+                    feed_dict['answer'].append(ques['answer'])
+                    feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
+                else:
+                    tmp_answer_list = []
+                    for choice_info in ques['choices']:
+                        if choice_info['answer'] == 'wrong':
+                            tmp_answer_list.append(False)
+                        elif choice_info['answer'] == 'correct':
+                            tmp_answer_list.append(True)
+                        else:
+                            pdb.set_trace()
+                    feed_dict['answer'].append(tmp_answer_list)
+                    feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
+                feed_dict['question_type_new'].append(ques['question_type'])
             programs.append(tmp_prog)
         programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, fd=feed_dict_list)
         monitors_list = [] 

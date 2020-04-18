@@ -84,7 +84,7 @@ class ReasoningV2ModelForCLEVRER(nn.Module):
             self.scene_graph.output_dims, configs.model.vse_hidden_dims, args=self.args 
         )
         #pdb.set_trace()
-        import clevrer.losses as vqa_losses
+        import clevrer.losses_v2 as vqa_losses
         self.scene_loss = vqa_losses.SceneParsingLoss(gdef.all_concepts_clevrer, add_supervision=configs.train.scene_add_supervision, args=self.args)
         self.qa_loss = vqa_losses.QALoss(add_supervision=configs.train.qa_add_supervision)
 

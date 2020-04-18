@@ -794,7 +794,6 @@ class DifferentiableReasoning(nn.Module):
 
                 buffers.append(buffer)
                 programs.append(prog)
-                #pdb.set_trace()
                 
                 ctx_features = [None]
                 for f_id in range(1, 4): 
@@ -807,6 +806,7 @@ class DifferentiableReasoning(nn.Module):
                         self.embedding_temporal, self.embedding_time, ctx_features,\
                         parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
 
+                pdb.set_trace()
                 for block_id, block in enumerate(prog):
                     op = block['op']
 

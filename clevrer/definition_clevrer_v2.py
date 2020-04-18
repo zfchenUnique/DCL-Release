@@ -32,6 +32,7 @@ class CLEVRERDefinitionV2(DatasetDefinitionBase):
         ('start', [], ['object_set'], 'time_set'),
         ('filter_collision', [], ['time_set'], ['object_set, time_set']),
         ('get_col_partner', [], ['object', 'col_set'], ['object_set']),
+        ('filter_ancestor', [], ['object_set', 'event', 'object_set', 'event'], ['event_mask1', 'event_mask2', 'event_mask3']),
     ]
 
     attribute_concepts = {
