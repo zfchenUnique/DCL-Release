@@ -712,10 +712,13 @@ class clevrerDataset(Dataset):
         return tube_info 
 
     def __len__(self):
-        if self.args.extract_region_attr_flag:
-            return len(self.frm_ann)
+        if self.args.debug:
+            return 100
         else:
-            return len(self.question_ann)
+            if self.args.extract_region_attr_flag:
+                return len(self.frm_ann)
+            else:
+                return len(self.question_ann)
 
     def make_dataloader(self, batch_size, shuffle, drop_last, nr_workers):
         from jactorch.data.dataloader import JacDataLoader

@@ -250,14 +250,17 @@ class QALoss(MultitaskLossBase):
 
 
             key = 'acc/qa/' + query_type
-            
+            question_type_new = feed_dict['question_type_new'][j]
+            new_key = 'acc/qa/' + question_type_new            
             if isinstance(gt, list):
                 for idx in range(len(gt)):
                     monitors.setdefault(key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault('acc/qa', []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
+                    monitors.setdefault(new_key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
             else:
                 monitors.setdefault(key, []).append((int(gt == argmax), acc_w))
                 monitors.setdefault('acc/qa', []).append((int(gt == argmax), acc_w))
+                monitors.setdefault(new_key, []).append((int(gt == argmax), acc_w))
 
 
             if self.training and self.add_supervision:
@@ -266,10 +269,12 @@ class QALoss(MultitaskLossBase):
                         l = loss(a[idx], gt[idx])
                         monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                         monitors.setdefault('loss/qa', []).append((l, loss_w))
+                        monitors.setdefault('loss/qa/' + question_type_new, []).append((l, loss_w))
                 else:
                     l = loss(a, gt)
                     monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                     monitors.setdefault('loss/qa', []).append((l, loss_w))
+                    monitors.setdefault('loss/qa/' + question_type_new, []).append((l, loss_w))
 
         return monitors, outputs
 
