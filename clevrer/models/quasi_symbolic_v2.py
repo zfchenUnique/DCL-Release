@@ -779,26 +779,26 @@ class ProgramExecutorContext(nn.Module):
     def filter_start_end(self, group, concept_groups):
         #pdb.set_trace()
         k = 4
-        if self._concept_groups_masks[k] is None:
-            masks = list()
-            for cg in concept_groups:
-                if isinstance(cg, six.string_types):
-                    cg = [cg]
-                mask = None
-                for c in cg:
-                    concept = self.taxnomy[k].get_concept(c)
-                    new_mask = concept.softmax_normalized_embedding 
-                    mask = torch.min(mask, new_mask) if mask is not None else new_mask
-                    if _fixed_start_end:
-                        mask = torch.zeros(mask.shape, dtype=mask.dtype, device=mask.device)
-                        if c == 'start':
-                            mask[:,:time_win] = 1
-                        elif c == 'end':
-                            mask[:,-time_win:] = 1
-                        #pdb.set_trace() 
-                    masks.append(mask)
-            self._time_buffer_masks = mask 
-            self._concept_groups_masks[k] = torch.stack(masks, dim=0)
+        #if self._concept_groups_masks[k] is None:
+        masks = list()
+        for cg in concept_groups:
+            if isinstance(cg, six.string_types):
+                cg = [cg]
+            mask = None
+            for c in cg:
+                concept = self.taxnomy[k].get_concept(c)
+                new_mask = concept.softmax_normalized_embedding 
+                mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                if _fixed_start_end:
+                    mask = torch.zeros(mask.shape, dtype=mask.dtype, device=mask.device)
+                    if c == 'start':
+                        mask[:,:time_win] = 1
+                    elif c == 'end':
+                        mask[:,-time_win:] = 1
+                    #pdb.set_trace() 
+                masks.append(mask)
+        self._time_buffer_masks = mask 
+        self._concept_groups_masks[k] = torch.stack(masks, dim=0)
         return self._concept_groups_masks[k][group]
 
     def filter_time_object(self, selected, time_weight):
@@ -853,7 +853,7 @@ class ProgramExecutorContext(nn.Module):
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
         else:
             #pdb.set_trace()
-            ftr = self.features[3]
+            ftr = self.features[3].clone()
             if self._time_buffer_masks is not None:
                 pdb.set_trace()
         ftr = ftr.view(obj_num, -1)
@@ -883,7 +883,7 @@ class ProgramExecutorContext(nn.Module):
                 mask = do_apply_self_mask(mask)
             masks.append(mask)
         self._concept_groups_masks[k] = torch.stack(masks, dim=0)
-        self.features[2] = rel_ftr_norm 
+        #self.features[2] = rel_ftr_norm 
         return self._concept_groups_masks[k]
 
     def further_prepare_for_moving_stationary(self, ftr_ori, time_mask, concept):
@@ -912,19 +912,18 @@ class ProgramExecutorContext(nn.Module):
         obj_num, ftr_dim = self.features[3].shape
         box_dim = 4
         time_step = int(ftr_dim/box_dim)
-        
+        #if self._concept_groups_masks[k] is None:
         if time_mask is not None:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             ftr = ftr.view(obj_num, -1)
         else:
             #pdb.set_trace()
             if self._time_buffer_masks is None:
-                ftr = self.features[3]
+                ftr = self.features[3].clone()
             else:
                 ftr = self.features[3].view(obj_num, time_step, box_dim) * self._time_buffer_masks.view(1, time_step, 1)
                 ftr = ftr.view(obj_num, -1)
                 time_mask = self._time_buffer_masks.squeeze() 
-        #if self._concept_groups_masks[k] is None:
         masks = list()
         for cg in concept_groups:
             if isinstance(cg, six.string_types):
@@ -1043,26 +1042,33 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
+
+            ctx_features = [None]
+            for f_id in range(1, 4): 
+                ctx_features.append(features[f_id].clone())
+
+            if self.args.apply_gaussian_smooth_flag:
+                ctx_features[3] = Gaussin_smooth(ctx_features[3])
+
+            ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
+                    self.embedding_temporal, self.embedding_time, ctx_features,\
+                    parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
+
+
             for i,  prog in enumerate(progs):
 
                 if feed_dict['meta_ann']['questions'][i]['question_type']!='descriptive':
                     continue 
+            
+                ctx._concept_groups_masks = [None, None, None, None, None]
+                ctx._time_buffer_masks = None
+                ctx._attribute_groups_masks = None
 
                 buffer = []
 
                 buffers.append(buffer)
                 programs.append(prog)
                 
-                ctx_features = [None]
-                for f_id in range(1, 4): 
-                    ctx_features.append(features[f_id].clone())
-
-                if self.args.apply_gaussian_smooth_flag:
-                    ctx_features[3] = Gaussin_smooth(ctx_features[3])
-
-                ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
-                        self.embedding_temporal, self.embedding_time, ctx_features,\
-                        parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
 
                 for block_id, block in enumerate(prog):
                     op = block['op']
@@ -1150,30 +1156,34 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
+            ctx_features = [None]
+            for f_id in range(1, 4): 
+                ctx_features.append(features[f_id].clone())
 
+            if self.args.apply_gaussian_smooth_flag:
+                ctx_features[3] = Gaussin_smooth(ctx_features[3])
 
+            ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
+                    self.embedding_temporal, self.embedding_time, ctx_features,\
+                    parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
+
+            valid_num = 0
             for i,  prog in enumerate(progs):
                 if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory':
                     continue 
+
                 buffer = []
 
                 buffers.append(buffer)
                 programs.append(prog)
                 
-                ctx_features = [None]
-                for f_id in range(1, 4): 
-                    ctx_features.append(features[f_id].clone())
-
-                if self.args.apply_gaussian_smooth_flag:
-                    ctx_features[3] = Gaussin_smooth(ctx_features[3])
-
-                ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
-                        self.embedding_temporal, self.embedding_time, ctx_features,\
-                        parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
                 choice_output  = []
                 choice_buffer_list = []
                 for c_id, tmp_choice in enumerate(feed_dict['meta_ann']['questions'][i]['choices']):
                     choice_prog = tmp_choice['program_cl']
+                    ctx._concept_groups_masks = [None, None, None, None, None]
+                    ctx._time_buffer_masks = None
+                    ctx._attribute_groups_masks = None
                     #print(tmp_choice['program_cl'])
                     #print(tmp_choice['choice'])
                     tmp_event_buffer = []
@@ -1234,6 +1244,9 @@ class DifferentiableReasoning(nn.Module):
                             event_buffer = torch.min(event_buffer, tmp_mask) if event_buffer is not None else tmp_mask
                     choice_output.append([choice_type, event_buffer]) 
 
+                ctx._concept_groups_masks = [None, None, None, None, None]
+                ctx._time_buffer_masks = None
+                ctx._attribute_groups_masks = None
                 for block_id, block in enumerate(prog):
                     op = block['op']
 
@@ -1301,8 +1314,8 @@ class DifferentiableReasoning(nn.Module):
                                 buffer[-1] = tuple(buffer[-1])
 
                 result.append((op, buffer[-1]))
-
-                quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
+                quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict, valid_num)
+                valid_num +=1
             
             programs_list.append(programs)
             buffers_list.append(buffers)
