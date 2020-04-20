@@ -118,6 +118,7 @@ parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
 parser.add_argument('--start_index', type=int, default=0)
 parser.add_argument('--extract_region_attr_flag', type=int, default=0)
 parser.add_argument('--smp_coll_frm_num', type=int, default=32)
+parser.add_argument('--prefix', type=str, default='')
 
 args = parser.parse_args()
 
@@ -150,7 +151,8 @@ def main():
         args.dump_dir = args.dump_dir + '_even_smp'+str(args.frm_img_num)
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_col_box_ftr'
-    args.dump_dir +=  '_' + args.version 
+    args.dump_dir +=  '_' + args.version + '_' + args.prefix
+
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -175,13 +177,13 @@ def main():
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
     #for ii in range(1, 200):
+    #    pass 
     #    feed_dict = train_dataset.__getitem__(ii)
     #    for ques_info in feed_dict['meta_ann']['questions']:
     #        for op in ques_info['program']:
-    #            pass 
-                #if 'program_cl' not in ques_info.keys():
-                #    continue 
-    #            if 'filter_order' in op:
+    #            if 'program_cl' not in ques_info.keys():
+    #                continue 
+    #            if 'filter_ancestor' in op:
     #                print(ques_info['program'])
     #                pdb.set_trace()
     validation_dataset = build_clevrer_dataset(args, 'validation')
@@ -264,14 +266,19 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         logger.critical(meters.format_simple('Validation', {k: v for k, v in meters.avg.items() if v != 0}, compressed=False))
         return meters
 
+    if args.debug:
+        shuffle_flag=False
+        args.num_workers = 0
+    else:
+        shuffle_flag=True
+
     for epoch in range(args.start_epoch + 1, args.epochs + 1):
         meters.reset()
 
         model.train()
 
         this_train_dataset = train_dataset
-        #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
-        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=True, nr_workers=args.data_workers)
+        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=shuffle_flag, drop_last=True, nr_workers=args.data_workers)
 
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
