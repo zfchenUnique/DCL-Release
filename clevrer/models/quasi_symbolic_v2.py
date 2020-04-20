@@ -811,7 +811,7 @@ class ProgramExecutorContext(nn.Module):
         mask = torch.min(selected, obj_weight.squeeze())
         return mask
 
-    def _get_concept_groups_masks(self, concept_groups, k):
+    def _get_concept_groups_masks_bp(self, concept_groups, k):
         #if self._concept_groups_masks[k] is None:
         masks = list()
         for cg in concept_groups:
@@ -825,6 +825,22 @@ class ProgramExecutorContext(nn.Module):
                 mask = do_apply_self_mask(mask)
             masks.append(mask)
         self._concept_groups_masks[k] = torch.stack(masks, dim=0)
+        return self._concept_groups_masks[k]
+
+    def _get_concept_groups_masks(self, concept_groups, k):
+        if self._concept_groups_masks[k] is None:
+            masks = list()
+            for cg in concept_groups:
+                if isinstance(cg, six.string_types):
+                    cg = [cg]
+                mask = None
+                for c in cg:
+                    new_mask = self.taxnomy[k].similarity(self.features[k], c)
+                    mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                if k == 2 and _apply_self_mask['relate']:
+                    mask = do_apply_self_mask(mask)
+                masks.append(mask)
+            self._concept_groups_masks[k] = torch.stack(masks, dim=0)
         return self._concept_groups_masks[k]
 
     def _get_order_groups_masks(self, concept_groups, k):
