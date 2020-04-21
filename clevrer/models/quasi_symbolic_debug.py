@@ -56,11 +56,13 @@ def make_debug_ctx(fd, buffer, i):
     return Context()
 
 
-def embed(self, i, buffer, result, fd):
+def embed(self, i, buffer, result, fd, valid_num=None):
     #DEBUG='ALL'
+    DEBUG='OFF'
+    result_idx = valid_num if valid_num is not None else i
     if not self.training and DEBUG != 'OFF':
     #if True:
-        p, l = result[i][1], fd['answer'][i]
+        p, l = result[result_idx][1], fd['answer'][i]
         if isinstance(p, tuple):
             p, word2idx = p
             p = p.argmax(-1).item()
@@ -68,9 +70,18 @@ def embed(self, i, buffer, result, fd):
             p = idx2word[p]
         elif fd['question_type'][i] == 'exist':
             p, l = int((p > 0).item()), int(l)
+        elif isinstance(p, list):
+            new_p = []; new_l = []
+            for idx in range(len(p)):
+                new_l.append(None)
+                new_p.append(None)
+                new_p[idx], new_l[idx] = int((p[idx] > 0).item()), int(l[idx])
         else:
             p, l = int(p.item()), int(l)
 
+        if not isinstance(p, list):
+            new_p = p
+            new_l = l
 
         gogogo = False
         if p == l:
@@ -78,14 +89,14 @@ def embed(self, i, buffer, result, fd):
             if DEBUG in ('ALL', 'CORRECT'):
                 print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 gogogo = True
-                #pdb.set_trace()
+                pdb.set_trace()
         else:
             print('Wrong: ', p, l)
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
                 print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 #print('%s'%(fd['meta_ann']['questions'][i]['program']))
-                #pdb.set_trace()
+                pdb.set_trace()
 
         if gogogo and 0:
             print('Starting the tracker.')

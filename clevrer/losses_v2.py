@@ -86,7 +86,7 @@ class SceneParsingLoss(MultitaskLossBase):
             for concept in concepts:
                 if 'relation_' + concept not in feed_dict:
                     continue
-                #pdb.set_trace()
+                pdb.set_trace()
                 cross_scores = []
                 for f in f_sng:
                     obj_num, ftr_dim = f[3].shape
@@ -120,7 +120,6 @@ class SceneParsingLoss(MultitaskLossBase):
                     coll_mat = 0.5 * (coll_mat + coll_mat.transpose(1, 0))
                     coll_mat = do_apply_self_mask_3d(coll_mat)
                     coll_mat_max, coll_mat_idx =  torch.max(coll_mat, dim=2)
-                    #pdb.set_trace()
                     cross_scores.append(coll_mat_max.view(-1))
                 cross_scores = torch.cat(cross_scores)
                 cross_labels = feed_dict['relation_' + concept].view(-1)
