@@ -484,7 +484,6 @@ class ProgramExecutorContext(nn.Module):
         return choice_result_list
 
     def count(self, selected):
-        #pdb.set_trace()
         if isinstance(selected, tuple):
             selected = selected[0]
         if len(selected.shape)==1: # for objects
@@ -497,6 +496,7 @@ class ProgramExecutorContext(nn.Module):
                 return torch.sigmoid(selected).sum(dim=-1).round()
         elif len(selected.shape)==2:  # for collision
             # mask out the diag elelments for collisions
+            #pdb.set_trace()
             obj_num = selected.shape[0]
             self_mask = 1- torch.eye(obj_num, dtype=selected.dtype, device=selected.device)
             count_conf = self_mask * (selected+selected.transpose(1, 0))*0.5
@@ -548,6 +548,7 @@ class ProgramExecutorContext(nn.Module):
         if selected is not None and (not isinstance(selected, (tuple, list))):
             colli_mask1 = torch.min(colli_mask, selected.unsqueeze(-1))
             colli_mask2 = torch.min(colli_mask, selected.unsqueeze(-2))
+            #pdb.set_trace()
             colli_mask  = 0.5*(colli_mask1 + colli_mask2)
         return colli_mask, colli_t_idx 
 
@@ -1058,6 +1059,7 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
+            #pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
@@ -1079,6 +1081,7 @@ class DifferentiableReasoning(nn.Module):
                 ctx._concept_groups_masks = [None, None, None, None, None]
                 ctx._time_buffer_masks = None
                 ctx._attribute_groups_masks = None
+                ctx._attribute_query_masks = None
 
                 buffer = []
 
@@ -1200,6 +1203,7 @@ class DifferentiableReasoning(nn.Module):
                     ctx._concept_groups_masks = [None, None, None, None, None]
                     ctx._time_buffer_masks = None
                     ctx._attribute_groups_masks = None
+                    ctx._attribute_query_masks = None
                     #print(tmp_choice['program_cl'])
                     #print(tmp_choice['choice'])
                     tmp_event_buffer = []
@@ -1263,6 +1267,7 @@ class DifferentiableReasoning(nn.Module):
                 ctx._concept_groups_masks = [None, None, None, None, None]
                 ctx._time_buffer_masks = None
                 ctx._attribute_groups_masks = None
+                ctx._attribute_query_masks = None
                 for block_id, block in enumerate(prog):
                     op = block['op']
 
