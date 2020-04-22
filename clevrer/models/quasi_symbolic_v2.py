@@ -1129,8 +1129,8 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
                                 block['time_concept_values']))
                     elif op == 'filter_before' or op == 'filter_after':
-                        print(feed_dict['meta_ann']['questions'][i]['question'])
-                        pdb.set_trace()
+                        #print(feed_dict['meta_ann']['questions'][i]['question'])
+                        #pdb.set_trace()
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
