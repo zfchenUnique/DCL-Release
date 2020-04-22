@@ -913,8 +913,11 @@ class ProgramExecutorContext(nn.Module):
             ed_idx = min(int(max_idx+time_win*0.5), time_step-1)
             time_mask[st_idx:ed_idx] = 1
             #pdb.set_trace()
-        assert time_mask is not None
-        ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+        #assert time_mask is not None
+        if time_mask is not None:
+            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+        else:
+            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim)
         ftr_diff = torch.zeros(obj_num, time_step, box_dim, dtype=ftr_ori.dtype, \
                 device=ftr_ori.device)
         ftr_diff[:, :time_step-1, :] = ftr_mask[:, 0:time_step-1, :] - ftr_mask[:, 1:time_step, :]
