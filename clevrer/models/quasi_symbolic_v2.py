@@ -258,7 +258,7 @@ class ProgramExecutorContext(nn.Module):
         self.train(training)
         self._events_buffer = [None, None, None] # collision, in and out 
         self.time_step = int(self.features[3].shape[1]/4)
-
+        self.valid_seq_mask  = None
 
     def filter_ancestor(self, event_list):
         obj_id_list =[]
@@ -501,12 +501,12 @@ class ProgramExecutorContext(nn.Module):
             self_mask = 1- torch.eye(obj_num, dtype=selected.dtype, device=selected.device)
             count_conf = self_mask * (selected+selected.transpose(1, 0))*0.5
             if self.training:
-                return torch.sigmoid(count_conf).sum()
+                return torch.sigmoid(count_conf).sum()/2
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
-                    return (count_conf > 0).float().sum()
+                    return (count_conf > 0).float().sum()/2
                 #print('Debuging!')
-                return torch.sigmoid(count_conf).sum().round()
+                return (torch.sigmoid(count_conf).sum()/2).round()
 
     _count_margin = 0.25
     _count_tau = 0.25
@@ -557,11 +557,9 @@ class ProgramExecutorContext(nn.Module):
             mask_idx = mask[1]
             mask = mask[0]
         mask = (mask * selected.unsqueeze(-1)).sum(dim=-2)
-        selected_quan = jacf.general_softmax(selected, impl='gumbel_hard', training=False)
-        mask_idx = (mask * selected_quan.unsqueeze(-1)).sum(dim=-2)
-        return mask, mask_idx  
-
-
+        #selected_quan = jacf.general_softmax(selected, impl='gumbel_hard', training=False)
+        #mask_idx = (mask * selected_quan.unsqueeze(-1)).sum(dim=-2)
+        return mask
 
     def query(self, selected, group, attribute_groups):
         if isinstance(selected, tuple):
@@ -963,6 +961,10 @@ class ProgramExecutorContext(nn.Module):
             for c in cg:
                 if (c == 'moving' or c == 'stationary') and self.args.diff_for_moving_stationary_flag:
                     ftr = self.further_prepare_for_moving_stationary(self.features[3], time_mask, c)
+                #pdb.set_trace()
+                if self.valid_seq_mask is not None:
+                    ftr = ftr.view(obj_num, time_step, box_dim) * self.valid_seq_mask - (1-self.valid_seq_mask)
+                    ftr = ftr.view(obj_num, -1)
                 new_mask = self.taxnomy[k].similarity(ftr, c)
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
             masks.append(mask)
@@ -1064,6 +1066,7 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
+        
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
@@ -1072,8 +1075,6 @@ class DifferentiableReasoning(nn.Module):
             buffers = []
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
-
-            #pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
@@ -1086,6 +1087,10 @@ class DifferentiableReasoning(nn.Module):
                     self.embedding_temporal, self.embedding_time, ctx_features,\
                     parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
 
+            if 'valid_seq_mask' in feed_dict.keys():
+                ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
+                valid_len = feed_dict['valid_seq_mask'].shape[1]
+                ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
 
             for i,  prog in enumerate(progs):
 

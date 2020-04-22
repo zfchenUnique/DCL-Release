@@ -268,7 +268,7 @@ class clevrerDataset(Dataset):
        # getting image frames 
         tube_info = self.sample_tube_frames(scene_idx)
         if self.args.even_smp_flag:
-            frm_dict = self.sample_frames_v2(tube_info, self.args.frm_img_num)   
+            frm_dict, valid_flag_dict = self.sample_frames_v2(tube_info, self.args.frm_img_num)   
         else:
             frm_dict = self.sample_frames(tube_info, self.args.frm_img_num)   
         frm_list = frm_dict['frm_list']
@@ -282,7 +282,7 @@ class clevrerDataset(Dataset):
             img_list.append(img)
         img_tensor = torch.stack(img_list, 0)
         data['img'] = img_tensor 
-        
+        data['valid_seq_mask'] = valid_flag_dict  
         # resize frame boxes
         img_size = self.args.img_size
         ratio = img_size / min(H, W)
@@ -671,10 +671,13 @@ class clevrerDataset(Dataset):
             tube_box_dict[tube_id] = tmp_dict 
         frm_list_unique = list(set(frm_list))
         frm_list_unique.sort()
+
         tube_box_dict['frm_list'] = frm_list_unique  
 
         if self.args.normalized_boxes:
-            
+            frm_num = len(tube_info['tubes'][0]) 
+            tube_num = len(tube_info['tubes']) 
+            valid_flag_dict = np.ones((tube_num, frm_num))
             for tube_id, tmp_tube in enumerate(tube_info['tubes']):
                 tmp_dict = {}
                 frm_num = len(tmp_tube) 
@@ -686,6 +689,7 @@ class clevrerDataset(Dataset):
                             tmp_box = [-1*self.W, -1*self.H, -1*self.W, -1*self.H]
                         else:
                             tmp_box = [0, 0, 0, 0]
+                        valid_flag_dict[tube_id, frm_id] = 0
                     x_c = (tmp_box[0] + tmp_box[2])* 0.5
                     y_c = (tmp_box[1] + tmp_box[3])* 0.5
                     w = tmp_box[2] - tmp_box[0]
@@ -696,9 +700,8 @@ class clevrerDataset(Dataset):
                     tmp_array[2] = tmp_array[2] / self.W
                     tmp_array[3] = tmp_array[3] / self.H
                     tube_info['tubes'][tube_id][frm_id] = tmp_array 
-        tube_box_dict['box_seq'] = tube_info  
-
-        return tube_box_dict 
+        tube_box_dict['box_seq'] = tube_info   
+        return tube_box_dict , valid_flag_dict 
 
     def sample_tube_frames(self, index):
         prp_full_path = os.path.join(self.args.tube_prp_path, 'proposal_' + str(index).zfill(5)+'.pk') 
