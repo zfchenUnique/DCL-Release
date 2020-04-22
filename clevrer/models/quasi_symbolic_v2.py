@@ -604,7 +604,6 @@ class ProgramExecutorContext(nn.Module):
     def filter_temporal(self, selected, group, concept_groups):
         if group is None:
             return selected
-        #pdb.set_trace()
         if isinstance(selected, list) and len(selected)==2:
             if isinstance(selected[1], tuple):
                 time_mask = selected[1][1]
@@ -758,7 +757,6 @@ class ProgramExecutorContext(nn.Module):
 
     def filter_in_out_rule(self, selected, group, concept_groups):
         if isinstance(selected, tuple):
-            pdb.set_trace() 
             selected = selected[0]
         # update obejct state
         assert len(concept_groups[group])==1 
@@ -909,19 +907,28 @@ class ProgramExecutorContext(nn.Module):
         time_step = int(ftr_dim/box_dim)
         if time_mask is None and (self._time_buffer_masks is not None):
             time_mask = self._time_buffer_masks 
-            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
-        elif time_mask is None:
-            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim)
-        elif time_mask is not None:
-            #pdb.set_trace()
+        elif time_mask is not None and time_mask.sum()<=1:
             max_idx = torch.argmax(time_mask)
             st_idx = max(int(max_idx-time_win*0.5), 0)
             ed_idx = min(int(max_idx+time_win*0.5), time_step-1)
             time_mask[st_idx:ed_idx] = 1
-            ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+            #pdb.set_trace()
+        assert time_mask is not None
+        ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
         ftr_diff = torch.zeros(obj_num, time_step, box_dim, dtype=ftr_ori.dtype, \
                 device=ftr_ori.device)
         ftr_diff[:, :time_step-1, :] = ftr_mask[:, 0:time_step-1, :] - ftr_mask[:, 1:time_step, :]
+        st_idx = 0
+        for idx in range(time_step):
+            if time_mask[idx]>0:
+                st_idx = idx -1 if (idx-1)>=0 else idx
+                break 
+        for idx in range(time_step-1, -1, -1):
+            if time_mask[idx]>0:
+                ed_idx = idx if idx>=0 else 0
+                break 
+        ftr_diff[:, st_idx, :] = 0
+        ftr_diff[:, ed_idx, :] = 0
         ftr_diff = ftr_diff.view(obj_num, ftr_dim)
         return ftr_diff 
 
@@ -929,14 +936,17 @@ class ProgramExecutorContext(nn.Module):
         obj_num, ftr_dim = self.features[3].shape
         box_dim = 4
         time_step = int(ftr_dim/box_dim)
+        #pdb.set_trace()
         #if self._concept_groups_masks[k] is None:
-        if time_mask is not None:
+        if time_mask is not None and time_mask.sum()>1:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             ftr = ftr.view(obj_num, -1)
+        elif time_mask is not None:
+            ftr = self.features[3].clone()
         else:
-            #pdb.set_trace()
-            if self._time_buffer_masks is None:
+            if self._time_buffer_masks is None or self._time_buffer_masks.sum()<=1:
                 ftr = self.features[3].clone()
+                time_mask = self._time_buffer_masks 
             else:
                 ftr = self.features[3].view(obj_num, time_step, box_dim) * self._time_buffer_masks.view(1, time_step, 1)
                 ftr = ftr.view(obj_num, -1)
@@ -1119,6 +1129,8 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
                                 block['time_concept_values']))
                     elif op == 'filter_before' or op == 'filter_after':
+                        print(feed_dict['meta_ann']['questions'][i]['question'])
+                        pdb.set_trace()
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
@@ -1135,10 +1147,10 @@ class DifferentiableReasoning(nn.Module):
                         elif op == 'count':
                             buffer.append(ctx.count(*inputs))
                         elif op == 'negate':
-                            pdb.set_trace()
+                            #pdb.set_trace()
                             buffer.append(ctx.negate(*inputs))
                         else:
-                            pdb.set_trace()
+                            #pdb.set_trace()
                             raise NotImplementedError('Unsupported operation: {}.'.format(op))
 
                     if not self.training and _test_quantize.value > InferenceQuantizationMethod.STANDARD.value:

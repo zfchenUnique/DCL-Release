@@ -472,6 +472,7 @@ class ProgramExecutorContext(nn.Module):
                     if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id) and torch.sum(tar_ftr[t_id:end_id,2])>0:
                         if self.args.diff_for_moving_stationary_flag:
                             time_weight[t_id] = 1
+                            print('bug!')
                         else:
                             time_weight[t_id:end_id] = 1
                         break 
@@ -670,12 +671,13 @@ class ProgramExecutorContext(nn.Module):
         box_dim = 4
         time_step = int(ftr_dim/box_dim)
         
-        if time_mask is not None:
+        if time_mask is not None and time_mask.sum()>1:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
             ftr = ftr.view(obj_num, -1)
         else:
             #pdb.set_trace()
-            if self._time_buffer_masks is None:
+            #if self._time_buffer_masks is None:
+            if self._time_buffer_masks is None or self._time_buffer_masks.sum()<=1:
                 ftr = self.features[3]
             else:
                 ftr = self.features[3].view(obj_num, time_step, box_dim) * self._time_buffer_masks.view(1, time_step, 1)
@@ -778,7 +780,7 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
-        #pdb.set_trace()
+        pdb.set_trace()
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 

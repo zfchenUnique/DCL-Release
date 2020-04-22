@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from jacinle.utils.enum import JacEnum
 from nscl.nn.losses import MultitaskLossBase
 from nscl.datasets.definition import gdef
-from clevrer.models.quasi_symbolic_v2 import fuse_box_ftr, fuse_box_overlap, do_apply_self_mask_3d   
+from clevrer.models.quasi_symbolic_v2 import fuse_box_ftr, fuse_box_overlap, do_apply_self_mask_3d, Gaussin_smooth    
 import pdb
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
@@ -38,6 +38,9 @@ class SceneParsingLoss(MultitaskLossBase):
         all_f = torch.cat(objects)
         
         obj_box = [f[3] for f in f_sng]
+        if self.args.apply_gaussian_smooth_flag:
+            obj_box = [ Gaussin_smooth(f[3]) for f in f_sng]
+        
         all_f_box = torch.cat(obj_box)
 
         for attribute, concepts in self.used_concepts['attribute'].items():
@@ -86,7 +89,6 @@ class SceneParsingLoss(MultitaskLossBase):
             for concept in concepts:
                 if 'relation_' + concept not in feed_dict:
                     continue
-                pdb.set_trace()
                 cross_scores = []
                 for f in f_sng:
                     obj_num, ftr_dim = f[3].shape
@@ -126,6 +128,13 @@ class SceneParsingLoss(MultitaskLossBase):
 
                 acc_key = 'acc/scene/relation/' + concept
                 monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
+                acc_key_pos = 'acc/scene/relation/' + concept +'_pos'
+                acc_key_neg = 'acc/scene/relation/' + concept +'_neg'
+                acc_mat = ((cross_scores > 0).long() == cross_labels.long()).float()
+                pos_acc = (acc_mat * cross_labels.float()).sum() / (cross_labels.float().sum()+ 0.000001)
+                neg_acc = (acc_mat * (1- cross_labels.float())).sum() / ((1-cross_labels.float()).sum()+0.000001)
+                monitors[acc_key_pos] = pos_acc 
+                monitors[acc_key_neg] = neg_acc
                 if self.training and self.add_supervision:
                     label_len = cross_labels.shape[0]
                     pos_num = cross_labels.sum().float()
