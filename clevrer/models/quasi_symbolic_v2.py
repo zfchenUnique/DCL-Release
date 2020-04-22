@@ -921,15 +921,16 @@ class ProgramExecutorContext(nn.Module):
         ftr_diff = torch.zeros(obj_num, time_step, box_dim, dtype=ftr_ori.dtype, \
                 device=ftr_ori.device)
         ftr_diff[:, :time_step-1, :] = ftr_mask[:, 0:time_step-1, :] - ftr_mask[:, 1:time_step, :]
-        st_idx = 0
-        for idx in range(time_step):
-            if time_mask[idx]>0:
-                st_idx = idx -1 if (idx-1)>=0 else idx
-                break 
-        for idx in range(time_step-1, -1, -1):
-            if time_mask[idx]>0:
-                ed_idx = idx if idx>=0 else 0
-                break 
+        st_idx = 0; ed_idx = time_step - 1
+        if time_mask is not None:
+            for idx in range(time_step):
+                if time_mask[idx]>0:
+                    st_idx = idx -1 if (idx-1)>=0 else idx
+                    break 
+            for idx in range(time_step-1, -1, -1):
+                if time_mask[idx]>0:
+                    ed_idx = idx if idx>=0 else 0
+                    break 
         ftr_diff[:, st_idx, :] = 0
         ftr_diff[:, ed_idx, :] = 0
         ftr_diff = ftr_diff.view(obj_num, ftr_dim)
