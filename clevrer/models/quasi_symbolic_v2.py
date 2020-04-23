@@ -43,6 +43,7 @@ _fixed_start_end = True
 time_win = 10
 _symmetric_collision_flag=True
 EPS = 1e-10
+_collision_thre = 0.0
 
 def compute_IoU(bbox1_xyhw, bbox2_xyhw):
     bbox1_area = bbox1_xyhw[:, 2] * bbox1_xyhw[:, 3]
@@ -327,7 +328,7 @@ class ProgramExecutorContext(nn.Module):
 
             all_causes.append([colli_mask3, in_mask, out_mask])
             # filter other objects in the graphs 
-            obj_idx_mat = (colli_mask3>0).nonzero()
+            obj_idx_mat = (colli_mask3>_collision_thre).nonzero()
             event_len = obj_idx_mat.shape[0] 
 
             for idx in range(event_len):
@@ -1178,7 +1179,7 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
-            #pdb.set_trace()
+            pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
