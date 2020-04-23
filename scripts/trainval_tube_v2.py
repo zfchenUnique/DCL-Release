@@ -126,6 +126,7 @@ parser.add_argument('--start_index', type=int, default=0)
 parser.add_argument('--extract_region_attr_flag', type=int, default=0)
 parser.add_argument('--smp_coll_frm_num', type=int, default=32)
 parser.add_argument('--prefix', type=str, default='')
+parser.add_argument('--colli_ftr_type', type=int, default=0, help='0 for average rgb, 1 for KNN sampling')
 
 args = parser.parse_args()
 

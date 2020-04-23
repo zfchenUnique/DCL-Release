@@ -45,6 +45,9 @@ def make_reasoning_v2_configs():
     configs.train.qa_add_supervision = False
     configs.train.parserv1_reward_shape = 'loss'
 
+    # new collision feature type
+    configs.colli_ftr_type = 0
+
     return configs
 
 
@@ -52,7 +55,7 @@ class ReasoningV2ModelForCLEVRER(nn.Module):
     def __init__(self, configs, args=None):
         super().__init__()
         self.args=args 
-
+        configs.colli_ftr_type = args.colli_ftr_type 
         import jactorch.models.vision.resnet as resnet
         self.resnet = resnet.resnet34(pretrained=True, incl_gap=False, num_classes=None)
         self.resnet.layer4 = jacnn.Identity()

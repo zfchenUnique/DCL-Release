@@ -88,8 +88,12 @@ class SceneGraph(nn.Module):
                 device=outputs[0][1].device)
         rel_ftr = torch.zeros(obj_num, obj_num, outputs[0][1].shape[1], \
                 dtype=outputs[0][1].dtype, device=outputs[0][1].device)
-        #obj_count =[0 for obj_id in range(obj_num)]
-        #rel_count = np.zeros([obj_num, obj_num])
+        
+        if self.args.colli_ftr_type==1:
+            frm_num = len(outputs)
+            rel_ftr_exp = torch.zeros(obj_num, obj_num, frm_num, outputs[0][1].shape[1], \
+                    dtype=outputs[0][1].dtype, device=outputs[0][1].device)
+        #pdb.set_trace()
         for out_id, out_ftr in enumerate(outputs):
             tube_id_list = out_ftr[3]
             for ftr_id, tube_id in enumerate(tube_id_list):
@@ -98,6 +102,7 @@ class SceneGraph(nn.Module):
             for t_id1, tube_id1 in enumerate(tube_id_list):
                 for t_id2, tube_id2 in enumerate(tube_id_list):
                     rel_ftr[tube_id1, tube_id2] += out_ftr[2][t_id1, t_id2]              
+                    rel_ftr_exp[tube_id1, tube_id2, out_id] = out_ftr[2][t_id1, t_id2]
 
         vid_len = len(feed_dict['tube_info'][0])
         tube_list = []
@@ -119,7 +124,11 @@ class SceneGraph(nn.Module):
         box_dim = min(128*4, tube_tensor.shape[1])
         box_ftr[:,:box_dim] = tube_tensor
 
-        rel_ftr_norm = self._norm(rel_ftr)
+        if self.args.colli_ftr_type==1:
+            rel_ftr_norm = self._norm(rel_ftr_exp)
+        else:
+            rel_ftr_norm = self._norm(rel_ftr)
+        
         if self.args.rel_box_flag: 
             rel_ftr_box = torch.zeros(obj_num, obj_num, 128*4*4, \
                     dtype=outputs[0][1].dtype, device=outputs[0][1].device)

@@ -644,7 +644,8 @@ class clevrerDataset(Dataset):
         tube_box_dict = {}
         frm_num = len(tube_info['tubes'][0]) 
         smp_diff = int(frm_num/img_num)
-        frm_list = list(range(0, frm_num, smp_diff))
+        frm_offset = 0 if img_num==6 else int(img_num/2)
+        frm_list = list(range(frm_offset, frm_num, smp_diff))
         for tube_id, tmp_tube in enumerate(tube_info['tubes']):
             tmp_dict = {}
             tmp_list = []
