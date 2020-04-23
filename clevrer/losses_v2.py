@@ -105,7 +105,21 @@ class SceneParsingLoss(MultitaskLossBase):
                     # N*N*smp_coll_frm_num*(seg_frm_num*box_dim*4)
                     rel_box_ftr = fuse_box_ftr(ftr)
                     # concatentate
-                    if not self.args.box_only_for_collision_flag:
+
+                    if self.args.colli_ftr_type ==1:
+                        vis_ftr_num = f[2].shape[2]
+                        col_ftr_dim = f[2].shape[3]
+                        off_set = smp_coll_frm_num % vis_ftr_num 
+                        exp_dim = int(smp_coll_frm_num / vis_ftr_num )
+                        coll_ftr = torch.zeros(obj_num, obj_num, smp_coll_frm_num, col_ftr_dim, \
+                                dtype=rel_box_ftr.dtype, device=rel_box_ftr.device)
+                        coll_ftr_exp = f[2].unsqueeze(3).expand(obj_num, obj_num, vis_ftr_num, exp_dim, col_ftr_dim).contiguous()
+                        coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
+                        coll_ftr[:, :, :vis_ftr_num*exp_dim] = coll_ftr_exp_view 
+                        coll_ftr[:, :, vis_ftr_num*exp_dim:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
+                        rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+
+                    elif not self.args.box_only_for_collision_flag:
                         col_ftr_dim = f[2].shape[2]
                         coll_ftr_exp = f[2].unsqueeze(2).expand(obj_num, obj_num, smp_coll_frm_num, col_ftr_dim)
                         rel_ftr_norm = torch.cat([coll_ftr_exp, rel_box_ftr], dim=-1)
