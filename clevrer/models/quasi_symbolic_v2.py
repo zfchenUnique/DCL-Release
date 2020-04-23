@@ -474,7 +474,7 @@ class ProgramExecutorContext(nn.Module):
                 choice_result_list.append(choice_result)
             elif choice_type == 'object':
                 choice_result1 = torch.min(choice_mask, cause_event_list[1]).max()  
-                choice_result2 = torch.min(choice_mask, cause_event_list[1]).max()  
+                choice_result2 = torch.min(choice_mask, cause_event_list[2]).max()  
                 choice_result3 = torch.min(choice_mask.unsqueeze(-1), cause_event_list[0]).max() 
                 choice_result = torch.max(torch.stack([choice_result1, choice_result2, choice_result3]))
                 choice_result_list.append(choice_result)
@@ -678,7 +678,6 @@ class ProgramExecutorContext(nn.Module):
                     mask = torch.min(mask, new_mask) if mask is not None else new_mask
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
-            #pdb.set_trace()
 
         elif len(selected.shape)==2:
             _, sorted_idx = torch.sort(selected_idx, dim=-1)
@@ -788,7 +787,6 @@ class ProgramExecutorContext(nn.Module):
                         mask[:,:time_win] = 1
                     elif c == 'end':
                         mask[:,-time_win:] = 1
-                    #pdb.set_trace() 
                 masks.append(mask)
         self._time_buffer_masks = mask 
         self._concept_groups_masks[k] = torch.stack(masks, dim=0)
@@ -1180,6 +1178,7 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
+            #pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
