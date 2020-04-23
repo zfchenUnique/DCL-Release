@@ -310,9 +310,8 @@ class ProgramExecutorContext(nn.Module):
             #colli_3d_mask = self._events_buffer[0][0]*frm_weight.unsqueeze(0).unsqueeze(0)
             colli_3d_mask = self._events_buffer[0][0] - frm_weight_2.unsqueeze(0).unsqueeze(0)
             colli_mask, colli_t_idx = torch.max(colli_3d_mask, dim=2)
-            colli_mask1 = torch.min(colli_mask, objset_weight.unsqueeze(-1))
-            colli_mask2 = torch.min(colli_mask, objset_weight.unsqueeze(-2))
-            colli_mask3 = 0.5 * (colli_mask1 + colli_mask2)
+            obj_weight_mask = torch.max(objset_weight.unsqueeze(-1), objset_weight.unsqueeze(-2))
+            colli_mask3 = torch.min(colli_mask, obj_weight_mask)
             # filtering in/out collisions
             in_mask = torch.min(self._events_buffer[1][0], objset_weight)
             out_mask = torch.min(self._events_buffer[2][0], objset_weight)
@@ -546,10 +545,10 @@ class ProgramExecutorContext(nn.Module):
         colli_mask, colli_t_idx = torch.max(colli_3d_mask, dim=2)
         obj_set_weight = None
         if selected is not None and (not isinstance(selected, (tuple, list))):
-            colli_mask1 = torch.min(colli_mask, selected.unsqueeze(-1))
-            colli_mask2 = torch.min(colli_mask, selected.unsqueeze(-2))
+            selected_mask  = torch.max(selected.unsqueeze(-1), selected.unsqueeze(-2))
+            colli_mask = torch.min(colli_mask, selected_mask)
             #pdb.set_trace()
-            colli_mask  = 0.5*(colli_mask1 + colli_mask2)
+            #colli_mask  = 0.5*(colli_mask1 + colli_mask2)
         return colli_mask, colli_t_idx 
 
     def get_col_partner(self, selected, mask):
@@ -627,7 +626,6 @@ class ProgramExecutorContext(nn.Module):
             return selected
         if isinstance(selected, tuple):
             selected = selected[0]
-        #pdb.set_trace()
         mask = self._get_concept_groups_masks(concept_groups, 3)
         mask = torch.min(selected.unsqueeze(0), mask)
         if torch.is_tensor(group):
@@ -717,7 +715,6 @@ class ProgramExecutorContext(nn.Module):
         else:
             selected = None
         k = 4
-        #pdb.set_trace()
         naive_weight = True
         if naive_weight:
             max_weight = torch.argmax(time_weight)
@@ -774,7 +771,6 @@ class ProgramExecutorContext(nn.Module):
         return mask, self._time_buffer_masks, event_frm 
 
     def filter_start_end(self, group, concept_groups):
-        #pdb.set_trace()
         k = 4
         #if self._concept_groups_masks[k] is None:
         masks = list()
@@ -849,7 +845,6 @@ class ProgramExecutorContext(nn.Module):
             for c in cg:
                 new_mask = self.taxnomy[k].similarity(self.features[k], c)
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
-            #pdb.set_trace()
             if k == 2 and _apply_self_mask['relate']:
                 mask = do_apply_self_mask(mask)
             masks.append(mask)
@@ -865,7 +860,6 @@ class ProgramExecutorContext(nn.Module):
         if time_mask is not None:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
         else:
-            #pdb.set_trace()
             ftr = self.features[3].clone()
             if self._time_buffer_masks is not None:
                 pdb.set_trace()
@@ -891,7 +885,6 @@ class ProgramExecutorContext(nn.Module):
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
                 if _symmetric_collision_flag:
                     mask = 0.5*(mask + mask.transpose(1, 0))
-                    #pdb.set_trace()
             if k == 2 and _apply_self_mask['relate']:
                 mask = do_apply_self_mask(mask)
             masks.append(mask)
@@ -910,7 +903,6 @@ class ProgramExecutorContext(nn.Module):
             st_idx = max(int(max_idx-time_win*0.5), 0)
             ed_idx = min(int(max_idx+time_win*0.5), time_step-1)
             time_mask[st_idx:ed_idx] = 1
-            #pdb.set_trace()
         #assert time_mask is not None
         if time_mask is not None:
             ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
@@ -938,7 +930,6 @@ class ProgramExecutorContext(nn.Module):
         obj_num, ftr_dim = self.features[3].shape
         box_dim = 4
         time_step = int(ftr_dim/box_dim)
-        #pdb.set_trace()
         #if self._concept_groups_masks[k] is None:
         if time_mask is not None and time_mask.sum()>1:
             ftr = self.features[3].view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
@@ -961,7 +952,6 @@ class ProgramExecutorContext(nn.Module):
             for c in cg:
                 if (c == 'moving' or c == 'stationary') and self.args.diff_for_moving_stationary_flag:
                     ftr = self.further_prepare_for_moving_stationary(self.features[3], time_mask, c)
-                #pdb.set_trace()
                 if self.valid_seq_mask is not None:
                     ftr = ftr.view(obj_num, time_step, box_dim) * self.valid_seq_mask - (1-self.valid_seq_mask)
                     ftr = ftr.view(obj_num, -1)
@@ -1028,7 +1018,6 @@ class DifferentiableReasoning(nn.Module):
         self.hidden_dims = hidden_dims
         self.parameter_resolution = parameter_resolution
         self.args= args 
-        #pdb.set_trace()
 
         for i, nr_vars in enumerate(['attribute', 'relation', 'temporal', 'time']):
             if nr_vars not in self.used_concepts:
@@ -1051,7 +1040,6 @@ class DifferentiableReasoning(nn.Module):
         # To do divide programs into oe set and mc set
         # run program seperately 
         programs_list_oe, buffers_list_oe, result_list_oe = self.forward_oe(batch_features, progs_list, fd)
-        #pdb.set_trace()
         programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc(batch_features, progs_list, fd)
         programs_list=[]; buffers_list= []; result_list = []
         for vid in range(len(fd)):
@@ -1130,7 +1118,6 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'filter_order':
                         buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'end' or op == 'start':
-                        #pdb.set_trace()
                         buffer.append(ctx.filter_start_end(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op =='get_frame':
                         buffer.append(ctx.filter_time_object(*inputs))
@@ -1139,7 +1126,6 @@ class DifferentiableReasoning(nn.Module):
                                 block['time_concept_values']))
                     elif op == 'filter_before' or op == 'filter_after':
                         #print(feed_dict['meta_ann']['questions'][i]['question'])
-                        #pdb.set_trace()
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
@@ -1156,10 +1142,8 @@ class DifferentiableReasoning(nn.Module):
                         elif op == 'count':
                             buffer.append(ctx.count(*inputs))
                         elif op == 'negate':
-                            #pdb.set_trace()
                             buffer.append(ctx.negate(*inputs))
                         else:
-                            #pdb.set_trace()
                             raise NotImplementedError('Unsupported operation: {}.'.format(op))
 
                     if not self.training and _test_quantize.value > InferenceQuantizationMethod.STANDARD.value:
@@ -1196,6 +1180,7 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
+
             ctx_features = [None]
             for f_id in range(1, 4): 
                 ctx_features.append(features[f_id].clone())
@@ -1206,6 +1191,11 @@ class DifferentiableReasoning(nn.Module):
             ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
                     self.embedding_temporal, self.embedding_time, ctx_features,\
                     parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
+            
+            if 'valid_seq_mask' in feed_dict.keys():
+                ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
+                valid_len = feed_dict['valid_seq_mask'].shape[1]
+                ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
 
             valid_num = 0
             for i,  prog in enumerate(progs):
@@ -1252,7 +1242,6 @@ class DifferentiableReasoning(nn.Module):
                         elif op == 'filter_order':
                             choice_buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                         elif op == 'end' or op == 'start':
-                            #pdb.set_trace()
                             choice_buffer.append(ctx.filter_start_end(*inputs, block['time_concept_idx'], block['time_concept_values']))
                         elif op =='get_frame':
                             choice_buffer.append(ctx.filter_time_object(*inputs))
@@ -1275,7 +1264,6 @@ class DifferentiableReasoning(nn.Module):
                             choice_buffer.append(ctx.exist(*inputs))
                         else:
                             raise NotImplementedError 
-                    #pdb.set_trace()
                     event_buffer = None
                     if len(tmp_event_buffer) == 0:
                         event_buffer = choice_buffer[-1]
@@ -1284,6 +1272,7 @@ class DifferentiableReasoning(nn.Module):
                         for tmp_mask in tmp_event_buffer:
                             event_buffer = torch.min(event_buffer, tmp_mask) if event_buffer is not None else tmp_mask
                     choice_output.append([choice_type, event_buffer]) 
+                    choice_buffer_list.append(choice_buffer)
 
                 ctx._concept_groups_masks = [None, None, None, None, None]
                 ctx._time_buffer_masks = None
@@ -1311,7 +1300,6 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'filter_order':
                         buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'end' or op == 'start':
-                        #pdb.set_trace()
                         buffer.append(ctx.filter_start_end(*inputs, block['time_concept_idx'], block['time_concept_values']))
                     elif op =='get_frame':
                         buffer.append(ctx.filter_time_object(*inputs))
@@ -1327,7 +1315,6 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
                     elif op == 'belong_to':
-                        #pdb.set_trace()
                         buffer.append(ctx.belong_to(choice_output, *inputs))
                     elif op == 'exist':
                         buffer.append(ctx.exist(*inputs))

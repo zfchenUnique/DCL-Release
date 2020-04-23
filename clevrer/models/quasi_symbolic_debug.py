@@ -89,7 +89,7 @@ def embed(self, i, buffer, result, fd, valid_num=None):
             if DEBUG in ('ALL', 'CORRECT'):
                 print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 gogogo = True
-                pdb.set_trace()
+                #pdb.set_trace()
         else:
             print('Wrong: ', p, l)
             if DEBUG in ('ALL', 'WRONG'):
