@@ -11,6 +11,13 @@
 """
 Training and evaulating the Neuro-Symbolic Concept Learner.
 """
+import torch
+torch.manual_seed(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+import numpy as np
+np.random.seed(0)
+
 import pdb
 
 import time
@@ -176,16 +183,6 @@ def main():
     initialize_dataset(args.dataset, args.version)
     # to replace dataset
     train_dataset = build_clevrer_dataset(args, 'train')
-    #for ii in range(1, 200):
-    #    pass 
-    #    feed_dict = train_dataset.__getitem__(ii)
-    #    for ques_info in feed_dict['meta_ann']['questions']:
-    #        for op in ques_info['program']:
-    #            if 'program_cl' not in ques_info.keys():
-    #                continue 
-    #            if 'filter_ancestor' in op:
-    #                print(ques_info['program'])
-    #                pdb.set_trace()
     validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
