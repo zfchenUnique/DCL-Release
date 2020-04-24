@@ -115,8 +115,10 @@ class SceneParsingLoss(MultitaskLossBase):
                                 dtype=rel_box_ftr.dtype, device=rel_box_ftr.device)
                         coll_ftr_exp = f[2].unsqueeze(3).expand(obj_num, obj_num, vis_ftr_num, exp_dim, col_ftr_dim).contiguous()
                         coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
-                        coll_ftr[:, :, :vis_ftr_num*exp_dim] = coll_ftr_exp_view 
-                        coll_ftr[:, :, vis_ftr_num*exp_dim:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
+                        min_frm_num = min(vis_ftr_num*exp_dim, smp_coll_frm_num)
+                        coll_ftr[:, :, :min_frm_num] = coll_ftr_exp_view[:,:, :min_frm_num] 
+                        if off_set>0:
+                            coll_ftr[:, :, vis_ftr_num*exp_dim:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
                         rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
 
                     elif not self.args.box_only_for_collision_flag:

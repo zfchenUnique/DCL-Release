@@ -377,20 +377,26 @@ class ProgramExecutorContext(nn.Module):
         
         # concatentate
         if self.args.colli_ftr_type ==1:
-            vis_ftr_num = self.features[2].shape[2]
-            col_ftr_dim = self.features[2].shape[3]
-            off_set = smp_coll_frm_num % vis_ftr_num 
-            exp_dim = int(smp_coll_frm_num / vis_ftr_num )
-            exp_dim = max(1, exp_dim)
-            coll_ftr = torch.zeros(obj_num, obj_num, smp_coll_frm_num, col_ftr_dim, \
-                    dtype=rel_box_ftr.dtype, device=rel_box_ftr.device)
-            coll_ftr_exp = self.features[2].unsqueeze(3).expand(obj_num, obj_num, vis_ftr_num, exp_dim, col_ftr_dim).contiguous()
-            coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
-            min_frm_num = min(vis_ftr_num*exp_dim, smp_coll_frm_num)
-            coll_ftr[:, :, :min_frm_num] = coll_ftr_exp_view[:,:, :min_frm_num] 
-            if vis_ftr_num*exp_dim<smp_coll_frm_num:
-                coll_ftr[:, :, vis_ftr_num*exp_dim:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
-            rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+            try:
+                vis_ftr_num = self.features[2].shape[2]
+                col_ftr_dim = self.features[2].shape[3]
+                off_set = smp_coll_frm_num % vis_ftr_num 
+                exp_dim = int(smp_coll_frm_num / vis_ftr_num )
+                exp_dim = max(1, exp_dim)
+                coll_ftr = torch.zeros(obj_num, obj_num, smp_coll_frm_num, col_ftr_dim, \
+                        dtype=rel_box_ftr.dtype, device=rel_box_ftr.device)
+                coll_ftr_exp = self.features[2].unsqueeze(3).expand(obj_num, obj_num, vis_ftr_num, exp_dim, col_ftr_dim).contiguous()
+                coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
+                min_frm_num = min(vis_ftr_num*exp_dim, smp_coll_frm_num)
+                coll_ftr[:, :, :min_frm_num] = coll_ftr_exp_view[:,:, :min_frm_num] 
+                if off_set>0:
+                    #pass
+                    coll_ftr[:, :, -1*off_set:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
+                    #pdb.set_trace()
+                    #coll_ftr[:, :, min_frm_num:] = self.features[2][:, :, -1].unsqueeze(2)
+                rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+            except:
+                pdb.set_trace()
 
         elif not self.args.box_only_for_collision_flag:
             col_ftr_dim = self.features[2].shape[2]
@@ -1079,6 +1085,9 @@ class DifferentiableReasoning(nn.Module):
             buffers = []
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
+            
+            #if feed_dict['meta_ann']['scene_index']==7398:
+            #    pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
