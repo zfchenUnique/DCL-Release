@@ -389,7 +389,7 @@ class ProgramExecutorContext(nn.Module):
                 coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
                 min_frm_num = min(vis_ftr_num*exp_dim, smp_coll_frm_num)
                 coll_ftr[:, :, :min_frm_num] = coll_ftr_exp_view[:,:, :min_frm_num] 
-                if off_set>0:
+                if vis_ftr_num*exp_dim<smp_coll_frm_num:
                     #pass
                     coll_ftr[:, :, -1*off_set:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
                     #pdb.set_trace()
