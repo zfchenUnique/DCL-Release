@@ -10,6 +10,7 @@ class CLEVRERDefinitionV2(DatasetDefinitionBase):
         ('scene', [], [], 'object_set'),
         ('objects', [], [], 'object_set'),
         ('events', [], [], 'event_set'),
+        ('unseen_events', [], [], 'event_set'),
         ('filter', ['concept'], ['object_set'], 'object_set'),
         ('intersect', [], ['object_set', 'object_set'], 'object_set'),
         ('union', [], ['object_set', 'object_set'], 'object_set'),

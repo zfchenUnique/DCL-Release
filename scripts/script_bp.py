@@ -11,13 +11,6 @@
 """
 Training and evaulating the Neuro-Symbolic Concept Learner.
 """
-import torch
-torch.manual_seed(0)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-import numpy as np
-np.random.seed(0)
-
 import pdb
 
 import time
@@ -41,7 +34,6 @@ from clevrer.dataset_clevrer import build_clevrer_dataset
 
 from clevrer.utils import set_debugger
 
-
 set_debugger()
 
 logger = get_logger(__file__)
@@ -53,7 +45,7 @@ parser.add_argument('--configs', default='', type='kv', metavar='CFGS')
 
 # training_target and curriculum learning
 parser.add_argument('--expr', default=None, metavar='DIR', help='experiment name')
-parser.add_argument('--training-target', required=True, choices=['derender', 'v2'])
+parser.add_argument('--training-target', required=True, choices=['derender', 'parser', 'all'])
 parser.add_argument('--training-visual-modules', default='all', choices=['none', 'object', 'relation', 'all'])
 parser.add_argument('--curriculum', default='all', choices=['off', 'scene', 'program', 'all'])
 parser.add_argument('--question-transform', default='off', choices=['off', 'basic', 'parserv1-groundtruth', 'parserv1-candidates', 'parserv1-candidates-executed'])
@@ -118,22 +110,27 @@ parser.add_argument('--mask_gt_path', type=str, default='../clevrer/proposals/')
 parser.add_argument('--box_only_for_collision_flag', type=int, default=0)
 parser.add_argument('--scene_add_supervision', type=int, default=0)
 parser.add_argument('--scene_supervision_weight', type=float, default=1.0)
-parser.add_argument('--box_iou_for_collision_flag', type=int, default=1)
-parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=1)
-parser.add_argument('--new_mask_out_value_flag', type=int, default=1)
-parser.add_argument('--apply_gaussian_smooth_flag', type=int, default=0)
-parser.add_argument('--start_index', type=int, default=0)
-parser.add_argument('--extract_region_attr_flag', type=int, default=0)
-parser.add_argument('--smp_coll_frm_num', type=int, default=32)
-parser.add_argument('--prefix', type=str, default='')
-parser.add_argument('--colli_ftr_type', type=int, default=0, help='0 for average rgb, 1 for KNN sampling')
-parser.add_argument('--n_seen_frames', type=int, default=128, help='')
-parser.add_argument('--unseen_events_path', type=str, default='/home/zfchen/code/nsclClevrer/temporal_reasoning-master/propnet_predictions_v1.0_noAttr_noEdgeSuperv', help='')
-parser.add_argument('--background_path', type=str, default='/home/zfchen/code/nsclClevrer/temporal_reasoning-master/background.png', help='')
-parser.add_argument('--bgH', type=int, default=100)
-parser.add_argument('--bgW', type=int, default=150)
+parser.add_argument('--box_iou_for_collision_flag', type=int, default=0)
+parser.add_argument('--diff_for_moving_stationary_flag', type=int, default=0)
+parser.add_argument('--new_mask_out_value_flag', type=int, default=0)
 
 args = parser.parse_args()
+
+if args.data_vocab_json is None:
+    args.data_vocab_json = osp.join(args.data_dir, 'vocab.json')
+
+args.data_image_root = osp.join(args.data_dir, 'images')
+if args.data_scenes_json is None:
+    args.data_scenes_json = osp.join(args.data_dir, 'scenes.json')
+if args.data_questions_json is None:
+    args.data_questions_json = osp.join(args.data_dir, 'questions.json')
+
+if args.extra_data_dir is not None:
+    args.extra_data_image_root = osp.join(args.extra_data_dir, 'images')
+    if args.extra_data_scenes_json is None:
+        args.extra_data_scenes_json = osp.join(args.extra_data_dir, 'scenes.json')
+    if args.extra_data_questions_json is None:
+        args.extra_data_questions_json = osp.join(args.extra_data_dir, 'questions.json')
 
 # filenames
 args.series_name = args.dataset
@@ -141,6 +138,7 @@ args.desc_name = escape_desc_name(args.desc)
 args.run_name = 'run-{}'.format(time.strftime('%Y-%m-%d-%H-%M-%S'))
 
 # directories
+
 if args.use_gpu:
     nr_devs = cuda.device_count()
     if args.force_gpu and nr_devs == 0:
@@ -153,6 +151,7 @@ desc = load_source(args.desc)
 configs = desc.configs
 args.configs.apply(configs)
 
+
 def main():
     args.dump_dir = ensure_path(osp.join(
         'dumps', args.series_name, args.desc_name, (
@@ -164,8 +163,7 @@ def main():
         args.dump_dir = args.dump_dir + '_even_smp'+str(args.frm_img_num)
     if args.even_smp_flag:
         args.dump_dir = args.dump_dir + '_col_box_ftr'
-    args.dump_dir +=  '_' + args.version + '_' + args.prefix
-
+    args.dump_dir +=  '_' + args.version 
 
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
@@ -186,23 +184,34 @@ def main():
             args.tb_dir_root = ensure_path(osp.join(args.dump_dir, 'tensorboard'))
             args.tb_dir = ensure_path(osp.join(args.tb_dir_root, args.run_name))
 
-    initialize_dataset(args.dataset, args.version)
+    initialize_dataset(args.dataset)
     # to replace dataset
-    validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
-    
+    #train_dataset.parse_program_dict()
+    #for ii in range(1, 100):
+    #    feed_dict = train_dataset.__getitem__(ii)
+    #    pdb.set_trace()
+    #    for ques_info in feed_dict['meta_ann']['questions']:
+    #        for op in ques_info['program']:
+    #            if 'program_cl' not in ques_info.keys():
+    #                continue 
+    #            if 'collision' in op:
+    #                pdb.set_trace()
+    validation_dataset = build_clevrer_dataset(args, 'validation')
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
 
+
 def main_train(train_dataset, validation_dataset, extra_dataset=None):
     logger.critical('Building the model.')
-    model = desc.make_model(args)
+    model = desc.make_model(args, train_dataset.vocab)
 
     if args.use_gpu:
         model.cuda()
         # Use the customized data parallel if applicable.
         if args.gpu_parallel:
             from jactorch.parallel import JacDataParallel
+            # from jactorch.parallel import UserScatteredJacDataParallel as JacDataParallel
             model = JacDataParallel(model, device_ids=args.gpus).cuda()
         # Disable the cudnn benchmark.
         cudnn.benchmark = False
@@ -270,11 +279,23 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         logger.critical(meters.format_simple('Validation', {k: v for k, v in meters.avg.items() if v != 0}, compressed=False))
         return meters
 
-    if args.debug:
-        shuffle_flag=False
-        args.num_workers = 0
-    else:
-        shuffle_flag=True
+    # assert args.curriculum == 'off', 'Unimplemented feature: curriculum mode {}.'.format(args.curriculum)
+    curriculum_strategy = [
+        (0, 3, 4),
+        (5, 3, 6),
+        (10, 3, 8),
+        (15, 4, 8),
+        (25, 4, 12),
+        (35, 5, 12),
+        (45, 6, 12),
+        (55, 7, 16),
+        (65, 8, 20),
+        (75, 9, 22),
+        (90, 10, 25),
+        (1e9, None, None)
+    ]
+
+    # trainer.register_event('backward:after', backward_check_nan)
 
     for epoch in range(args.start_epoch + 1, args.epochs + 1):
         meters.reset()
@@ -282,7 +303,19 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         model.train()
 
         this_train_dataset = train_dataset
-        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=shuffle_flag, drop_last=True, nr_workers=args.data_workers)
+        if args.curriculum != 'off':
+            for si, s in enumerate(curriculum_strategy):
+                if curriculum_strategy[si][0] < epoch <= curriculum_strategy[si + 1][0] and 0:
+                    max_scene_size, max_program_size = s[1:]
+                    if args.curriculum in ('scene', 'all'):
+                        this_train_dataset = this_train_dataset.filter_scene_size(max_scene_size)
+                    if args.curriculum in ('program', 'all'):
+                        this_train_dataset = this_train_dataset.filter_program_size_raw(max_program_size)
+                    logger.critical('Building the data loader. Curriculum = {}/{}, length = {}.'.format(*s[1:], len(this_train_dataset)))
+                    break
+        #print('no shuffling')
+        #train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=True, nr_workers=args.data_workers)
+        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=True, drop_last=True, nr_workers=args.data_workers)
 
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
@@ -332,14 +365,13 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
             feed_dict = next(train_iter)
+            #pdb.set_trace()
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
 
             data_time = time.time() - end; end = time.time()
 
-            #if feed_dict[0]['meta_ann']['scene_index']!=7398:
-            #    continue 
             loss, monitors, output_dict, extra_info = trainer.step(feed_dict, cast_tensor=False)
             step_time = time.time() - end; end = time.time()
 

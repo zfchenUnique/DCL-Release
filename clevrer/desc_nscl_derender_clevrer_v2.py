@@ -31,10 +31,19 @@ class Model(ReasoningV2ModelForCLEVRER):
     def forward(self, feed_dict_list):
         video_num = len(feed_dict_list)
         f_sng_list = []
+        f_sng_future_list = []
         for vid, feed_dict in enumerate(feed_dict_list):
             f_scene = self.resnet(feed_dict['img'])
             f_sng = self.scene_graph(f_scene, feed_dict)
             f_sng_list.append(f_sng)
+    
+            if feed_dict['img_future'] is not None:
+                f_scene_future = self.resnet(feed_dict['img_future']) 
+                f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
+                f_sng_future_list.append(f_sng_future)
+            else:
+                f_sng_future_list.append(None)
+            #pdb.set_trace()
 
         programs = []
         for idx, feed_dict in enumerate(feed_dict_list):
@@ -44,7 +53,9 @@ class Model(ReasoningV2ModelForCLEVRER):
             feed_dict['question_type_new'] = []
             for ques in feed_dict['meta_ann']['questions']:
                 #if 'answer' not in ques.keys():
-                if 'answer' not in ques.keys() and ques['question_type']!='explanatory':
+                #if 'answer' not in ques.keys() and ques['question_type']!='explanatory':
+                if 'answer' not in ques.keys() and ques['question_type']!='explanatory' and \
+                            ques['question_type']!='predictive':
                     continue 
                 if 'program_cl' not in ques.keys():
                     continue 
@@ -66,7 +77,8 @@ class Model(ReasoningV2ModelForCLEVRER):
                     feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
                 feed_dict['question_type_new'].append(ques['question_type'])
             programs.append(tmp_prog)
-        programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, fd=feed_dict_list)
+        programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
+                fd=feed_dict_list, future_features_list=f_sng_future_list)
         monitors_list = [] 
         output_list = []
         for idx, buffers  in enumerate(buffers_list): 

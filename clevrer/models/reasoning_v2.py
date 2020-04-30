@@ -84,7 +84,8 @@ class ReasoningV2ModelForCLEVRER(nn.Module):
         
         self.reasoning = qs.DifferentiableReasoning(
             self._make_vse_concepts(configs.model.vse_known_belong),
-            self.scene_graph.output_dims, configs.model.vse_hidden_dims, args=self.args 
+            self.scene_graph.output_dims, configs.model.vse_hidden_dims,
+            args=self.args, seg_frm_num=seg_frm_num 
         )
         #pdb.set_trace()
         import clevrer.losses_v2 as vqa_losses

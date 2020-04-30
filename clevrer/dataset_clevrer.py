@@ -12,14 +12,26 @@ from jacinle.utils.tqdm import tqdm
 from nscl.datasets.definition import gdef
 from nscl.datasets.common.vocab import Vocab
 import operator
-
+import math
+#import cv2
 #torch.multiprocessing.set_sharing_strategy('file_system')
 #set_debugger()
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
-_ignore_list = ['get_counterfact', 'unseen_events']
+_ignore_list = ['get_counterfact']
 #_used_list = ['filter_order']
+
+
+def merge_img_patch(img_0, img_1):
+
+    ret = img_0.copy()
+    idx = img_1[:, :, 0] > 0
+    idx = np.logical_or(idx, img_1[:, :, 1] > 0)
+    idx = np.logical_or(idx, img_1[:, :, 2] > 0)
+    ret[idx] = img_1[idx]
+
+    return ret
 
 def gen_vocab(dataset):
     all_words = dataset.parse_concepts_and_attributes()
@@ -99,6 +111,152 @@ class clevrerDataset(Dataset):
         self._filter_program_types()
         if self.args.extract_region_attr_flag:
             self.__intialize_frm_ann()
+        self.background = None
+
+    def merge_frames_for_prediction(self, img_list, obj_list):
+        if self.background is None:
+            self.background = Image.open(self.args.background_path).convert('RGB')
+            self.background = self.background.resize((self.args.bgW, self.args.bgH), Image.ANTIALIAS)
+            self.background = np.array(self.background)
+        img_patch = copy.deepcopy(self.background)
+        W, H = self.args.bgW, self.args.bgH
+        for p_id, patch in enumerate(img_list):
+            obj = obj_list[p_id]
+            if math.isnan(obj['x']):
+                continue
+            if math.isnan(obj['y']):
+                continue 
+            y = int(obj['y'] * H )
+            x = int(obj['x'] * W )
+
+            img = np.array(patch)
+            # print(x, y, H, W)
+            h, w = img.shape[0], img.shape[1]
+            x_ = max(-x, 0)
+            y_ = max(-y, 0)
+            x = max(x, 0)
+            y = max(y, 0)
+            h_ = min(h - y_, H - y)
+            w_ = min(w - x_, W - x)
+
+            if y + h_ < 0 or y >= H or x + w_ < 0 or x >= W:
+                continue
+
+            img_patch[y:y+h_, x:x+w_] = merge_img_patch(
+                img_patch[y:y+h_, x:x+w_], img[y_:y_+h_, x_:x_+w_])
+        img_patch = Image.fromarray(img_patch)
+        return img_patch
+
+
+    def load_predict_info(self, scene_index, frm_dict, padding_img=None):
+        predictions = {}
+        full_pred_path = os.path.join(self.args.unseen_events_path, 'sim_'+str(scene_index).zfill(5)+'.json')
+        pred_ann = jsonload(full_pred_path)
+        # load prediction for future
+        future_frm_list = []
+        tube_box_dict = {}
+        obj_num = len(frm_dict) - 2
+        tmp_dict = {'boxes': [], 'frm_name': []}
+        frm_list_unique = []
+        tube_box_list = []
+        for obj_id in range(obj_num):
+            tube_box_dict[obj_id] = copy.deepcopy(tmp_dict)
+            tube_box_list.append([])
+
+        for pred_id, pred_info in enumerate(pred_ann['predictions']):
+            what_if_flag = pred_info['what_if']
+            if what_if_flag !=-1:
+                continue 
+            for traj_id, traj_info in enumerate(pred_info['trajectory']):
+                frame_index = traj_info['frame_index']
+                if self.args.n_seen_frames > frame_index:
+                    continue
+                # preparing rgb features
+                img_list = traj_info['imgs']
+                obj_list = traj_info['objects']
+                syn_img = self.merge_frames_for_prediction(img_list, obj_list)
+                #cv2.imwrite('img_%d.png'%(frame_index) , syn_img)
+                _exist_obj_flag = False 
+                for r_id, obj_id in enumerate(traj_info['ids']):
+                    
+                    obj = traj_info['objects'][r_id]
+                    if math.isnan(obj['x']):
+                        continue
+                    if math.isnan(obj['y']):
+                        continue 
+                    if math.isnan(obj['h']):
+                        continue
+                    if math.isnan(obj['w']):
+                        continue 
+                    if obj['x']<0 or obj['x']>1:
+                        continue 
+                    if obj['y']<0 or obj['y']>1:
+                        continue 
+                    if obj['h']<0 or obj['h']>1:
+                        continue 
+                    if obj['w']<0 or obj['w']>1:
+                        continue 
+
+                    _exist_obj_flag = True
+
+                    x = copy.deepcopy(obj['x'])
+                    y = copy.deepcopy(obj['y'])
+                    h = copy.deepcopy(obj['h'])
+                    w = copy.deepcopy(obj['w'])
+                    x2 = x + w
+                    y2 = y + h
+                    tube_box_dict[obj_id]['boxes'].append(np.array([x, y, x2, y2]).astype(np.float32))
+                    tube_box_dict[obj_id]['frm_name'].append(frame_index)
+            
+                if not _exist_obj_flag:
+                    continue
+
+                frm_list_unique.append(frame_index)
+                syn_img2, _ = self.img_transform(syn_img, np.array([0, 0, 1, 1]))
+                future_frm_list.append(syn_img2)
+                for obj_id in range(obj_num):
+                    if obj_id in traj_info['ids']:
+                        index = traj_info['ids'].index(obj_id)
+                        obj = traj_info['objects'][index]
+                        
+                        if math.isnan(obj['x']) or math.isnan(obj['y']) or \
+                                math.isnan(obj['h']) or math.isnan(obj['w']) or\
+                                obj['x']<0 or obj['x']>1 or \
+                                obj['y']<0 or obj['y']>1 or \
+                                obj['h']<0 or obj['h']>1 or \
+                                obj['w']<0 or obj['w']>1:
+
+                            tube_box_list[obj_id].append(np.array([-1.0, -1.0, 0.0, 0.0]).astype(np.float32))
+                            continue 
+
+                        x = copy.deepcopy(obj['x'])
+                        y = copy.deepcopy(obj['y'])
+                        h = copy.deepcopy(obj['h'])
+                        w = copy.deepcopy(obj['w'])
+                        x +=  w*0.5
+                        y +=  h*0.5
+                        tube_box_list[obj_id].append(np.array([x, y, w, h]).astype(np.float32))
+                    else:
+                        tube_box_list[obj_id].append(np.array([-1.0, -1.0, 0.0, 0.0]).astype(np.float32))
+
+        if len(future_frm_list)==0:
+            frm_list_unique = [frm_dict['frm_list'][-1]] 
+            tube_box_dict['frm_list'] = frm_list_unique 
+            last_tube_box_list = [ [tmp_list[-1]] for tmp_list in frm_dict['box_seq']['tubes'] ] 
+            tube_box_dict['box_seq'] = last_tube_box_list
+            img_tensor = padding_img.unsqueeze(0)
+            for obj_id, obj_info in frm_dict.items():
+                if not isinstance(obj_id, int):
+                    continue
+                tube_box_dict[obj_id]={}
+                tube_box_dict[obj_id]['boxes'] = [obj_info['boxes'][-1]]
+                tube_box_dict[obj_id]['frm_name'] = [obj_info['frm_name'][-1]]
+        else:
+            frm_list_unique = frm_list_unique 
+            tube_box_dict['frm_list'] = frm_list_unique 
+            tube_box_dict['box_seq'] = tube_box_list
+            img_tensor = torch.stack(future_frm_list, 0)
+        return tube_box_dict, img_tensor 
 
     def __intialize_frm_ann(self):
         frm_ann = []
@@ -236,7 +394,8 @@ class clevrerDataset(Dataset):
                     
                 if not valid_flag:
                     continue
-                if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
+                #if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
+                if ('answer' not in ques_info.keys() and ques_info['question_type']!='explanatory' and ques_info['question_type']!='predictive' ):
                     continue 
                 meta_new['questions'].append(ques_info)
             if len(meta_new['questions'])>0:
@@ -257,7 +416,6 @@ class clevrerDataset(Dataset):
                 return self.__getitem__model(index)
 
     def __getitem__model_v2(self, index):
-        #pdb.set_trace()
         data = {}
         meta_ann = self.question_ann[index]
         scene_idx = meta_ann['scene_index']
@@ -294,7 +452,8 @@ class clevrerDataset(Dataset):
                 tube_box_info['boxes'][box_id] = tmp_box
             frm_dict[key_id]=tube_box_info 
         data['tube_info'] = frm_dict  
-        
+    
+        load_predict_flag = False
         # getting programs
         for q_id, ques_info in enumerate(meta_ann['questions']):
             valid_flag = True
@@ -305,8 +464,12 @@ class clevrerDataset(Dataset):
             if not valid_flag:
                 continue
             #if 'answer' not in ques_info.keys():
-            if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
-                continue 
+            #if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
+            if ('answer' not in ques_info.keys() and ques_info['question_type']!='explanatory' and ques_info['question_type']!='predictive' ):
+                continue
+            if ques_info['question_type']=='predictive':
+                load_predict_flag = True
+
             if 'answer'in ques_info.keys() and ques_info['answer'] == 'no':
                 ques_info['answer'] = False
             elif 'answer' in ques_info.keys() and ques_info['answer'] == 'yes':
@@ -322,7 +485,25 @@ class clevrerDataset(Dataset):
                         transform_conpcet_forms_for_nscl_v2(choice_info['program'])
 
         data['meta_ann'] = meta_ann 
-       
+
+        # loadding unseen events
+        if load_predict_flag:
+            scene_index = meta_ann['scene_index']
+            data['predictions'], data['img_future'] = self.load_predict_info(scene_index, frm_dict, padding_img= data['img'][-1])
+            _, c, tarH, tarW = img_tensor.shape
+            for key_id, tube_box_info in data['predictions'].items():
+                if not isinstance(key_id, int):
+                    continue
+                for box_id, box in enumerate(tube_box_info['boxes']):
+                    tmp_box = torch.tensor(box).float()
+                    tmp_box[0] = tmp_box[0]*tarW
+                    tmp_box[2] = tmp_box[2]*tarW
+                    tmp_box[1] = tmp_box[1]*tarH 
+                    tmp_box[3] = tmp_box[3]*tarH
+                    data['predictions'][key_id]['boxes'][box_id] = tmp_box
+        else:
+            data['predictions'] = None
+            data['img_future'] = None
         # adding scene supervision
         if self.args.scene_supervision_flag:
             mask_gt_path = os.path.join(self.args.mask_gt_path, 'proposal_'+str(scene_idx).zfill(5)+'.json') 

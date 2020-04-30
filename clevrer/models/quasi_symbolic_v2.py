@@ -241,7 +241,7 @@ class ConceptQuantizationContext(nn.Module):
 
 
 class ProgramExecutorContext(nn.Module):
-    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, training=True, args=None):
+    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, training=True, args=None, future_features=None, seg_frm_num=None):
         super().__init__()
         self.args = args 
         self.features = features
@@ -260,6 +260,9 @@ class ProgramExecutorContext(nn.Module):
         self._events_buffer = [None, None, None] # collision, in and out 
         self.time_step = int(self.features[3].shape[1]/4)
         self.valid_seq_mask  = None
+        self._unseen_event_buffer = None # for collision in the future
+        self._future_features = future_features
+        self._seg_frm_num = seg_frm_num 
 
     def filter_ancestor(self, event_list):
         obj_id_list =[]
@@ -347,7 +350,49 @@ class ProgramExecutorContext(nn.Module):
                     explored_list.append(obj_id2)
                     self._search_causes(new_obj_weight, target_frm_id, all_causes, explored_list)
 
+    def init_unseen_events(self):
+        if self._unseen_event_buffer is None:
+            obj_num, obj_num2, pred_frm_num, ftr_dim = self._future_features[2].shape
+            box_dim = self._future_features[3].shape[1]//pred_frm_num
+            if self.args.colli_ftr_type ==1:
+                # B*B*T*D
+                coll_ftr = self._future_features[2]
+                # bilinear sampling for target box feature
+                # B*T*d1
+                box_ftr = self._future_features[3].clone().view(obj_num, 1, pred_frm_num, box_dim)
+                # B*B*(T*sample_frames)*d1
+                # TODO: making it constant with the seen video
+                box_ftr_exp = F.interpolate(box_ftr, size=[pred_frm_num*self._seg_frm_num, box_dim], mode='bilinear') 
+                ftr = box_ftr_exp.view(obj_num, pred_frm_num, -1)
+                rel_box_ftr = fuse_box_ftr(ftr)
+                rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+                if self.args.box_iou_for_collision_flag:
+                    # N*N*(T*sample_frames)
+                    box_iou_ftr  = fuse_box_overlap(ftr.view(obj_num, -1))
+                    box_iou_ftr_view = box_iou_ftr.view(obj_num, obj_num, pred_frm_num, self._seg_frm_num)
+                    rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr_view], dim=-1)
+            else:
+                raise NotImplementedError 
 
+            k = 2
+            masks = list()
+            for cg in ['collision']:
+                if isinstance(cg, six.string_types):
+                    cg = [cg]
+                mask = None
+                for c in cg:
+                    new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
+                    mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                    if _symmetric_collision_flag:
+                        mask = 0.5*(mask + mask.transpose(1, 0))
+                mask = do_apply_self_mask_3d(mask)
+                masks.append(mask)
+            event_colli_set = torch.stack(masks, dim=0)
+            event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
+            self._unseen_event_buffer = [event_colli_score , frm_idx]
+            return event_colli_score 
+        else:
+            return self._unseen_event_buffer[0] 
 
     def init_events(self):
         if self._events_buffer[0] is None:
@@ -361,7 +406,6 @@ class ProgramExecutorContext(nn.Module):
             self._events_buffer[2] = [event_out_objset_pro, frm_list_out]
         return self._events_buffer 
 
-
     def init_collision(self, smp_coll_frm_num):
         obj_num, ftr_dim = self.features[3].shape
         box_dim = 4
@@ -374,7 +418,6 @@ class ProgramExecutorContext(nn.Module):
         ftr = ftr.view(obj_num, smp_coll_frm_num, seg_frm_num*box_dim)
         # N*N*smp_coll_frm_num*(seg_frm_num*box_dim*4)
         rel_box_ftr = fuse_box_ftr(ftr)
-        
         # concatentate
         if self.args.colli_ftr_type ==1:
             try:
@@ -392,7 +435,6 @@ class ProgramExecutorContext(nn.Module):
                 if vis_ftr_num*exp_dim<smp_coll_frm_num:
                     #pass
                     coll_ftr[:, :, -1*off_set:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
-                    #pdb.set_trace()
                     #coll_ftr[:, :, min_frm_num:] = self.features[2][:, :, -1].unsqueeze(2)
                 rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
             except:
@@ -421,7 +463,6 @@ class ProgramExecutorContext(nn.Module):
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
                 if _symmetric_collision_flag:
                     mask = 0.5*(mask + mask.transpose(1, 0))
-                    #pdb.set_trace()
             mask = do_apply_self_mask_3d(mask)
             masks.append(mask)
         event_colli_set = torch.stack(masks, dim=0)
@@ -519,7 +560,6 @@ class ProgramExecutorContext(nn.Module):
                 return torch.sigmoid(selected).sum(dim=-1).round()
         elif len(selected.shape)==2:  # for collision
             # mask out the diag elelments for collisions
-            #pdb.set_trace()
             obj_num = selected.shape[0]
             self_mask = 1- torch.eye(obj_num, dtype=selected.dtype, device=selected.device)
             count_conf = self_mask * (selected+selected.transpose(1, 0))*0.5
@@ -537,43 +577,49 @@ class ProgramExecutorContext(nn.Module):
     def relate(self, selected, group, concept_groups):
         if isinstance(selected, tuple):
             selected = selected[0]
-        #pdb.set_trace()
         mask = self._get_concept_groups_masks(concept_groups, 2)
         mask = (mask * selected.unsqueeze(-1).unsqueeze(0)).sum(dim=-2)
         if torch.is_tensor(group):
             return (mask * group.unsqueeze(1)).sum(dim=0)
         return mask[group]
 
-    def filter_collision(self, selected, group, concept_groups):
+    def filter_collision(self, selected, group, concept_groups, ques_type='descriptive'):
         if isinstance(selected, tuple):
             time_weight = selected[1].squeeze()
             selected = selected[0]
         else:
             time_weight = None
-        colli_frm_list = self._events_buffer[0][1]
 
-        if time_weight is not None:
-            #pdb.set_trace()
-            frm_mask_list = [] 
-            for smp_id, frm_id in enumerate(colli_frm_list): 
-                if time_weight[frm_id]>0:
-                    frm_mask_list.append(1)
-                else:
-                    frm_mask_list.append(0)
-            frm_weight = torch.tensor(frm_mask_list, dtype= time_weight.dtype, device = time_weight.device)
-            frm_weight_2 = -10 * (1 - frm_weight)
-            #colli_3d_mask = self._events_buffer[0][0]*frm_weight.unsqueeze(0).unsqueeze(0)
-            colli_3d_mask = self._events_buffer[0][0] - frm_weight_2.unsqueeze(0).unsqueeze(0)
+        if ques_type=='descriptive' or ques_type=='explanatory':
+            colli_frm_list = self._events_buffer[0][1]
+            if time_weight is not None:
+                frm_mask_list = [] 
+                for smp_id, frm_id in enumerate(colli_frm_list): 
+                    if time_weight[frm_id]>0:
+                        frm_mask_list.append(1)
+                    else:
+                        frm_mask_list.append(0)
+                frm_weight = torch.tensor(frm_mask_list, dtype= time_weight.dtype, device = time_weight.device)
+                frm_weight_2 = -10 * (1 - frm_weight)
+                #colli_3d_mask = self._events_buffer[0][0]*frm_weight.unsqueeze(0).unsqueeze(0)
+                colli_3d_mask = self._events_buffer[0][0] - frm_weight_2.unsqueeze(0).unsqueeze(0)
+            else:
+                colli_3d_mask = self._events_buffer[0][0]
+            colli_mask, colli_t_idx = torch.max(colli_3d_mask, dim=2)
+        elif ques_type == 'predictive':
+            colli_mask, colli_t_idx = self._unseen_event_buffer 
+        elif ques_type == 'counterfactual':
+            pdb.set_trace()
+            raise NotImplementedError
         else:
-            colli_3d_mask = self._events_buffer[0][0]
-        colli_mask, colli_t_idx = torch.max(colli_3d_mask, dim=2)
+            raise NotImplementedError
         obj_set_weight = None
         if selected is not None and (not isinstance(selected, (tuple, list))):
             selected_mask  = torch.max(selected.unsqueeze(-1), selected.unsqueeze(-2))
-            colli_mask = torch.min(colli_mask, selected_mask)
-            #pdb.set_trace()
-            #colli_mask  = 0.5*(colli_mask1 + colli_mask2)
-        return colli_mask, colli_t_idx 
+            colli_mask2 = torch.min(colli_mask, selected_mask)
+        else:
+            colli_mask2 = colli_mask 
+        return colli_mask2, colli_t_idx 
 
     def get_col_partner(self, selected, mask):
         if isinstance(mask, tuple) :
@@ -596,7 +642,6 @@ class ProgramExecutorContext(nn.Module):
     def unique(self, selected):
         if isinstance(selected, tuple):
             selected = selected[0]
-        #pdb.set_trace()
         if self.training or _test_quantize.value < InferenceQuantizationMethod.STANDARD.value:
             return jacf.general_softmax(selected, impl='standard', training=self.training)
         # trigger the greedy_max
@@ -1033,13 +1078,14 @@ class ProgramExecutorContext(nn.Module):
 
 
 class DifferentiableReasoning(nn.Module):
-    def __init__(self, used_concepts, input_dims, hidden_dims, parameter_resolution='deterministic', vse_attribute_agnostic=False, args=None):
+    def __init__(self, used_concepts, input_dims, hidden_dims, parameter_resolution='deterministic', vse_attribute_agnostic=False, args=None, seg_frm_num=-1):
         super().__init__()
         self.used_concepts = used_concepts
         self.input_dims = input_dims
         self.hidden_dims = hidden_dims
         self.parameter_resolution = parameter_resolution
         self.args= args 
+        self._seg_frm_num = seg_frm_num 
 
         for i, nr_vars in enumerate(['attribute', 'relation', 'temporal', 'time']):
             if nr_vars not in self.used_concepts:
@@ -1058,11 +1104,12 @@ class DifferentiableReasoning(nn.Module):
                 tax.filter_in = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
                 tax.filter_out = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
 
-    def forward(self, batch_features, progs_list, fd=None):
+    def forward(self, batch_features, progs_list, fd=None, future_features_list=None):
         # To do divide programs into oe set and mc set
         # run program seperately 
         programs_list_oe, buffers_list_oe, result_list_oe = self.forward_oe(batch_features, progs_list, fd)
-        programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc(batch_features, progs_list, fd)
+        #programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc(batch_features, progs_list, fd, future_features_list)
+        programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc_dynamic(batch_features, progs_list, fd, future_features_list)
         programs_list=[]; buffers_list= []; result_list = []
         for vid in range(len(fd)):
             programs_list.append(programs_list_oe[vid] + programs_list_mc[vid])
@@ -1190,7 +1237,7 @@ class DifferentiableReasoning(nn.Module):
             result_list.append(result)
         return programs_list, buffers_list, result_list
 
-    def forward_mc(self, batch_features, progs_list, fd=None):
+    def forward_mc(self, batch_features, progs_list, fd=None, future_feature_list=None):
         assert len(progs_list) == len(batch_features)
         programs_list = []
         buffers_list = []
@@ -1200,12 +1247,12 @@ class DifferentiableReasoning(nn.Module):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
             feed_dict = fd[vid_id]
+            future_features = future_feature_list[vid_id]
             programs = []
             buffers = []
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
-            #pdb.set_trace()
 
             ctx_features = [None]
             for f_id in range(1, 4): 
@@ -1216,7 +1263,9 @@ class DifferentiableReasoning(nn.Module):
 
             ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
                     self.embedding_temporal, self.embedding_time, ctx_features,\
-                    parameter_resolution=self.parameter_resolution, training=self.training, args=self.args)
+                    parameter_resolution=self.parameter_resolution, \
+                    training=self.training, args=self.args, future_features=future_features,\
+                    seg_frm_num = self._seg_frm_num)
             
             if 'valid_seq_mask' in feed_dict.keys():
                 ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
@@ -1225,7 +1274,8 @@ class DifferentiableReasoning(nn.Module):
 
             valid_num = 0
             for i,  prog in enumerate(progs):
-                if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory':
+                if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory' and \
+                    feed_dict['meta_ann']['questions'][i]['question_type']!='predictive':
                     continue 
 
                 buffer = []
@@ -1254,6 +1304,9 @@ class DifferentiableReasoning(nn.Module):
                             continue
                         elif op == 'events':
                             choice_buffer.append(ctx.init_events())
+                            continue
+                        elif op == 'unseen_events':
+                            choice_buffer.append(ctx.init_unseen_events())
                             continue
 
                         inputs = []
@@ -1313,6 +1366,9 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'events':
                         buffer.append(ctx.init_events())
                         continue
+                    elif op == 'unseen_events':
+                        buffer.append(ctx.init_unseen_events())
+                        continue
 
                     inputs = []
                     for inp, inp_type in zip(block['inputs'], gdef.operation_signatures_dict[op][1]):
@@ -1341,6 +1397,7 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
                     elif op == 'belong_to':
+                        #pdb.set_trace()
                         buffer.append(ctx.belong_to(choice_output, *inputs))
                     elif op == 'exist':
                         buffer.append(ctx.exist(*inputs))
@@ -1376,4 +1433,257 @@ class DifferentiableReasoning(nn.Module):
             buffers_list.append(buffers)
             result_list.append(result)
         return programs_list, buffers_list, result_list 
+
+
+    def forward_mc_dynamic(self, batch_features, progs_list, fd=None, future_feature_list=None):
+        assert len(progs_list) == len(batch_features)
+        programs_list = []
+        buffers_list = []
+        result_list = []
+        batch_size = len(batch_features)
+        for vid_id, vid_ftr in enumerate(batch_features):
+            features = batch_features[vid_id]
+            progs = progs_list[vid_id] 
+            feed_dict = fd[vid_id]
+            future_features = future_feature_list[vid_id]
+            programs = []
+            buffers = []
+            result = []
+            obj_num = len(feed_dict['tube_info']) - 2
+
+            print(feed_dict['meta_ann']['scene_index'])
+            print('Debug!')
+
+            ctx_features = [None]
+            for f_id in range(1, 4): 
+                ctx_features.append(features[f_id].clone())
+
+            if self.args.apply_gaussian_smooth_flag:
+                ctx_features[3] = Gaussin_smooth(ctx_features[3])
+
+            ctx = ProgramExecutorContext(self.embedding_attribute, self.embedding_relation, \
+                    self.embedding_temporal, self.embedding_time, ctx_features,\
+                    parameter_resolution=self.parameter_resolution, \
+                    training=self.training, args=self.args, future_features=future_features,\
+                    seg_frm_num = self._seg_frm_num)
+            
+            if 'valid_seq_mask' in feed_dict.keys():
+                ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
+                valid_len = feed_dict['valid_seq_mask'].shape[1]
+                ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
+
+            valid_num = 0
+            for i,  prog in enumerate(progs):
+                ques_type = feed_dict['meta_ann']['questions'][i]['question_type']
+                if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory' and \
+                    feed_dict['meta_ann']['questions'][i]['question_type']!='predictive':
+                    continue 
+
+                buffer = []
+
+                buffers.append(buffer)
+                programs.append(prog)
+               
+                ctx._concept_groups_masks = [None, None, None, None, None]
+                ctx._time_buffer_masks = None
+                ctx._attribute_groups_masks = None
+                ctx._attribute_query_masks = None
+                belong_block_id = -1
+
+                """
+                parse the program before operator ``belong to'' 
+                """
+                for block_id, block in enumerate(prog):
+                    op = block['op']
+
+                    if op == 'scene' or op =='objects':
+                        buffer.append(10 + torch.zeros(obj_num, dtype=torch.float, device=features[1].device))
+                        continue
+                    elif op == 'events':
+                        buffer.append(ctx.init_events())
+                        continue
+                    elif op == 'unseen_events':
+                        buffer.append(ctx.init_unseen_events())
+                        continue
+
+                    inputs = []
+                    for inp, inp_type in zip(block['inputs'], gdef.operation_signatures_dict[op][1]):
+                        inp = buffer[inp]
+                        if inp_type == 'object':
+                            inp = ctx.unique(inp)
+                        inputs.append(inp)
+
+                    if op == 'belong_to':
+                        belong_block_id = block_id
+                        break
+                    elif op == 'filter':
+                        buffer.append(ctx.filter(*inputs, block['concept_idx'], block['concept_values']))
+                    elif op == 'filter_order':
+                        buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
+                    elif op == 'end' or op == 'start':
+                        buffer.append(ctx.filter_start_end(*inputs, block['time_concept_idx'], block['time_concept_values']))
+                    elif op =='get_frame':
+                        buffer.append(ctx.filter_time_object(*inputs))
+                    elif op == 'filter_in' or op == 'filter_out':
+                        buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
+                                block['time_concept_values']))
+                    elif op == 'filter_before' or op == 'filter_after':
+                        buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
+                    elif op == 'filter_temporal':
+                        buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
+                    elif op == 'filter_collision':
+                        buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type))
+                    elif op == 'get_col_partner':
+                        buffer.append(ctx.get_col_partner(*inputs))
+                        
+                        buffer.append(ctx.belong_to(choice_output, *inputs))
+                    elif op == 'exist':
+                        buffer.append(ctx.exist(*inputs))
+                    elif op == 'filter_ancestor':
+                        buffer.append(ctx.filter_ancestor(inputs))
+                    else:
+                        pdb.set_trace()
+                        raise NotImplementedError('Unsupported operation: {}.'.format(op))
+
+                    if not self.training and _test_quantize.value > InferenceQuantizationMethod.STANDARD.value:
+                        if block_id != len(prog) - 1:
+                            if not isinstance(buffer[-1], tuple):
+                                buffer[-1] = -10 + 20 * (buffer[-1] > 0).float()
+                            else:
+                                buffer[-1] = list(buffer[-1])
+                                for out_id, out_value in enumerate(buffer[-1]):
+                                    buffer[-1][out_id] = -10 + 20 * (buffer[-1][out_id] > 0).float()
+                                buffer[-1] = tuple(buffer[-1])
+
+                """
+                parse the choices for operator ``belong to'' 
+                """
+
+                choice_output  = []
+                choice_buffer_list = []
+                for c_id, tmp_choice in enumerate(feed_dict['meta_ann']['questions'][i]['choices']):
+                    choice_prog = tmp_choice['program_cl']
+                    ctx._concept_groups_masks = [None, None, None, None, None]
+                    ctx._time_buffer_masks = None
+                    ctx._attribute_groups_masks = None
+                    ctx._attribute_query_masks = None
+                    #print(tmp_choice['program_cl'])
+                    #print(tmp_choice['choice'])
+                    tmp_event_buffer = []
+                    choice_buffer = []
+                    choice_type = None
+                    for block_id, block in enumerate(choice_prog):
+                        op = block['op']
+                        
+                        if op == 'scene' or op =='objects':
+                            choice_buffer.append(10 + torch.zeros(obj_num, dtype=torch.float, device=features[1].device))
+                            continue
+                        elif op == 'events':
+                            choice_buffer.append(ctx.init_events())
+                            continue
+
+                        inputs = []
+                        for inp, inp_type in zip(block['inputs'], gdef.operation_signatures_dict[op][1]):
+                            inp = choice_buffer[inp]
+                            if inp_type == 'object':
+                                inp = ctx.unique(inp)
+                            inputs.append(inp)
+
+                        if op == 'filter':
+                            choice_buffer.append(ctx.filter(*inputs, block['concept_idx'], block['concept_values']))
+                        elif op == 'filter_order':
+                            choice_buffer.append(ctx.filter_order(*inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
+                        elif op == 'end' or op == 'start':
+                            choice_buffer.append(ctx.filter_start_end(*inputs, block['time_concept_idx'], block['time_concept_values']))
+                        elif op =='get_frame':
+                            choice_buffer.append(ctx.filter_time_object(*inputs))
+                        elif op == 'filter_in' or op == 'filter_out':
+                            choice_buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
+                                    block['time_concept_values']))
+                            tmp_event_buffer.append(choice_buffer[block_id][0])
+                            choice_type = block['time_concept_values'][block['time_concept_idx']][0]
+                        elif op == 'filter_before' or op == 'filter_after':
+                            choice_buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
+                        elif op == 'filter_temporal':
+                            choice_buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
+                        elif op == 'filter_collision':
+                            choice_buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type))
+                            choice_type = block['relational_concept_values'][block['relational_concept_idx']][0]
+                            tmp_event_buffer.append(choice_buffer[block_id][0])
+                        elif op == 'get_col_partner':
+                            choice_buffer.append(ctx.get_col_partner(*inputs))
+                        elif op == 'exist':
+                            choice_buffer.append(ctx.exist(*inputs))
+                        else:
+                            raise NotImplementedError 
+                    event_buffer = None
+                    if len(tmp_event_buffer) == 0:
+                        event_buffer = choice_buffer[-1]
+                        choice_type = 'object'
+                    else:
+                        for tmp_mask in tmp_event_buffer:
+                            event_buffer = torch.min(event_buffer, tmp_mask) if event_buffer is not None else tmp_mask
+                    choice_output.append([choice_type, event_buffer]) 
+                    choice_buffer_list.append(choice_buffer)
+
+                """
+                parse the operators after ``belong to'' 
+                """
+                ctx._concept_groups_masks = [None, None, None, None, None]
+                ctx._time_buffer_masks = None
+                ctx._attribute_groups_masks = None
+                ctx._attribute_query_masks = None
+                for block_id, block in enumerate(prog):
+                    if block_id <belong_block_id:
+                        continue 
+                    op = block['op']
+
+                    inputs = []
+                    for inp, inp_type in zip(block['inputs'], gdef.operation_signatures_dict[op][1]):
+                        inp = buffer[inp]
+                        if inp_type == 'object':
+                            inp = ctx.unique(inp)
+                        inputs.append(inp)
+
+                    if op == 'belong_to':
+                        #pdb.set_trace()
+                        buffer.append(ctx.belong_to(choice_output, *inputs))
+                    elif op == 'exist':
+                        buffer.append(ctx.exist(*inputs))
+                    elif op == 'filter_ancestor':
+                        buffer.append(ctx.filter_ancestor(inputs))
+                    else:
+                        assert block_id == len(prog) - 1, 'Unexpected query operation: {}. Are you using the CLEVR-convension?'.format(op)
+                        if op == 'query':
+                            buffer.append(ctx.query(*inputs, block['attribute_idx'], block['attribute_values']))
+                        elif op == 'count':
+                            buffer.append(ctx.count(*inputs))
+                        elif op == 'negate':
+                            buffer.append(ctx.negate(*inputs))
+                        else:
+                            pdb.set_trace()
+                            raise NotImplementedError('Unsupported operation: {}.'.format(op))
+
+                    if not self.training and _test_quantize.value > InferenceQuantizationMethod.STANDARD.value:
+                        if block_id != len(prog) - 1:
+                            if not isinstance(buffer[-1], tuple):
+                                buffer[-1] = -10 + 20 * (buffer[-1] > 0).float()
+                            else:
+                                buffer[-1] = list(buffer[-1])
+                                for out_id, out_value in enumerate(buffer[-1]):
+                                    buffer[-1][out_id] = -10 + 20 * (buffer[-1][out_id] > 0).float()
+                                buffer[-1] = tuple(buffer[-1])
+
+                result.append((op, buffer[-1]))
+                quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict, valid_num)
+                valid_num +=1
+            
+            programs_list.append(programs)
+            buffers_list.append(buffers)
+            result_list.append(result)
+        return programs_list, buffers_list, result_list 
+
+
+
+
 
