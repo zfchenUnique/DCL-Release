@@ -132,6 +132,7 @@ parser.add_argument('--unseen_events_path', type=str, default='/home/zfchen/code
 parser.add_argument('--background_path', type=str, default='/home/zfchen/code/nsclClevrer/temporal_reasoning-master/background.png', help='')
 parser.add_argument('--bgH', type=int, default=100)
 parser.add_argument('--bgW', type=int, default=150)
+parser.add_argument('--max_counterfact_num', type=int, default=2)
 
 args = parser.parse_args()
 
@@ -190,7 +191,12 @@ def main():
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
-    
+   
+    for ii in range(0, 200):
+        continue 
+        feed_dict = train_dataset.__getitem__(ii)
+        pdb.set_trace()
+
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
 
@@ -345,7 +351,11 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
 
             n = len(feed_dict)
             meters.update(loss=loss, n=n)
-            meters.update(monitors, n=n)
+            if isinstance(monitors, list):
+                for tmp_monitor, ques_num in monitors:
+                    meters.update(tmp_monitor, ques_num)
+            else:
+                meters.update(monitors, n=n)
             meters.update({'time/data': data_time, 'time/step': step_time})
 
             if args.use_tb:

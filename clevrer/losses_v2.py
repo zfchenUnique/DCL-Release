@@ -219,7 +219,10 @@ class QALoss(MultitaskLossBase):
         if 'answer' not in feed_dict or 'question_type' not in feed_dict:
             return monitors, outputs
 
-        for i, (query_type, a) in enumerate(answers):
+        for i, tmp_answer in enumerate(answers):
+            if tmp_answer is None:
+                continue 
+            query_type, a = tmp_answer 
             j = i if question_index is None else question_index[i]
             loss_w = loss_weights[i] if loss_weights is not None else 1
             acc_w = accuracy_weights[i] if accuracy_weights is not None else 1

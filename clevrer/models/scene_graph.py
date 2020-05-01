@@ -80,7 +80,7 @@ class SceneGraph(nn.Module):
                 nn.init.kaiming_normal_(m.weight.data)
                 m.bias.data.zero_()
 
-    def merge_tube_obj_ftr(self, outputs, feed_dict, mode=0):
+    def merge_tube_obj_ftr(self, outputs, feed_dict, mode=0, tar_obj_id=-1):
         obj_num = len(feed_dict['tube_info']) -2
         obj_ftr = torch.zeros(obj_num, outputs[0][1].shape[1], dtype=outputs[0][1].dtype, \
                 device=outputs[0][1].device)
@@ -91,6 +91,10 @@ class SceneGraph(nn.Module):
                     device=outputs[0][1].device)
         elif mode==1:
             future_frm_num = feed_dict['img_future'].shape[0]
+            box_ftr = torch.zeros(obj_num, future_frm_num*4, dtype=outputs[0][1].dtype, \
+                    device=outputs[0][1].device)
+        elif mode==2:
+            future_frm_num = feed_dict['img_counterfacts'][tar_obj_id].shape[0]
             box_ftr = torch.zeros(obj_num, future_frm_num*4, dtype=outputs[0][1].dtype, \
                     device=outputs[0][1].device)
 
@@ -115,6 +119,8 @@ class SceneGraph(nn.Module):
                 box_seq = feed_dict['tube_info']['box_seq']['tubes'][obj_id]
             elif mode==1:
                 box_seq = feed_dict['predictions']['box_seq'][obj_id]
+            elif mode==2:
+                box_seq = feed_dict['counterfacts'][tar_obj_id]['box_seq'][obj_id]
             box_list = []
             for box_id, box in enumerate(box_seq):
                 if isinstance(box, list):
@@ -131,6 +137,8 @@ class SceneGraph(nn.Module):
         if mode==0:
             box_dim = min(128*4, tube_tensor.shape[1])
         elif mode==1:
+            box_dim = min(future_frm_num*4, tube_tensor.shape[1])
+        elif mode==2:
             box_dim = min(future_frm_num*4, tube_tensor.shape[1])
         box_ftr[:,:box_dim] = tube_tensor
 
@@ -154,7 +162,7 @@ class SceneGraph(nn.Module):
 
         return None, self._norm(obj_ftr), rel_ftr_norm, box_ftr  
 
-    def forward(self, input, feed_dict, mode=0):
+    def forward(self, input, feed_dict, mode=0, tar_obj_id=-1):
         """
         extracting region, collision and box sequence features for models
         0 for normal, 1 for future and 2 for counterfact
@@ -165,7 +173,7 @@ class SceneGraph(nn.Module):
 
         outputs = list()
 
-        def parse_boxes_for_frm(feed_dict, frm_idx, mode=0):
+        def parse_boxes_for_frm(feed_dict, frm_idx, mode=0, tar_obj_id=-1):
             if mode==0:
                 boxes_list = []
                 tube_id_list = []
@@ -198,9 +206,25 @@ class SceneGraph(nn.Module):
                     tube_id_list.append(tube_id)
                 boxes_tensor = torch.stack(boxes_list, 0).cuda()
                 return boxes_tensor, tube_id_list
+            elif mode==2:
+                boxes_list = []
+                tube_id_list = []
+                frm_id = feed_dict['counterfacts'][tar_obj_id]['frm_list'][frm_idx]
+                for tube_id, tube_info in feed_dict['counterfacts'][tar_obj_id].items():
+                    if not isinstance(tube_id, int):
+                        continue 
+                    assert len(tube_info['frm_name'])==len(tube_info['boxes'])
+                    if frm_id not in tube_info['frm_name']:
+                        continue
+                    box_idx = tube_info['frm_name'].index(frm_id)
+                    box = tube_info['boxes'][box_idx]
+                    boxes_list.append(torch.tensor(box, device=feed_dict['img_counterfacts'][tar_obj_id].device))
+                    tube_id_list.append(tube_id)
+                boxes_tensor = torch.stack(boxes_list, 0).cuda()
+                return boxes_tensor, tube_id_list
 
         for i in range(input.size(0)):
-            boxes, tube_id_list = parse_boxes_for_frm(feed_dict, i, mode)
+            boxes, tube_id_list = parse_boxes_for_frm(feed_dict, i, mode, tar_obj_id)
             with torch.no_grad():
                 batch_ind = i + torch.zeros(boxes.size(0), 1, dtype=boxes.dtype, device=boxes.device)
 
@@ -257,7 +281,7 @@ class SceneGraph(nn.Module):
                     tube_id_list 
                 ])
 
-        outputs_new = self.merge_tube_obj_ftr(outputs, feed_dict, mode)
+        outputs_new = self.merge_tube_obj_ftr(outputs, feed_dict, mode, tar_obj_id)
         return outputs_new
 
     def _norm(self, x):

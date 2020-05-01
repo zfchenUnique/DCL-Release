@@ -241,7 +241,8 @@ class ConceptQuantizationContext(nn.Module):
 
 
 class ProgramExecutorContext(nn.Module):
-    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, training=True, args=None, future_features=None, seg_frm_num=None):
+    def __init__(self, attribute_taxnomy, relation_taxnomy, temporal_taxnomy, time_taxnomy, features, parameter_resolution, \
+            training=True, args=None, future_features=None, seg_frm_num=None, nscl_model=None):
         super().__init__()
         self.args = args 
         self.features = features
@@ -263,6 +264,8 @@ class ProgramExecutorContext(nn.Module):
         self._unseen_event_buffer = None # for collision in the future
         self._future_features = future_features
         self._seg_frm_num = seg_frm_num 
+        self._nscl_model = nscl_model 
+        self._counterfact_event_buffer = None
 
     def filter_ancestor(self, event_list):
         obj_id_list =[]
@@ -349,6 +352,54 @@ class ProgramExecutorContext(nn.Module):
                     new_obj_weight[obj_id2] = 10
                     explored_list.append(obj_id2)
                     self._search_causes(new_obj_weight, target_frm_id, all_causes, explored_list)
+
+    def init_counterfactual_events(self, selected, feed_dict):
+        what_if_obj_id = selected.argmax()
+        f_scene = self._nscl_model.resnet(feed_dict['img_counterfacts'][what_if_obj_id])
+        f_sng_counterfact = self._nscl_model.scene_graph(f_scene, feed_dict, \
+                mode=2, tar_obj_id = what_if_obj_id)
+        self._counterfact_features = f_sng_counterfact 
+        
+        obj_num, obj_num2, pred_frm_num, ftr_dim = self._counterfact_features[2].shape
+        box_dim = self._counterfact_features[3].shape[1]//pred_frm_num
+        #pdb.set_trace()
+        if self.args.colli_ftr_type ==1:
+            # B*B*T*D
+            coll_ftr = self._counterfact_features[2]
+            # bilinear sampling for target box feature
+            # B*T*d1
+            box_ftr = self._counterfact_features[3].clone().view(obj_num, 1, pred_frm_num, box_dim)
+            # B*B*(T*sample_frames)*d1
+            # TODO: making it constant with the seen video
+            box_ftr_exp = F.interpolate(box_ftr, size=[pred_frm_num*self._seg_frm_num, box_dim], mode='bilinear') 
+            ftr = box_ftr_exp.view(obj_num, pred_frm_num, -1)
+            rel_box_ftr = fuse_box_ftr(ftr)
+            rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+            if self.args.box_iou_for_collision_flag:
+                # N*N*(T*sample_frames)
+                box_iou_ftr  = fuse_box_overlap(ftr.view(obj_num, -1))
+                box_iou_ftr_view = box_iou_ftr.view(obj_num, obj_num, pred_frm_num, self._seg_frm_num)
+                rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr_view], dim=-1)
+        else:
+            raise NotImplementedError 
+
+        k = 2
+        masks = list()
+        for cg in ['collision']:
+            if isinstance(cg, six.string_types):
+                cg = [cg]
+            mask = None
+            for c in cg:
+                new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
+                mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                if _symmetric_collision_flag:
+                    mask = 0.5*(mask + mask.transpose(1, 0))
+            mask = do_apply_self_mask_3d(mask)
+            masks.append(mask)
+        event_colli_set = torch.stack(masks, dim=0)
+        event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
+        self._counterfact_event_buffer = [event_colli_score , frm_idx]
+        return event_colli_score 
 
     def init_unseen_events(self):
         if self._unseen_event_buffer is None:
@@ -556,7 +607,6 @@ class ProgramExecutorContext(nn.Module):
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
                     return (selected > 0).float().sum()
-                #print('Debuging!')
                 return torch.sigmoid(selected).sum(dim=-1).round()
         elif len(selected.shape)==2:  # for collision
             # mask out the diag elelments for collisions
@@ -568,7 +618,6 @@ class ProgramExecutorContext(nn.Module):
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
                     return (count_conf > 0).float().sum()/2
-                #print('Debuging!')
                 return (torch.sigmoid(count_conf).sum()/2).round()
 
     _count_margin = 0.25
@@ -609,8 +658,9 @@ class ProgramExecutorContext(nn.Module):
         elif ques_type == 'predictive':
             colli_mask, colli_t_idx = self._unseen_event_buffer 
         elif ques_type == 'counterfactual':
-            pdb.set_trace()
-            raise NotImplementedError
+            colli_mask, colli_t_idx = self._counterfact_event_buffer  
+            #pdb.set_trace()
+            #raise NotImplementedError
         else:
             raise NotImplementedError
         obj_set_weight = None
@@ -1104,12 +1154,13 @@ class DifferentiableReasoning(nn.Module):
                 tax.filter_in = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
                 tax.filter_out = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
 
-    def forward(self, batch_features, progs_list, fd=None, future_features_list=None):
+    def forward(self, batch_features, progs_list, fd=None, future_features_list=None, nscl_model=None, ignore_list=None):
         # To do divide programs into oe set and mc set
         # run program seperately 
-        programs_list_oe, buffers_list_oe, result_list_oe = self.forward_oe(batch_features, progs_list, fd)
+        programs_list_oe, buffers_list_oe, result_list_oe = self.forward_oe(batch_features, progs_list, fd, ignore_list=ignore_list)
         #programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc(batch_features, progs_list, fd, future_features_list)
-        programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc_dynamic(batch_features, progs_list, fd, future_features_list)
+        programs_list_mc, buffers_list_mc, result_list_mc = self.forward_mc_dynamic(batch_features, progs_list,\
+                fd, future_features_list, nscl_model, ignore_list=ignore_list)
         programs_list=[]; buffers_list= []; result_list = []
         for vid in range(len(fd)):
             programs_list.append(programs_list_oe[vid] + programs_list_mc[vid])
@@ -1117,7 +1168,7 @@ class DifferentiableReasoning(nn.Module):
             result_list.append(result_list_oe[vid] + result_list_mc[vid]) 
         return programs_list, buffers_list, result_list 
 
-    def forward_oe(self, batch_features, progs_list, fd=None):
+    def forward_oe(self, batch_features, progs_list, fd=None, ignore_list=None):
         assert len(progs_list) == len(batch_features)
         programs_list = []
         buffers_list = []
@@ -1155,6 +1206,11 @@ class DifferentiableReasoning(nn.Module):
             for i,  prog in enumerate(progs):
 
                 if feed_dict['meta_ann']['questions'][i]['question_type']!='descriptive':
+                    continue
+                if ignore_list is not None and i in ignore_list[vid_id]:
+                    programs.append(None)
+                    buffers.append(None)
+                    result.append(None)
                     continue 
             
                 ctx._concept_groups_masks = [None, None, None, None, None]
@@ -1435,7 +1491,7 @@ class DifferentiableReasoning(nn.Module):
         return programs_list, buffers_list, result_list 
 
 
-    def forward_mc_dynamic(self, batch_features, progs_list, fd=None, future_feature_list=None):
+    def forward_mc_dynamic(self, batch_features, progs_list, fd=None, future_feature_list=None, nscl_model=None, ignore_list=None):
         assert len(progs_list) == len(batch_features)
         programs_list = []
         buffers_list = []
@@ -1451,9 +1507,6 @@ class DifferentiableReasoning(nn.Module):
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
 
-            print(feed_dict['meta_ann']['scene_index'])
-            print('Debug!')
-
             ctx_features = [None]
             for f_id in range(1, 4): 
                 ctx_features.append(features[f_id].clone())
@@ -1465,20 +1518,28 @@ class DifferentiableReasoning(nn.Module):
                     self.embedding_temporal, self.embedding_time, ctx_features,\
                     parameter_resolution=self.parameter_resolution, \
                     training=self.training, args=self.args, future_features=future_features,\
-                    seg_frm_num = self._seg_frm_num)
+                    seg_frm_num = self._seg_frm_num, nscl_model=nscl_model)
             
             if 'valid_seq_mask' in feed_dict.keys():
                 ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
                 valid_len = feed_dict['valid_seq_mask'].shape[1]
                 ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
-
+            counter_fact_num = 0 
             valid_num = 0
             for i,  prog in enumerate(progs):
                 ques_type = feed_dict['meta_ann']['questions'][i]['question_type']
-                if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory' and \
-                    feed_dict['meta_ann']['questions'][i]['question_type']!='predictive':
+                #if ques_type!='explanatory' and ques_type!='predictive':
+                if ques_type=='descriptive':
                     continue 
-
+                if ignore_list is not None and i in ignore_list[vid_id]:
+                    programs.append(None)
+                    buffers.append(None)
+                    result.append(None)
+                    continue 
+                #if ques_type=='counterfactual':
+                #    counter_fact_num +=1
+                #    print(counter_fact_num)
+                
                 buffer = []
 
                 buffers.append(buffer)
@@ -1541,6 +1602,8 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.exist(*inputs))
                     elif op == 'filter_ancestor':
                         buffer.append(ctx.filter_ancestor(inputs))
+                    elif op == 'get_counterfact':
+                        buffer.append(ctx.init_counterfactual_events(*inputs, feed_dict))
                     else:
                         pdb.set_trace()
                         raise NotImplementedError('Unsupported operation: {}.'.format(op))
