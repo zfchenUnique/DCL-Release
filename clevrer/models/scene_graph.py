@@ -172,7 +172,7 @@ class SceneGraph(nn.Module):
         relation_features = self.relation_feature_extract(input)
 
         outputs = list()
-
+        #pdb.set_trace()
         def parse_boxes_for_frm(feed_dict, frm_idx, mode=0, tar_obj_id=-1):
             if mode==0:
                 boxes_list = []
@@ -185,7 +185,7 @@ class SceneGraph(nn.Module):
                     if frm_id not in tube_info['frm_name']:
                         continue
                     box_idx = tube_info['frm_name'].index(frm_id)
-                    box = tube_info['boxes'][box_idx]
+                    box = tube_info['boxes'][box_idx].squeeze(0)
                     boxes_list.append(torch.tensor(box, device=feed_dict['img'].device))
                     tube_id_list.append(tube_id)
                 boxes_tensor = torch.stack(boxes_list, 0).cuda()

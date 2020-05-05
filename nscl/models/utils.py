@@ -16,6 +16,9 @@ __all__ = ['canonize_monitors', 'update_from_loss_module']
 def canonize_monitors(monitors):
     for k, v in monitors.items():
         if isinstance(monitors[k], list):
+            if len(monitors[k])==0:
+                monitors[k] = -1
+                continue 
             if isinstance(monitors[k][0], tuple) and len(monitors[k][0]) == 2:
                 monitors[k] = sum([a * b for a, b in monitors[k]]) / max(sum([b for _, b in monitors[k]]), 1e-6)
             else:

@@ -193,7 +193,6 @@ class SceneParsingLoss(MultitaskLossBase):
                         from IPython import embed; embed()
                     for loss_key in ['loss/scene/temporal/' + v, 'loss/scene']:
                         monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
-
         return monitors, outputs
 
 
@@ -215,6 +214,11 @@ class QALoss(MultitaskLossBase):
 
         monitors = {}
         outputs = {'answer': []}
+            
+        question_type_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive']
+        for query_type in question_type_list:
+            monitors.setdefault('acc/qa/' + query_type, [])
+            monitors.setdefault('loss/qa/' + query_type, [])
 
         if 'answer' not in feed_dict or 'question_type' not in feed_dict:
             return monitors, outputs
@@ -280,6 +284,8 @@ class QALoss(MultitaskLossBase):
             key = 'acc/qa/' + query_type
             question_type_new = feed_dict['question_type_new'][j]
             new_key = 'acc/qa/' + question_type_new            
+           
+
             if isinstance(gt, list):
                 for idx in range(len(gt)):
                     monitors.setdefault(key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
@@ -303,7 +309,6 @@ class QALoss(MultitaskLossBase):
                     monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                     monitors.setdefault('loss/qa', []).append((l, loss_w))
                     monitors.setdefault('loss/qa/' + question_type_new, []).append((l, loss_w))
-
         return monitors, outputs
 
     def _gen_normalized_weights(self, weights, n):

@@ -39,7 +39,11 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger
+from clevrer.utils import set_debugger, custom_reduce_func, remove_wrapper_for_paral_training, collate_dict 
+from jactorch.data.dataloader import JacDataLoader, JacDataLoaderMultiGPUWrapper
+from jactorch.data.collate import VarLengthCollateV3
+
+from nscl.models.utils import canonize_monitors
 
 
 set_debugger()
@@ -191,11 +195,6 @@ def main():
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
-   
-    for ii in range(0, 200):
-        continue 
-        feed_dict = train_dataset.__getitem__(ii)
-        pdb.set_trace()
 
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
@@ -209,7 +208,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         # Use the customized data parallel if applicable.
         if args.gpu_parallel:
             from jactorch.parallel import JacDataParallel
-            model = JacDataParallel(model, device_ids=args.gpus).cuda()
+            model = JacDataParallel(model, device_ids=args.gpus, user_scattered=True).cuda()
         # Disable the cudnn benchmark.
         cudnn.benchmark = False
 
@@ -263,9 +262,9 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         from IPython import embed; embed()
 
     logger.critical('Building the data loader.')
-    validation_dataloader = validation_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=False, nr_workers=args.data_workers)
-    if extra_dataset is not None:
-        extra_dataloader = extra_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=False, nr_workers=args.data_workers)
+    #validation_dataloader = validation_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=False, nr_workers=args.data_workers)
+    validation_dataloader = JacDataLoader(validation_dataset, batch_size=args.batch_size, collate_fn=collate_dict, shuffle=False, num_workers=args.data_workers, drop_last=True) 
+    validation_dataloader = JacDataLoaderMultiGPUWrapper(validation_dataloader, args.gpus)
 
     if args.evaluate:
         meters.reset()
@@ -278,7 +277,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     if args.debug:
         shuffle_flag=False
-        args.num_workers = 0
+        #args.num_workers = 0
     else:
         shuffle_flag=True
 
@@ -286,9 +285,8 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         meters.reset()
 
         model.train()
-
-        this_train_dataset = train_dataset
-        train_dataloader = this_train_dataset.make_dataloader(args.batch_size, shuffle=shuffle_flag, drop_last=True, nr_workers=args.data_workers)
+        train_dataloader = JacDataLoader(train_dataset, batch_size=args.batch_size, collate_fn=collate_dict, shuffle=shuffle_flag, num_workers=args.data_workers, drop_last=True) 
+        train_dataloader = JacDataLoaderMultiGPUWrapper(train_dataloader, args.gpus)
 
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
@@ -328,7 +326,7 @@ def backward_check_nan(self, feed_dict, loss, monitors, output_dict):
 def train_epoch(epoch, trainer, train_dataloader, meters):
     nr_iters = args.iters_per_epoch
     if nr_iters == 0:
-        nr_iters = len(train_dataloader)
+        nr_iters = len(train_dataloader)//len(args.gpus)
 
     meters.update(epoch=epoch)
 
@@ -337,33 +335,37 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
     end = time.time()
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
-            feed_dict = next(train_iter)
+            new_feed_dict_list = next(train_iter)
+            # remove list wrapper
+            #new_feed_dict_list = remove_wrapper_for_paral_training(feed_dict_list)
+
             if args.use_gpu:
                 if not args.gpu_parallel:
-                    feed_dict = async_copy_to(feed_dict, 0)
+                    new_feed_dict_list = async_copy_to(new_feed_dict_list, 0)
 
             data_time = time.time() - end; end = time.time()
 
-            #if feed_dict[0]['meta_ann']['scene_index']!=7398:
-            #    continue 
-            loss, monitors, output_dict, extra_info = trainer.step(feed_dict, cast_tensor=False)
+            loss, monitors, output_dict, extra_info = trainer.step(new_feed_dict_list, cast_tensor=False, \
+                    reduce_func=custom_reduce_func)
             step_time = time.time() - end; end = time.time()
 
-            n = len(feed_dict)
+            n = len(new_feed_dict_list)
             meters.update(loss=loss, n=n)
-
-            # remove padding values
-            for tmp_key, tmp_value in monitors.items(): 
-                if isinstance(tmp_value , list):
-                    for sub_idx, sub_value in enumerate(tmp_value):
-                        if sub_value[0]==-1:
+            if isinstance(monitors, list):
+                for tmp_monitor in monitors:
+                    # remove padding values
+                    for tmp_key, tmp_value in tmp_monitor.items(): 
+                        if isinstance(tmp_value , list):
+                            for sub_idx, sub_value in enumerate(tmp_value):
+                                if sub_value[0]==-1:
+                                    continue 
+                                meters.update({tmp_key: sub_value[0]}, n=sub_value[1])
+                        elif tmp_value==-1:
                             continue 
-                        meters.update({tmp_key: sub_value[0]}, n=sub_value[1])
-                elif tmp_value==-1:
-                    continue 
-                else:
-                    meters.update({tmp_key: tmp_value}, n=1)
-
+                        else:
+                            meters.update({tmp_key: tmp_value}, n=1)
+            else:
+                meters.update(monitors, n=n)
             meters.update({'time/data': data_time, 'time/step': step_time})
 
             if args.use_tb:
@@ -382,47 +384,50 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
 
 
 def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validation'):
+    val_iter = iter(val_dataloader)
+    nr_iters = len(val_dataloader)//len(args.gpus)*args.batch_size
+    if len(val_dataloader)%len(args.gpus)!=0:
+        logger.warning('Number of GPUs didn\'t match length of the dataset!.')
     end = time.time()
-    #pdb.set_trace()
-    with tqdm_pbar(total=len(val_dataloader)*val_dataloader.batch_size) as pbar:
-        for feed_dict in val_dataloader:
+    with tqdm_pbar(total=len(val_dataloader)*args.batch_size) as pbar:
+        for ii in range(nr_iters):
+            feed_dict = next(val_iter)
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
 
             data_time = time.time() - end; end = time.time()
-            #pdb.set_trace()
             output_dict_list, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
-            
+
             step_time = time.time() - end; end = time.time()
-            for idx, mon_dict  in enumerate(output_dict_list['monitors']): 
-                monitors = {meter_prefix + '/' + k: v for k, v in as_float(mon_dict).items()}
+            for list_idx, output_dict in enumerate(output_dict_list):
+                for idx, mon_dict  in enumerate(output_dict['monitors']): 
+                    monitors = {meter_prefix + '/' + k: v for k, v in as_float(mon_dict).items()}
+                    #canonize_monitors(monitors)
+                    for tmp_key, tmp_value in monitors.items(): 
+                        if isinstance(tmp_value , list):
+                            for sub_idx, sub_value in enumerate(tmp_value):
+                                if sub_value[0]==-1:
+                                    continue 
+                                meters.update({tmp_key: sub_value[0]}, n=sub_value[1])
+                        elif tmp_value==-1:
+                            continue 
+                        else:
+                            meters.update({tmp_key: tmp_value}, n=1)
 
-                # remove padding values
-                for tmp_key, tmp_value in monitors.items(): 
-                    if isinstance(tmp_value , list):
-                        for sub_idx, sub_value in enumerate(tmp_value):
-                            if sub_value[0]==-1:
-                                continue 
-                            meters.update({tmp_key: sub_value[0]}, n=sub_value[1])
-                    elif tmp_value==-1:
-                        continue 
-                    else:
-                        meters.update({tmp_key: tmp_value}, n=1)
-                
-                meters.update({'time/data': data_time, 'time/step': step_time})
-                if args.use_tb:
-                    meters.flush()
+                    meters.update({'time/data': data_time, 'time/step': step_time})
 
-                pbar.set_description(meters.format_simple(
-                    'Epoch {} (validation)'.format(epoch),
-                    {k: v for k, v in meters.val.items() if k.startswith('validation') and k.count('/') <= 2},
-                    compressed=True
-                ))
-                pbar.update()
+                    if args.use_tb:
+                        meters.flush()
+
+                    pbar.set_description(meters.format_simple(
+                        'Epoch {} (validation)'.format(epoch),
+                        {k: v for k, v in meters.val.items() if k.startswith('validation') and k.count('/') <= 2},
+                        compressed=True
+                    ))
+                    pbar.update()
 
             end = time.time()
-    #pdb.set_trace()
 
 if __name__ == '__main__':
     main()

@@ -636,13 +636,18 @@ class clevrerDataset(Dataset):
                     tmp_box[3] = tmp_box[3]*tarH
                     data['predictions'][key_id]['boxes'][box_id] = tmp_box
         else:
-            data['predictions'] = None
-            data['img_future'] = None
+            # just padding for the dataloader
+            data['predictions'] = {}
+            data['img_future'] = torch.zeros(1, 1, 1, 1)
 
         # loadding counterfact events
         if load_counter_fact_flag:
             scene_index = meta_ann['scene_index']
             data['counterfacts'], data['img_counterfacts'] = self.load_counterfacts_info(scene_index, frm_dict, padding_img=data['img'][0])
+        else:
+            # just padding for the dataloader
+            data['counterfacts'] = {}
+            data['img_counterfacts'] = torch.zeros(1, 1, 1, 1)
 
 
         # adding scene supervision
@@ -1039,7 +1044,7 @@ class clevrerDataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            return 100
+            return 50
         else:
             if self.args.extract_region_attr_flag:
                 return len(self.frm_ann)

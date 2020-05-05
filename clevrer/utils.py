@@ -19,6 +19,52 @@ ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
 
+def collate_dict(batch):
+    return batch
+
+def remove_wrapper_for_paral_training(feed_dict_list):
+    for feed_idx, feed_dict in enumerate(feed_dict_list):
+        new_feed_fict = {}
+        for key_name, value in feed_dict.items():
+            if isinstance(value, torch.Tensor):
+                new_value = value.squeeze(0)
+            pdb.set_trace()
+            new_feed_dict[key_name] = new_value
+
+def default_reduce_func(k, v):
+    if torch.is_tensor(v):
+        return v.mean()
+    return v
+
+def custom_reduce_func(k, v):
+
+    if isinstance(v, list):
+        for idx in range(len(v)-1, -1, -1):
+            if v[idx]<0:
+                del v[idx]
+        if len(v)>0:
+            return sum(v)/len(v)
+        else:
+            return  -1
+    else:
+        invalid_mask = v<0
+        if invalid_mask.float().sum()>0:
+            pdb.set_trace()
+            valid_mask = 1 - invalid_mask.float()
+            valid_v = torch.sum(v*valid_mask)
+            valid_num = valid_mask.sum()
+            if valid_num>0:
+                return valid_v/valid_num
+            else:
+                return -1
+
+    if '_max' in k:
+        return v.max()
+    elif '_sum' in k:
+        return v.sum()
+    else:
+        return default_reduce_func(k, v)
+
 def decode_mask_to_xyxy(mask):
     bbx_xyxy = cocoMask.toBbox(mask)
     bbx_xyxy[2] =  bbx_xyxy[2] + bbx_xyxy[0]
