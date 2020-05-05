@@ -23,16 +23,16 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] Diff for stationary and moving
 - [x] Conflict value between default [0, 0, 0, 0] and mask out values [0, 0, 0, 0]
 - [x] Filter order programs
+- [x] Gaussion smoothing
+- [x] Multiple choice selection question, program definition V2
+- [x] Skipping bounding boxes
+- [x] New tube proposal generation
+- [x] Temporal operation for 'first', 'second' and 'last'
+- [x] dynamic program V2 for modeling video graph
 
 ## To do list:
 More comprehensive features for temporal concepts 
-- [x] Gaussion smoothing
-- [ ] Multiple choice selection question, program definition V2
-- [ ] Skipping bounding boxes
-- [ ] New tube proposal generation
 - [ ] RGB for stationary and moving
-- [ ] Temporal operation for 'first', 'second' and 'last'
-- [ ] dynamic program V2 for modeling video graph
 
 ## Temporal reasoning
 - [ ] Design neoral operations for temporal reasoning programs
