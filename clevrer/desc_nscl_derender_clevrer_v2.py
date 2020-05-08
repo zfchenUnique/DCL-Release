@@ -13,6 +13,7 @@ to get the supervision for the VSE modules. This model tests the implementation 
 from jacinle.utils.container import GView
 from nscl.models.utils import canonize_monitors, update_from_loss_module
 from clevrer.models.reasoning_v2 import ReasoningV2ModelForCLEVRER, make_reasoning_v2_configs
+from clevrer.utils import predict_future_feature
 
 configs = make_reasoning_v2_configs()
 configs.model.vse_known_belong = False
@@ -27,6 +28,10 @@ class Model(ReasoningV2ModelForCLEVRER):
         configs.train.scene_add_supervision = args.scene_add_supervision 
         self.args = args
         super().__init__(configs, args)
+
+    def build_temporal_prediction_model(self, args, desc_pred):
+        model_pred = desc_pred.PropagationNetwork(args, residual=True, use_gpu=True)
+        self._model_pred = model_pred 
 
     def forward(self, feed_dict_list):
         if self.training:
@@ -45,14 +50,16 @@ class Model(ReasoningV2ModelForCLEVRER):
         f_sng_list = []
         f_sng_future_list = []
         for vid, feed_dict in enumerate(feed_dict_list):
-            #pdb.set_trace()
             f_scene = self.resnet(feed_dict['img'])
             f_sng = self.scene_graph(f_scene, feed_dict)
             f_sng_list.append(f_sng)
     
-            if len(feed_dict['predictions']) >0:
+            if len(feed_dict['predictions']) >0 and self.args.version=='v2':
                 f_scene_future = self.resnet(feed_dict['img_future']) 
                 f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
+                f_sng_future_list.append(f_sng_future)
+            elif self.args.version=='v3' and feed_dict['load_predict_flag']:
+                f_sng_future = predict_future_feature(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
             else:
                 f_sng_future_list.append(None)

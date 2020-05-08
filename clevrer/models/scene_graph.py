@@ -81,7 +81,13 @@ class SceneGraph(nn.Module):
                 m.bias.data.zero_()
 
     def merge_tube_obj_ftr(self, outputs, feed_dict, mode=0, tar_obj_id=-1):
-        obj_num = len(feed_dict['tube_info']) -2
+        if 'tube_info' in feed_dict.keys():
+            obj_num = len(feed_dict['tube_info']) -2
+        elif mode==3 and 'predictions' in feed_dict.keys():
+            obj_num = len(feed_dict['predictions']) -2
+
+        obj_ftr_exp = torch.zeros(obj_num, len(outputs), outputs[0][1].shape[1],\
+                dtype=outputs[0][1].dtype, device=outputs[0][1].device)
         obj_ftr = torch.zeros(obj_num, outputs[0][1].shape[1], dtype=outputs[0][1].dtype, \
                 device=outputs[0][1].device)
         rel_ftr = torch.zeros(obj_num, obj_num, outputs[0][1].shape[1], \
@@ -97,6 +103,12 @@ class SceneGraph(nn.Module):
             future_frm_num = feed_dict['img_counterfacts'][tar_obj_id].shape[0]
             box_ftr = torch.zeros(obj_num, future_frm_num*4, dtype=outputs[0][1].dtype, \
                     device=outputs[0][1].device)
+        elif mode==3:
+            future_frm_num = feed_dict['img_future'].shape[0]
+            box_ftr = torch.zeros(obj_num, future_frm_num*4, \
+                    dtype=outputs[0][1].dtype, device=outputs[0][1].device)
+            obj_ftr = torch.zeros(obj_num, future_frm_num, outputs[0][1].shape[1],\
+                    dtype=outputs[0][1].dtype, device=outputs[0][1].device)
 
         if self.args.colli_ftr_type==1:
             frm_num = len(outputs)
@@ -106,7 +118,11 @@ class SceneGraph(nn.Module):
         for out_id, out_ftr in enumerate(outputs):
             tube_id_list = out_ftr[3]
             for ftr_id, tube_id in enumerate(tube_id_list):
-                obj_ftr[tube_id] += out_ftr[1][ftr_id]
+                if mode!=3:
+                    obj_ftr[tube_id] += out_ftr[1][ftr_id]
+                else:
+                    obj_ftr[tube_id, out_id] = out_ftr[1][ftr_id]
+                obj_ftr_exp[tube_id, out_id] = out_ftr[1][ftr_id]
 
             for t_id1, tube_id1 in enumerate(tube_id_list):
                 for t_id2, tube_id2 in enumerate(tube_id_list):
@@ -117,7 +133,7 @@ class SceneGraph(nn.Module):
         for obj_id in range(obj_num):
             if mode==0:
                 box_seq = feed_dict['tube_info']['box_seq']['tubes'][obj_id]
-            elif mode==1:
+            elif mode==1 or mode==3:
                 box_seq = feed_dict['predictions']['box_seq'][obj_id]
             elif mode==2:
                 box_seq = feed_dict['counterfacts'][tar_obj_id]['box_seq'][obj_id]
@@ -140,13 +156,18 @@ class SceneGraph(nn.Module):
             box_dim = min(future_frm_num*4, tube_tensor.shape[1])
         elif mode==2:
             box_dim = min(future_frm_num*4, tube_tensor.shape[1])
+        elif mode==3:
+            box_dim = min(future_frm_num*4, tube_tensor.shape[1])
         box_ftr[:,:box_dim] = tube_tensor
+        if mode==3:
+            box_ftr = box_ftr.view(obj_num, future_frm_num, 4)
 
         if self.args.colli_ftr_type==1:
             rel_ftr_norm = self._norm(rel_ftr_exp)
         else:
             rel_ftr_norm = self._norm(rel_ftr)
-        
+
+
         if self.args.rel_box_flag: 
             rel_ftr_box = torch.zeros(obj_num, obj_num, 128*4*4, \
                     dtype=outputs[0][1].dtype, device=outputs[0][1].device)
@@ -160,7 +181,7 @@ class SceneGraph(nn.Module):
             rel_ftr_box_v2 = self.col_fuse(rel_ftr_box) 
             rel_ftr_norm = torch.cat([rel_ftr_norm, rel_ftr_box_v2], dim=-1)
 
-        return None, self._norm(obj_ftr), rel_ftr_norm, box_ftr  
+        return self._norm(obj_ftr_exp), self._norm(obj_ftr), rel_ftr_norm, box_ftr  
 
     def forward(self, input, feed_dict, mode=0, tar_obj_id=-1):
         """
@@ -190,7 +211,7 @@ class SceneGraph(nn.Module):
                     tube_id_list.append(tube_id)
                 boxes_tensor = torch.stack(boxes_list, 0).cuda()
                 return boxes_tensor, tube_id_list
-            elif mode==1:
+            elif mode==1 or mode==3:
                 boxes_list = []
                 tube_id_list = []
                 frm_id = feed_dict['predictions']['frm_list'][frm_idx]

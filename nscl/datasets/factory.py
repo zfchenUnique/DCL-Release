@@ -47,10 +47,10 @@ dataset_registry = DatasetRegistry()
 
 def initialize_dataset(dataset, version='v1'):
     from nscl.datasets.definition import set_global_definition
-    if dataset=='clevrer' and version !='v2':
+    if dataset=='clevrer' and version =='v1':
         from  clevrer.definition_clevrer import CLEVRERDefinition
         def_class = CLEVRERDefinition
-    elif dataset=='clevrer' and version =='v2':
+    elif dataset=='clevrer' and (version =='v2' or version == 'v3'):
         from  clevrer.definition_clevrer_v2 import CLEVRERDefinitionV2
         def_class = CLEVRERDefinitionV2
     else:

@@ -14,7 +14,8 @@ jac-crun ${GPU_ID} scripts/trainval_tube.py --desc clevrer/desc_nscl_derender_cl
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --resume dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_new_col_diff_mov_new_mask_gau_std1/checkpoints/epoch_40.pth 
+    --debug
+    #--resume dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_new_col_diff_mov_new_mask_gau_std1/checkpoints/epoch_40.pth 
     #--resume dumps/remote_models/new_collision_15.pth \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_thre_in_out_new/checkpoints/epoch_5.pth \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_sym_col_scene_super_balance_thre_in_out_new/checkpoints/epoch_5.pth

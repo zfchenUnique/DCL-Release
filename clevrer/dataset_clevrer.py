@@ -20,9 +20,9 @@ import random
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
+_ignore_list = []
 #_ignore_list = ['get_counterfact']
 #_used_list = ['filter_order']
-_ignore_list = []
 
 def merge_img_patch(img_0, img_1):
 
@@ -530,7 +530,7 @@ class clevrerDataset(Dataset):
         if self.args.extract_region_attr_flag:
             return self.__get_video_frame__(index)
         else:
-            if self.args.version == 'v2':
+            if self.args.version == 'v2' or self.args.version == 'v3':
                 return self.__getitem__model_v2(index)
             else:
                 return self.__getitem__model(index)
@@ -621,7 +621,7 @@ class clevrerDataset(Dataset):
         data['meta_ann'] = meta_ann 
         #pdb.set_trace()
         # loadding unseen events
-        if load_predict_flag:
+        if load_predict_flag  and self.args.version=='v2':
             scene_index = meta_ann['scene_index']
             data['predictions'], data['img_future'] = self.load_predict_info(scene_index, frm_dict, padding_img= data['img'][-1])
             _, c, tarH, tarW = img_tensor.shape
@@ -639,9 +639,11 @@ class clevrerDataset(Dataset):
             # just padding for the dataloader
             data['predictions'] = {}
             data['img_future'] = torch.zeros(1, 1, 1, 1)
+        data['load_predict_flag'] =  load_predict_flag 
+
 
         # loadding counterfact events
-        if load_counter_fact_flag:
+        if load_counter_fact_flag and self.args.version=='v2':
             scene_index = meta_ann['scene_index']
             data['counterfacts'], data['img_counterfacts'] = self.load_counterfacts_info(scene_index, frm_dict, padding_img=data['img'][0])
         else:

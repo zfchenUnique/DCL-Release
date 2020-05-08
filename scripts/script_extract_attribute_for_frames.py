@@ -35,7 +35,7 @@ set_debugger()
 
 logger = get_logger(__file__)
 
-parser = JacArgumentParser(description=__doc__.strip())
+parser = JacArgumentParser(description='')
 
 parser.add_argument('--desc', required=True, type='checked_file', metavar='FILE')
 parser.add_argument('--configs', default='', type='kv', metavar='CFGS')
@@ -190,7 +190,6 @@ def main():
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, args.setname)
     main_train(validation_dataset)
-
 
 def main_train(validation_dataset):
     logger.critical('Building the model.')

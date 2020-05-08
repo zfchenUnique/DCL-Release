@@ -5,8 +5,7 @@ logger = get_logger(__file__)
 
 
 class CLEVRERDefinition(DatasetDefinitionBase):
-    import pdb
-    pdb.set_trace()
+
     operation_signatures = [
         # Part 1: CLEVRER dataset.
         ('scene', [], [], 'object_set'),

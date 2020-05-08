@@ -18,6 +18,215 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
+def prepare_future_prediction_input(feed_dict, f_sng, args):
+    """"
+    attr: obj_num, attr_dim, 1, 1 (None)
+    x: obj_num, state_dim*(n_his+1)
+    rel: return from prepare_relations
+    label_obj: obj_num, state_dim, 1 , 1
+    label_rel: obj_num * obj_num, rela_dim, 1, 1
+    """""
+    x_step = args.n_his +1 
+    last_frm_id_list = [frm_id for frm_id in feed_dict['tube_info']['frm_list'][-args.n_his-1:]]
+    obj_num, ftr_t_dim = f_sng[3].shape
+    ftr_dim = f_sng[1].shape[-1]
+    box_dim = 4
+    t_dim = ftr_t_dim//box_dim
+    spatial_seq = f_sng[3].view(obj_num, t_dim, box_dim)
+    tmp_box_list = [spatial_seq[:, frm_id] for frm_id in last_frm_id_list]
+    x_box = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, args.n_his+1, box_dim)  
+    x_ftr = f_sng[0][:, -x_step:] .view(obj_num, x_step, ftr_dim)
+    x = torch.cat([x_box, x_ftr], dim=2).view(obj_num, x_step*(ftr_dim+box_dim), 1, 1).contiguous()
+
+    # obj_num*obj_num, box_dim*total_step, 1, 1
+    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim))
+    ftr_rela = f_sng[2][:, :, -x_step:].view(obj_num*obj_num, x_step*ftr_dim, 1, 1) 
+    rela = torch.cat([spatial_rela, ftr_rela], dim=1)
+    rel = prepare_relations(obj_num)
+    for idx in range(len(rel)-2):
+        rel[idx] = rel[idx].to(ftr_rela.device)
+    rel.append(rela)
+    attr = None 
+    node_r_idx, node_s_idx, Ra = rel[3], rel[4], rel[5]
+    Rr_idx, Rs_idx, value = rel[0], rel[1], rel[2]
+
+    Rr = torch.sparse.FloatTensor(
+        Rr_idx, value, torch.Size([node_r_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+    Rs = torch.sparse.FloatTensor(
+        Rs_idx, value, torch.Size([node_s_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+
+    return attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx 
+
+def prepare_counterfact_prediction_input(feed_dict, f_sng, args):
+    """"
+    attr: obj_num, attr_dim, 1, 1 (None)
+    x: obj_num, state_dim*(n_his+1)
+    rel: return from prepare_relations
+    label_obj: obj_num, state_dim, 1 , 1
+    label_rel: obj_num * obj_num, rela_dim, 1, 1
+    """""
+    x_step = args.n_his +1 
+    first_id_list = [frm_id for frm_id in feed_dict['tube_info']['frm_list'][:x_step]]
+    obj_num, ftr_t_dim = f_sng[3].shape
+    ftr_dim = f_sng[1].shape[-1]
+    box_dim = 4
+    t_dim = ftr_t_dim//box_dim
+    spatial_seq = f_sng[3].view(obj_num, t_dim, box_dim)
+    tmp_box_list = [spatial_seq[:, frm_id].clone() for frm_id in first_id_list]
+    x_box = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, x_step, box_dim)  
+    x_ftr = f_sng[0][:, :x_step].view(obj_num, x_step, ftr_dim).clone()
+    x = torch.cat([x_box, x_ftr], dim=2).view(obj_num, x_step*(ftr_dim+box_dim), 1, 1).contiguous()
+
+    # obj_num*obj_num, box_dim*total_step, 1, 1
+    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim))
+    ftr_rela = f_sng[2][:, :, :x_step].view(obj_num*obj_num, x_step*ftr_dim, 1, 1) 
+    rela = torch.cat([spatial_rela, ftr_rela], dim=1)
+    rel = prepare_relations(obj_num)
+    for idx in range(len(rel)-2):
+        rel[idx] = rel[idx].to(ftr_rela.device)
+    rel.append(rela)
+    attr = None 
+    node_r_idx, node_s_idx, Ra = rel[3], rel[4], rel[5]
+    Rr_idx, Rs_idx, value = rel[0], rel[1], rel[2]
+
+    Rr = torch.sparse.FloatTensor(
+        Rr_idx, value, torch.Size([node_r_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+    Rs = torch.sparse.FloatTensor(
+        Rs_idx, value, torch.Size([node_s_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+
+    return attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx 
+
+
+def prepare_relations(n):
+    node_r_idx = np.arange(n)
+    node_s_idx = np.arange(n)
+
+    rel = np.zeros((n**2, 2))
+    rel[:, 0] = np.repeat(np.arange(n), n)
+    rel[:, 1] = np.tile(np.arange(n), n)
+
+    n_rel = rel.shape[0]
+    Rr_idx = torch.LongTensor([rel[:, 0], np.arange(n_rel)])
+    Rs_idx = torch.LongTensor([rel[:, 1], np.arange(n_rel)])
+    value = torch.FloatTensor([1] * n_rel)
+
+    rel = [Rr_idx, Rs_idx, value, node_r_idx, node_s_idx]
+    return rel
+
+def extract_spatial_relations(feats):
+    """
+    Extract spatial relations
+    """
+    ### prepare relation attributes
+    n_objects, t_frame, box_dim = feats.shape
+    feats = feats.view(n_objects, t_frame*box_dim, 1, 1)
+    n_relations = n_objects * n_objects
+    relation_dim =  box_dim
+    state_dim = box_dim 
+    Ra = torch.ones([n_relations, relation_dim *t_frame, 1, 1], device=feats.device) * -0.5
+
+    #change to relative position
+    #  relation_dim = self.args.relation_dim
+    #  state_dim = self.args.state_dim
+    for i in range(n_objects):
+        for j in range(n_objects):
+            idx = i * n_objects + j
+            Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+            Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+            Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+            Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+    return Ra
+
+def predict_counterfact_features(model, feed_dict, f_sng, args, counter_fact_id):
+    data = prepare_counterfact_prediction_input(feed_dict, f_sng, args)
+    #x: obj_num, state_dim*(n_his+1)
+    x_step = args.n_his + 1
+    attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
+    
+
+    pred_obj_list = []
+    pred_rel_list = []
+    for t_step in range(args.n_his+1):
+        pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
+        pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
+    n_objects = x.shape[0]
+    relation_dim = args.relation_dim
+    state_dim = args.state_dim 
+    for p_id, frm_id  in enumerate(range(0, args.n_seen_frames, args.frame_offset)):
+        x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
+
+        feats = x
+        # update relation
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+
+        # masking out counter_fact_id 
+        x[counter_fact_id] = -1.0
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                if i==counter_fact_id or j==counter_fact_id:
+                    Ra[idx] = -1.0
+
+        pred_obj, pred_rel = model._model_pred(
+            attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
+        pred_obj_list.append(pred_obj)
+        pred_rel_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)) 
+    #make the output consitent with video scene graph
+    pred_frm_num = len(pred_obj_list) 
+    ftr_dim = f_sng[1].shape[1]
+    box_dim = 4
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects, n_objects, pred_frm_num, ftr_dim)
+    #pdb.set_trace()
+    return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
+
+def predict_future_feature(model, feed_dict, f_sng, args):
+    data = prepare_future_prediction_input(feed_dict, f_sng, args)
+    #x: obj_num, state_dim*(n_his+1)
+    x_step = args.n_his + 1
+    #pdb.set_trace()
+    attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
+    pred_obj_list = []
+    pred_rel_list = []
+    for t_step in range(args.n_his+1):
+        pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
+        pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
+
+    n_objects = x.shape[0]
+    relation_dim = args.relation_dim
+    state_dim = args.state_dim 
+    for p_id in range(args.pred_frm_num):
+        x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
+        feats = x
+        # update relation
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+
+        pred_obj, pred_rel = model._model_pred(
+            attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
+        pred_obj_list.append(pred_obj)
+        pred_rel_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)) 
+    #make the output consitent with video scene graph
+    pred_frm_num = args.pred_frm_num 
+    ftr_dim = f_sng[1].shape[1]
+    box_dim = 4
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects, n_objects, pred_frm_num, ftr_dim)
+    #pdb.set_trace()
+    return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
 
 def collate_dict(batch):
     return batch

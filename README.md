@@ -29,10 +29,15 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] New tube proposal generation
 - [x] Temporal operation for 'first', 'second' and 'last'
 - [x] dynamic program V2 for modeling video graph
+- [x] Learning dynamic models in the latent space
 
 ## To do list:
 More comprehensive features for temporal concepts 
 - [ ] RGB for stationary and moving
+### Details for learning dynamic modeles in the latent space
+Step1, extract visual features for each target object and their collision features
+Step2, using a dynamic models to learn corresponding features
+Step3, Joint optimizing both the latent features and the dynamic nscl models
 
 ## Temporal reasoning
 - [ ] Design neoral operations for temporal reasoning programs
