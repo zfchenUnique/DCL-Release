@@ -154,8 +154,10 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         if args.version=='v3':
             if args.gpu_parallel:
                 model.module._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
+                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
             else:
                 model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
+                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
 
     #pdb.set_trace()
 

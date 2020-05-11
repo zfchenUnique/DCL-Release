@@ -32,7 +32,7 @@ import torch.nn.functional as F
 import copy
 from scipy import signal 
 import numpy as np
-from clevrer.utils import predict_counterfact_features 
+from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2  
 
 logger = get_logger(__file__)
 
@@ -362,7 +362,7 @@ class ProgramExecutorContext(nn.Module):
 
     def init_counterfactual_events_v3(self, selected, feed_dict):
         what_if_obj_id = selected.argmax()
-        self._counterfact_features = predict_counterfact_features(self._nscl_model, feed_dict, self.features, self.args, what_if_obj_id)
+        self._counterfact_features = predict_counterfact_features_v2(self._nscl_model, feed_dict, self.features, self.args, what_if_obj_id)
         
         obj_num, obj_num2, pred_frm_num, ftr_dim = self._counterfact_features[2].shape
         box_dim = self._counterfact_features[3].shape[1]//pred_frm_num

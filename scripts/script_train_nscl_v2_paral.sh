@@ -19,7 +19,8 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2_paral.py --desc clevrer/desc_nscl_de
     --colli_ftr_type 1 \
     --load dumps/remote_models/frm_31_epoch_24.pth \
     --pred_model_path ../temporal_reasoning-master/models_latent.py \
-    --pretrain_pred_model_path  ../temporal_reasoning-master/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_tubemode_1/tube_net_epoch_0_iter_500000.pth 
+    --pretrain_pred_model_path  ../temporal_reasoning-master/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_tubemode_1/tube_net_epoch_0_iter_500000.pth \
+    --debug 
     #--resume  dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp6_col_box_ftr_v2_new_visual_colli/checkpoints/epoch_4.pth
     #--resume dumps/remote_models/new_colli_16.pth \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp6_col_box_ftr_v2_new_causal_fix_station_moving_bug/checkpoints/epoch_3.pth

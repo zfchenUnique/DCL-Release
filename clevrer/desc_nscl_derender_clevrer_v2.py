@@ -13,7 +13,7 @@ to get the supervision for the VSE modules. This model tests the implementation 
 from jacinle.utils.container import GView
 from nscl.models.utils import canonize_monitors, update_from_loss_module
 from clevrer.models.reasoning_v2 import ReasoningV2ModelForCLEVRER, make_reasoning_v2_configs
-from clevrer.utils import predict_future_feature
+from clevrer.utils import predict_future_feature, predict_future_feature_v2 
 
 configs = make_reasoning_v2_configs()
 configs.model.vse_known_belong = False
@@ -59,7 +59,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                 f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
                 f_sng_future_list.append(f_sng_future)
             elif self.args.version=='v3' and feed_dict['load_predict_flag']:
-                f_sng_future = predict_future_feature(self, feed_dict, f_sng, self.args)
+                f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
             else:
                 f_sng_future_list.append(None)
