@@ -158,13 +158,13 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
         Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
 
         valid_object_id_list = check_valid_object_id_list(x, args)
-        if len(valid_object_id_list) == 0:
-            break 
 
         if counter_fact_id in valid_object_id_list:
             counter_idx = valid_object_id_list.index(counter_fact_id)
             del valid_object_id_list[counter_idx]
 
+        if len(valid_object_id_list) == 0:
+            break 
         data_valid = prepare_valid_input(x, Ra, valid_object_id_list, args)
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
