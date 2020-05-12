@@ -202,6 +202,8 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     ftr_dim = f_sng[1].shape[1]
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
+    #visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
+    #pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
@@ -293,7 +295,6 @@ def predict_future_feature(model, feed_dict, f_sng, args):
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects, n_objects, pred_frm_num, ftr_dim)
-    #visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
 
 def check_valid_object_id_list(x, args):
@@ -425,7 +426,7 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
     # print(actions[:, 0, :])
     # print(states[:20, 0, :])
     filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = filename + '.avi'
+    videoname = filename + '_' + str(int(whatif_id)) +'.avi'
     #videoname = filename + '.mp4'
     os.system('mkdir -p ' + filename)
 
@@ -446,7 +447,7 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
     if whatif_id == -1:
         n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1]
     else:
-        n_frame = len(box_ftr.shape[1]) 
+        n_frame = box_ftr.shape[1] 
     padding_patch_list = []
     for i in range(n_frame):
         if whatif_id==-1:
@@ -501,13 +502,59 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
                     patch_resize = cv2.resize(padding_patch_list[tube_id], (int(x2*W) - int(x*W), int(y2*H) - int(y*H)))
                     img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
                     cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
-
+        
             store_img = True
 
             if store_img:
                 cv2.imwrite(os.path.join( 'tmp/%s_%d.png' % (filename, i)), img.astype(np.uint8))
+        else:
+            frm_id = feed_dict['tube_info']['frm_list'][i]
+            img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+            img_rgb = cv2.imread(img_full_path)
+            #for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+            img = copy.deepcopy(bg)
+            for tube_id in range(box_ftr.shape[0]):
+                tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                img_patch = img_rgb[int(y*H):int(y*H + h*H) , int(x*W): int(x*W + w*W)]
+                hh, ww, c = img_patch.shape
+                if hh*ww*c==0:
+                    img_patch  = np.zeros((24, 24, 3), dtype=np.float32)
 
-            out.write(img)
+                tmp_box = box_ftr[tube_id][i]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                y2 = y +h
+                x2 = x +w
+                if w<=0 or h<=0:
+                    continue
+                if x>1:
+                    continue
+                if y>1:
+                    continue
+                if x2 <=0:
+                    continue
+                if y2 <=0:
+                    continue 
+                if x<0:
+                    x=0
+                if y<0:
+                    y=0
+                if x2>1:
+                    x2=1
+                if y2>1:
+                    y2=1
+                patch_resize = cv2.resize(img_patch, (max(int(x2*W) - int(x*W), 1), max(int(y2*H) - int(y*H), 1)))
+                img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+            if store_img:
+                cv2.imwrite(os.path.join( 'tmp/%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
+        out.write(img)
 
 def collate_dict(batch):
     return batch
