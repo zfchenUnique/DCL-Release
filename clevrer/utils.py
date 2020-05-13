@@ -18,6 +18,9 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
+def _norm(x, dim=-1):
+    return x / (x.norm(2, dim=dim, keepdim=True)+1e-7)
+
 def prepare_future_prediction_input(feed_dict, f_sng, args):
     """"
     attr: obj_num, attr_dim, 1, 1 (None)
@@ -153,6 +156,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     n_objects_ori = x.shape[0]
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
+    box_dim = 4
     for p_id, frm_id  in enumerate(range(0, args.n_seen_frames, args.frame_offset)):
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
         Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
@@ -186,6 +190,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
                 device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
+            pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
         pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         
@@ -194,6 +199,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects + ori_id_2
                 pred_rel[ori_idx] = pred_rel_valid[valid_idx]
+                pred_rel[ori_id, box_dim:] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
         pred_rel_list.append(pred_rel.view(n_objects_ori*n_objects_ori, relation_dim, 1, 1)) 
@@ -365,7 +371,7 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     n_objects_ori = x.shape[0]
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
-
+    box_dim = 4
 
     for p_id in range(args.pred_frm_num):
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
@@ -388,6 +394,9 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
                 Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
                 Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
 
+        # normalize data
+
+
         pred_obj_valid, pred_rel_valid = model._model_pred(
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
        
@@ -395,6 +404,7 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
                 device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
+            pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
         pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         
@@ -403,6 +413,7 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects + ori_id_2
                 pred_rel[ori_idx] = pred_rel_valid[valid_idx]
+                pred_rel[ori_id, box_dim:] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
         pred_rel_list.append(pred_rel.view(n_objects_ori*n_objects_ori, relation_dim, 1, 1)) 
