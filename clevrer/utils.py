@@ -183,11 +183,11 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
         
         pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
-                device=pred_obj_valid.device) - 1.0
+                device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
         pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
-                device=pred_obj_valid.device) - 1.0
+                device=pred_obj_valid.device) #- 1.0
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
@@ -392,11 +392,11 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
        
         pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
-                device=pred_obj_valid.device) - 1.0
+                device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
         pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
-                device=pred_obj_valid.device) - 1.0
+                device=pred_obj_valid.device) #- 1.0
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
