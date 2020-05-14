@@ -150,7 +150,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
    
     for i in range(n_objects_ori):
         for j in range(n_objects_ori):
-            idx = i * n_objects + j
+            idx = i * n_objects_ori + j
             if i==counter_fact_id or j==valid_object_id_list:
                 Ra[idx] = 0.0
     x[counter_fact_id] = 0.0
