@@ -143,8 +143,9 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         if trainer.load_weights(args.load):
             logger.critical('Loaded weights from pretrained model: "{}".'.format(args.load))
         if args.version=='v3':
-            model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
-            logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
+            if args.pretrain_pred_model_path:
+                model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
+                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
             #pdb.set_trace()
     if args.use_tb and not args.debug:
         from jactorch.train.tb import TBLogger, TBGroupMeters

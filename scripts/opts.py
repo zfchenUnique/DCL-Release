@@ -94,7 +94,8 @@ def load_param_parser():
     
     # for temporal prediction model
     parser.add_argument('--pred_model_path', required=True, type='checked_file', metavar='FILE')
-    parser.add_argument('--pretrain_pred_model_path', required=True, type='checked_file', metavar='FILE')
+    #parser.add_argument('--pretrain_pred_model_path', required=True, type='checked_file', metavar='FILE')
+    parser.add_argument('--pretrain_pred_model_path', type=str,  default='')
     parser.add_argument('--attr_dim', type=int, default=5)
     # [dx, dy, dw, dh, ftr_dim]
     parser.add_argument('--state_dim', type=int, default=260)
