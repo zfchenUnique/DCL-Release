@@ -11,13 +11,18 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --tube_prp_path ../clevrer/tubeProposalsGt\
     --box_only_for_collision_flag 0 \
     --scene_supervision_flag 1\
-    --version v2 \
     --box_iou_for_collision_flag 1 \
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
     --colli_ftr_type 1 \
-    --load dumps/remote_models/frm_31_epoch_24.pth
+    --load dumps/remote_models/frm_31_epoch_24.pth \
+    --version v3 \
+    --debug \
+    --pred_model_path ../temporal_reasoning-master/models_latent.py \
+    --pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/net_best.pth
+    #--pretrain_pred_model_path ../temporal_reasoning-master/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_tubemode_1/tube_net_epoch_2_iter_700000.pth \
+    #--pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v2/tube_net_epoch_2_iter_700000.pth \
     #--debug \
     #--load dumps/remote_models/new_colli_16.pth
     #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp6_col_box_ftr_v2_new_causal_fix_station_moving_bug/checkpoints/epoch_8.pth

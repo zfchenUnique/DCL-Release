@@ -146,14 +146,20 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     #x: obj_num, state_dim*(n_his+1)
     x_step = args.n_his + 1
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
-    
+    n_objects_ori = x.shape[0]
+   
+    for i in range(n_objects_ori):
+        for j in range(n_objects_ori):
+            idx = i * n_objects + j
+            if i==counter_fact_id or j==valid_object_id_list:
+                Ra[idx] = 0.0
+    x[counter_fact_id] = 0.0
 
     pred_obj_list = []
     pred_rel_list = []
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
         pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
-    n_objects_ori = x.shape[0]
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
     box_dim = 4
