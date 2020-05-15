@@ -214,8 +214,8 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     ftr_dim = f_sng[1].shape[1]
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
-    #visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
-    #pdb.set_trace()
+    visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
+    pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
@@ -430,8 +430,8 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
-    #visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
-    #pdb.set_trace()
+    visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
+    pdb.set_trace()
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
@@ -443,7 +443,7 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
     # print(actions[:, 0, :])
     # print(states[:20, 0, :])
     filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = filename + '_' + str(int(whatif_id)) +'.avi'
+    videoname = 'dumps/'+ filename + '_' + str(int(whatif_id)) +'.avi'
     #videoname = filename + '.mp4'
     os.system('mkdir -p ' + filename)
 
