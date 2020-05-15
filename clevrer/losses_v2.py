@@ -216,9 +216,13 @@ class QALoss(MultitaskLossBase):
         outputs = {'answer': []}
             
         question_type_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive']
+        question_type_per_question_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive']
         for query_type in question_type_list:
             monitors.setdefault('acc/qa/' + query_type, [])
             monitors.setdefault('loss/qa/' + query_type, [])
+
+        for query_type in question_type_per_question_list:
+            monitors.setdefault('acc/qa/' + query_type+'_per_ques', [])
 
         if 'answer' not in feed_dict or 'question_type' not in feed_dict:
             return monitors, outputs
@@ -291,6 +295,8 @@ class QALoss(MultitaskLossBase):
                     monitors.setdefault(key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault('acc/qa', []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault(new_key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
+                monitors.setdefault(new_key+'_per_ques', []).append((int(gt == tmp_answer_list), acc_w))
+                #pdb.set_trace()
             else:
                 monitors.setdefault(key, []).append((int(gt == argmax), acc_w))
                 monitors.setdefault('acc/qa', []).append((int(gt == argmax), acc_w))
