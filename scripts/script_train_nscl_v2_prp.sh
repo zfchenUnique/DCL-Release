@@ -12,7 +12,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --prefix prp_v3_40000 \
+    --prefix prp_v3_no_refined \
     --colli_ftr_type 1 \
     --pred_model_path ../temporal_reasoningv2/models_latent.py \
     --frm_img_num 31 --even_smp_flag 1 \
