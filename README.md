@@ -31,12 +31,12 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] dynamic program V2 for modeling video graph
 - [x] Learning dynamic models in the latent space
 - [x] Finding out why it fails, using deeper model
+- [x] QA accuracy per question
 
 ## To do list:
 More comprehensive features for temporal concepts 
 - [ ] Models with learnt tube proposals
 - [ ] Models with learnt programs
-- [ ] QA accuracy per question
 - [ ] Threshold for collision performance
 - [ ] More supervision info from QA
 ### Details for learning dynamic modeles in the latent space
