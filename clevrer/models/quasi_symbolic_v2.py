@@ -335,7 +335,7 @@ class ProgramExecutorContext(nn.Module):
 
             all_causes.append([colli_mask3, in_mask, out_mask])
             # filter other objects in the graphs 
-            obj_idx_mat = (colli_mask3>_collision_thre).nonzero()
+            obj_idx_mat = (colli_mask3>self.args.colli_threshold).nonzero()
             event_len = obj_idx_mat.shape[0] 
 
             for idx in range(event_len):
@@ -669,7 +669,7 @@ class ProgramExecutorContext(nn.Module):
                 return torch.sigmoid(count_conf).sum()/2
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
-                    return (count_conf > 0).float().sum()/2
+                    return (count_conf > self.args.colli_threshold).float().sum()/2
                 return (torch.sigmoid(count_conf).sum()/2).round()
 
     _count_margin = 0.25

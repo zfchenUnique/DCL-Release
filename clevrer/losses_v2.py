@@ -147,7 +147,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
                 acc_key_pos = 'acc/scene/relation/' + concept +'_pos'
                 acc_key_neg = 'acc/scene/relation/' + concept +'_neg'
-                acc_mat = ((cross_scores > 0).long() == cross_labels.long()).float()
+                acc_mat = ((cross_scores > self.args.colli_threshold).long() == cross_labels.long()).float()
                 pos_acc = (acc_mat * cross_labels.float()).sum() / (cross_labels.float().sum()+ 0.000001)
                 neg_acc = (acc_mat * (1- cross_labels.float())).sum() / ((1-cross_labels.float()).sum()+0.000001)
                 monitors[acc_key_pos] = pos_acc 
