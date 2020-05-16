@@ -109,6 +109,7 @@ def load_param_parser():
     parser.add_argument('--pred_frm_num', type=int, default=12, help='number of frames to predict')
     parser.add_argument('--pstep', type=int, default=2)
     parser.add_argument('--frame_offset', type=int, default=5)
+    parser.add_argument('--colli_threshold', type=float, default=0.0)
 
     args = parser.parse_args()
     return args 
