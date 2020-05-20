@@ -21,6 +21,8 @@ def parse_opt():
     parser.add_argument('--extract_att_path', type=str, default='dumps/clevrer/tmpProposalsAttr', help='')
     parser.add_argument('--vis_path', type=str, default='../videoParser/samples/attrVideo', help='')
     parser.add_argument('--attr_w', type=float, default=1, help='')
+    parser.add_argument('--valid_frm_thre_hold', type=int, default=10, help='')
+    parser.add_argument('--match_thre', type=float, default=1, help='')
 
     # parse 
     args = parser.parse_args()

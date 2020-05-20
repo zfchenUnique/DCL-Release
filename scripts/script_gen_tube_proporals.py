@@ -98,7 +98,6 @@ def draw_rectangle(img, bbox, color=(0,0,255), thickness=3, use_dashed_line=Fals
     assert bbox[2] <= img.shape[1]
     assert bbox[3] <= img.shape[0]
     cur_img = copy.deepcopy(img)
-    #pdb.set_trace()
     if use_dashed_line:
         drawrect(
             cur_img,
@@ -109,7 +108,6 @@ def draw_rectangle(img, bbox, color=(0,0,255), thickness=3, use_dashed_line=Fals
             'dotted'
             )
     else:
-        #pdb.set_trace()
         cv2.rectangle(
             cur_img,
             (int(bbox[0]), int(bbox[1])),
@@ -123,7 +121,6 @@ def images2video(image_list, frame_rate, video_path, max_edge=None):
     FFMPEG = 'ffmpeg'
     SAVE_VIDEO = FFMPEG + ' -y -r %d -i %s/%s.jpg %s'
     
-    #pdb.set_trace() 
     if os.path.exists(TMP_DIR):
         shutil.rmtree(TMP_DIR)
     os.mkdir(TMP_DIR)
@@ -136,7 +133,6 @@ def images2video(image_list, frame_rate, video_path, max_edge=None):
             shutil.copyfile(cur_img, cur_fname)
         elif isinstance(cur_img, np.ndarray):
             max_len = max(cur_img.shape[:2])
-            #pdb.set_trace()
             if max_edge is not None and max_len > max_edge and img_size is None and max_edge is not None:
                 magnif = float(max_edge) / float(max_len)
                 img_size = (int(cur_img.shape[1] * magnif), int(cur_img.shape[0] * magnif))
@@ -150,7 +146,6 @@ def images2video(image_list, frame_rate, video_path, max_edge=None):
         else:
             NotImplementedError()
     print(subprocess.getoutput(SAVE_VIDEO % (frame_rate, TMP_DIR, '%08d', video_path)))
-    #pdb.set_trace() 
     shutil.rmtree(TMP_DIR)
 
 def visTube_from_image(frmList, tube, outName):
@@ -159,8 +154,7 @@ def visTube_from_image(frmList, tube, outName):
         imName = frmList[i]
         img = draw_rectangle(imName, bbx)
         image_list.append(img)
-        images2video(image_list, 10, outName)
-    #pdb.set_trace() 
+    images2video(image_list, 10, outName)
 
 def visual_tube_proposals(results, f_dict, prp_num, opt):
     sub_idx = int(f_dict['video_index']/1000)
@@ -174,7 +168,6 @@ def visual_tube_proposals(results, f_dict, prp_num, opt):
         frmImList.append(img)
     vis_frame_num = 24
     visIner = int(len(frmImList) /vis_frame_num)
-    #pdb.set_trace() 
     for ii in range(len(results[0])):
         print('visualizing tube %d\n'%(ii))
         tube = results[0][ii]
@@ -188,7 +181,6 @@ def visual_tube_proposals(results, f_dict, prp_num, opt):
             os.makedirs(out_sub_path)
         out_full_path = os.path.join(out_sub_path, str(prp_num)+'_' + str(ii)+'.gif')
         visTube_from_image(copy.deepcopy(frmImList_vis), tube_vis, out_full_path) 
-        #pdb.set_trace()
 
 def compute_IoU(box1, box2):
     KEYS = ['x1', 'y1', 'x2', 'y2']
@@ -375,9 +367,10 @@ def get_tubes(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
                                 if concept!='':
                                     attr_score += prevbox_attr[attr_upper][concept] 
                             attr_score  /= timestep 
-                            link_score +=  attr_score * attr_w  
-                    #except:
-                    #    pdb.set_trace()
+                            link_score +=  attr_score * attr_w
+                        #if e_score<=0:
+                        #    link_score = 0.0
+                        #    pdb.set_trace()
                     
                     cur_score = score_list[-1][i_prevbox] + link_score
                     if cur_score > cur_scores[i_curbox]:
@@ -450,12 +443,12 @@ def extract_tube_v0(opt):
         else:
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute(f_dict, opt) 
         out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
-        #pdb.set_trace()
         pickledump(out_fn_path, out_dict)
+        pdb.set_trace()
         if file_idx%100==0:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
-        if file_idx<=10100 and 0:
-            visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
+        #if file_idx<=10100 and 0:
+        #visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
 
 def visual_specific_tube(opt):
     sample_folder_path= '../clevrer/proposals'
@@ -787,16 +780,474 @@ def extract_tube_per_video_attribute(f_dict, opt, attr_dict_list):
 
         if not opt['use_attr_flag']:
             bbx_sc_list.append([sc_mat, bbx_mat])
+
         else:
             bbx_sc_list.append([sc_mat, bbx_mat, attr_list])
 
     tube_list, score_list = get_tubes(bbx_sc_list, connect_w, opt['use_attr_flag'], opt['attr_w'])
     return tube_list, score_list, bbx_sc_list  
 
+def extract_tube_v1(opt):
+    sample_folder_path= '../clevrer/proposals'
+    file_list = get_sub_file_list(sample_folder_path, '.json')
+    file_list.sort()
+    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_v1')
+    if not os.path.isdir(out_path):
+        os.makedirs(out_path)
+    for file_idx, sample_file in enumerate(file_list):
+
+        out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
+
+        if file_idx >=100:
+            break
+        if file_idx <=22:
+            continue 
+
+        fh = open(sample_file, 'r')
+        f_dict = json.load(fh)
+        max_obj_num = 0
+        for frm_idx, frm_info in enumerate(f_dict['frames']):
+            tmp_obj_num = len(frm_info['objects']) 
+            if max_obj_num<tmp_obj_num:
+                max_obj_num = tmp_obj_num 
+
+        if opt['use_attr_flag']:
+            attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
+            if not os.path.isfile(attr_dict_path):
+                continue 
+            attr_dict_list = jsonload(attr_dict_path) 
+            tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list) 
+        else:
+            tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt) 
+        tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
+        out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
+        pickledump(out_fn_path, out_dict)
+        if file_idx%100==0:
+            print('finish processing %d/%d videos' %(file_idx, len(file_list)))
+
+def extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list=None):
+    connect_w = opt['connect_w']
+    score_w = opt['score_w']
+    bbx_sc_list = []
+
+    if attr_dict_list is not None:
+        assert len(f_dict['frames'])==len(attr_dict_list)
+
+    # get object number of a video
+    max_obj_num = 0
+    for frm_idx, frm_info in enumerate(f_dict['frames']):
+        tmp_obj_num = len(frm_info['objects']) 
+        if max_obj_num<tmp_obj_num:
+            max_obj_num = tmp_obj_num 
+
+
+    for frm_idx, frm_info in enumerate(f_dict['frames']):
+        bbx_mat = []
+        sc_mat = []
+        color_list = []
+        material_list = []
+        shape_list = []
+        attr_list = []
+        tmp_obj_num = len(frm_info['objects']) 
+
+        if opt['use_attr_flag']:
+            attr_frm_dict = attr_dict_list[frm_idx]
+            assert len(frm_info['objects']) ==  len(attr_frm_dict['color'])
+        for obj_idx, obj_info in enumerate(frm_info['objects']):
+            bbx_xywh = mask.toBbox(obj_info['mask'])
+            bbx_xyxy = copy.deepcopy(bbx_xywh)
+            bbx_xyxy[2] =  bbx_xyxy[2] + bbx_xyxy[0]
+            bbx_xyxy[3] =  bbx_xyxy[3] + bbx_xyxy[1]
+            bbx_mat.append(bbx_xyxy)
+            sc_mat.append(obj_info['score']*score_w)
+            
+            if opt['use_attr_flag']:
+                tmp_color = COLORS[attr_frm_dict['color'][obj_idx]]
+                tmp_material = MATERIALS[attr_frm_dict['material'][obj_idx]]
+                tmp_shape = SHAPES[attr_frm_dict['shape'][obj_idx]]
+                attr_list.append([tmp_color, tmp_material, tmp_shape])
+            #pdb.set_trace()
+
+
+        frm_size = frm_info['objects'][0]['mask']['size']
+        for tmp_idx in range(tmp_obj_num, max_obj_num):
+            tmp_box = np.array([0, 0, 1, 1])
+            bbx_mat.append(tmp_box)
+            sc_mat.append(0)
+            
+            if opt['use_attr_flag']:
+                attr_list.append(['', '', ''])
+
+        bbx_mat = np.stack(bbx_mat, axis=0)
+        sc_mat = np.array(sc_mat)
+        sc_mat = np.expand_dims(sc_mat, axis=1 )
+
+        #pdb.set_trace()
+
+        if not opt['use_attr_flag']:
+            bbx_sc_list.append([sc_mat, bbx_mat])
+
+        else:
+            bbx_sc_list.append([sc_mat, bbx_mat, attr_list])
+
+    tube_list, score_list = get_tubes_v1(bbx_sc_list, connect_w, opt['use_attr_flag'], opt['attr_w'])
+    return tube_list, score_list, bbx_sc_list  
+
+def get_tubes_v1(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
+    """
+    det_list_org: [score_list, bbx_list]
+    alpha: connection weight
+    """
+    det_list = copy.deepcopy(det_list_org)
+    tubes = []
+    continue_flg = True
+    tube_scores = []
+
+    while continue_flg:
+        timestep = 0
+        obj_num = det_list[timestep][0].shape[0]
+        
+        if use_attr_flag:
+            acc_time_list = []
+            acc_attr_list = []
+            for obj_id in range(obj_num):
+                tmp_obj_dict = {}
+                for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                    attr_upper = attr_concept.upper()
+                    tmp_obj_num = 0
+                    concept_dict = {}
+                    for concept in globals()[attr_upper]:
+                        concept_dict[concept] = 0.0
+                    obj_concept = det_list[timestep][2][obj_id][attr_id]
+                    concept_dict[obj_concept] = 1.0
+                    tmp_obj_dict[attr_upper] = concept_dict 
+                acc_attr_list.append(tmp_obj_dict) 
+                acc_time_list.append(acc_attr_list)
+
+            for t_id in range(1, len(det_list)):
+                acc_time_list.append([])
+                for obj_id in range(obj_num):
+                    acc_time_list[t_id].append({})
+
+        score_list = []
+        score_list.append(np.zeros(det_list[timestep][0].shape[0]))
+        prevind_list = []
+        prevind_list.append([-1] * det_list[timestep][0].shape[0])
+        timestep += 1
+
+        while timestep < len(det_list):
+            n_curbox = det_list[timestep][0].shape[0]
+            n_prevbox = score_list[-1].shape[0]
+            cur_scores = np.zeros(n_curbox) - np.inf
+            prev_inds = [-1] * n_curbox
+            for i_prevbox in range(n_prevbox):
+                prevbox_coods = det_list[timestep-1][1][i_prevbox, :]
+                prevbox_score = det_list[timestep-1][0][i_prevbox, 0]
+
+                for i_curbox in range(n_curbox):
+                    curbox_coods = det_list[timestep][1][i_curbox, :]
+                    curbox_score = det_list[timestep][0][i_curbox, 0]
+                    #try:
+                    if True:
+                        e_score = compute_IoU(prevbox_coods.tolist(), curbox_coods.tolist())
+                        link_score = prevbox_score + curbox_score + alpha * (e_score)
+                        
+                        if use_attr_flag:
+                            #prevbox_attr = det_list[timestep-1][2][i_prevbox]
+                            det_list
+                            prevbox_attr = acc_time_list[timestep-1][i_prevbox]
+                            curbox_attr = det_list[timestep][2][i_curbox]
+                            #attr_score = compare_attr_score(prevbox_attr, curbox_attr)
+                            attr_score = 0.0
+                            for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                                attr_upper = attr_concept.upper()
+                                concept = curbox_attr[attr_id] 
+                                if concept!='':
+                                    attr_score += prevbox_attr[attr_upper][concept] 
+                            attr_score  /= timestep 
+                            link_score +=  attr_score * attr_w
+                        if e_score<=0:
+                            link_score = 0.0
+                    
+                    cur_score = score_list[-1][i_prevbox] + link_score
+                    if cur_score > cur_scores[i_curbox]:
+                        cur_scores[i_curbox] = cur_score
+                        prev_inds[i_curbox] = i_prevbox
+                        if use_attr_flag:
+                            acc_time_list[timestep][i_curbox] = copy.deepcopy(acc_time_list[timestep-1][i_prevbox])
+                            curbox_attr = det_list[timestep][2][i_curbox]
+                            for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                                attr_upper = attr_concept.upper()
+                                concept = curbox_attr[attr_id] 
+                                if concept!='':
+                                    acc_time_list[timestep][i_curbox][attr_upper][concept] +=1  
+
+            score_list.append(cur_scores)
+            prevind_list.append(prev_inds)
+            timestep += 1
+
+        # get path and remove used boxes
+        cur_tube = [None] * len(det_list)
+        tube_score = np.max(score_list[-1]) / len(det_list)
+        prev_ind = np.argmax(score_list[-1])
+        timestep = len(det_list) - 1
+        while timestep >= 0:
+            cur_tube[timestep] = det_list[timestep][1][prev_ind, :].tolist()
+            det_list[timestep][0] = np.delete(det_list[timestep][0], prev_ind, axis=0)
+            det_list[timestep][1] = np.delete(det_list[timestep][1], prev_ind, axis=0)
+            if use_attr_flag:
+                det_list[timestep][2].pop(prev_ind)
+            prev_ind = prevind_list[timestep][prev_ind]
+            if det_list[timestep][1].shape[0] == 0:
+                continue_flg = False
+            timestep -= 1
+        assert prev_ind < 0
+        tubes.append(cur_tube)
+        tube_scores.append(tube_score)
+    return tubes, tube_scores
+
+
+def refine_tube_list(tube_list, score_list, bbx_sc_list, opt=None):
+    #pdb.set_trace()
+    bbx_bin_dict = {frm_id:[] for frm_id in range(len(tube_list[0]))}
+    valid_frm_num_list = [0 for i in range(len(tube_list))]
+    for tube_id, tmp_list in enumerate(tube_list):
+        for frm_id, tmp_box in enumerate(tmp_list):
+            if tmp_box!=[0, 0, 1, 1]:
+                valid_frm_num_list[tube_id] +=1
+
+    for tube_id, tmp_list in enumerate(tube_list):
+        if valid_frm_num_list[tube_id]>opt['valid_frm_thre_hold']:
+            continue
+        for frm_id, tmp_box in enumerate(tmp_list):
+            if tmp_box!=[0, 0, 1, 1]:
+                bbx_bin_dict[frm_id].append(copy.deepcopy(tmp_box))
+
+    """
+    delete small connected regions that are not connected
+    """
+    def delete_small_connected_regions(tube_list, valid_frm_num_list, bbx_bin_dict, opt):
+        max_seg_list = []
+        time_step = len(tube_list[0])   
+        for tube_id, tmp_list in enumerate(tube_list):
+            if valid_frm_num_list[tube_id]<=opt['valid_frm_thre_hold']:
+                max_seg_list.append([0, time_step])
+                continue
+            box_iou = compute_batch_IoU(np.array(tmp_list[0:time_step-1]), np.array(tmp_list[1:time_step]))
+            st_id = 0
+            tmp_seg_list = []
+            tmp_seg_length = []
+            for frm_id in range(time_step-1):
+                if box_iou[frm_id]<=0 or frm_id==time_step-2:
+                    if tmp_list[st_id+1] == [0, 0, 1, 1]: # remove padding boxes
+                        continue 
+                    if frm_id == time_step-2:
+                        frm_id = time_step 
+                    tmp_seg_list.append([st_id, frm_id])
+                    tmp_seg_length.append(frm_id - st_id)
+                    st_id = frm_id
+            if len(tmp_seg_length)>0:
+                max_length = max(tmp_seg_length)
+                max_idx = tmp_seg_length.index(max_length)
+                max_seg_list.append(tmp_seg_list[max_idx])
+                for frm_id, tmp_box in enumerate(tmp_list):
+                    if frm_id < tmp_seg_list[max_idx][0] or frm_id > tmp_seg_list[max_idx][1]:
+                        if tmp_box !=[0, 0, 1, 1]:
+                            bbx_bin_dict[frm_id].append(copy.deepcopy(tmp_box))
+                            tube_list[tube_id][frm_id] = [0, 0, 1, 1]
+            else:
+                max_seg_list.append([0, time_step])
+        #pdb.set_trace()
+        return tube_list, bbx_bin_dict, max_seg_list  
+
+    """
+    re-assign boxes into tubes
+    """
+    def find_best_match_boxes(box_seq, frm_id, prp_box_list, bbx_sc_list, attr_dict, max_seg, opt):
+        best_box = [0, 0, 1, 1]
+        box_idx = -1
+        if len(prp_box_list)==0:
+            return best_box, box_idx
+        match_score_list = []
+        bbx_prp_mat = bbx_sc_list[frm_id][1]
+        for idx, tmp_box in enumerate(prp_box_list): 
+            if tmp_box == [0, 0, 1, 1]:
+                match_score_list.append(0)
+                continue 
+            # attribute match score
+            sim_mat = compute_batch_IoU(np.tile(np.array(tmp_box).reshape(1, 4), (len(bbx_prp_mat), 1)), bbx_prp_mat)
+            box_id = np.argmax(sim_mat) 
+            max_score = sim_mat[box_id]
+            assert max_score>0.99
+            tmp_attr_list = bbx_sc_list[frm_id][2][box_id]
+            tmp_attr_score_list= []
+            for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                tmp_attr_score_list.append(attr_dict[attr_concept][tmp_attr_list[attr_id]])
+            match_score_list.append(sum(tmp_attr_score_list)/len(tmp_attr_score_list))
+        
+            # iou score before and after
+            if frm_id>0:
+                iou_before = compute_IoU_v2(tmp_box, box_seq[frm_id-1])
+                match_score_list[idx] +=iou_before
+        max_score = max(match_score_list) 
+        match_idx = match_score_list.index(max_score)
+        if max_score> opt['match_thre']:
+            best_box = prp_box_list[match_idx]
+            box_idx = match_idx
+        return best_box, box_idx 
+
+    def reassign_boxes(tube_list, valid_frm_num_list, bbx_bin_dict, opt, max_seg_list=None):
+        for tube_id, tmp_list in enumerate(tube_list):
+            if valid_frm_num_list[tube_id]<=opt['valid_frm_thre_hold']:
+                continue
+            def get_bbx_attr_info(tmp_list, bbx_sc_list, max_seg_list, tube_id):
+                attr_dict = {}
+                for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                    concept_dict = {} 
+                    attr_upper = attr_concept.upper()
+                    for concept in globals()[attr_upper]:
+                        concept_dict[concept] = 0.0
+                    attr_dict[attr_concept] = concept_dict 
+
+                if max_seg_list is None:
+                    st_id = 0
+                    ed_id = len(bbx_sc_list)
+                else:
+                    st_id, ed_id = max_seg_list[tube_id]
+                valid_num = 0
+                for tmp_id in range(st_id, ed_id):
+                    tmp_box = tmp_list[tmp_id]
+                    if tmp_box==[0, 0, 1, 1]:
+                        continue
+                    valid_num +=1
+                    bbx_prp_mat = bbx_sc_list[tmp_id][1]
+                    sim_mat = compute_batch_IoU(np.tile(np.array(tmp_box).reshape(1, 4), (len(bbx_prp_mat), 1)), bbx_prp_mat)
+                    box_id = np.argmax(sim_mat) 
+                    max_score = sim_mat[box_id]
+                    assert max_score>0.99
+                    attr_list = bbx_sc_list[tmp_id][2][box_id]
+                    for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                        tmp_concept = attr_list[attr_id]
+                        attr_dict[attr_concept][tmp_concept] +=1 
+                for attr_concept, concept_dict  in attr_dict.items():
+                    for concept, concept_val in concept_dict.items():
+                        attr_dict[attr_concept][concept] = concept_val/(valid_num+0.000001)
+                return attr_dict 
+
+            attr_dict = get_bbx_attr_info(tmp_list, bbx_sc_list, max_seg_list, tube_id)
+            if max_seg_list is not None:
+                max_seg = max_seg_list[tube_id]
+            else:
+                max_seg = None
+
+            for frm_id, tmp_box in enumerate(tmp_list):
+                if tmp_box==[0, 0, 1, 1]:
+                    #bbx_bin_dict[frm_id].append(copy.deepcopy(tmp_box))
+                    best_match_box, box_idx = find_best_match_boxes(tmp_list, frm_id, bbx_bin_dict[frm_id], bbx_sc_list, attr_dict, max_seg, opt)
+                    tube_list[tube_id][frm_id] = best_match_box
+                    if box_idx>=0:
+                        del bbx_bin_dict[frm_id][box_idx]
+        return tube_list, bbx_bin_dict 
+    
+    # making new tubes based on the cached proposals
+    def make_new_tubes(bbx_bin_dict, bbx_sc_list, opt, tube_list, score_list):
+        bbx_sc_list_new = []
+        max_box_num = 0
+        for frm_id, frm_list in bbx_bin_dict.items():
+            if len(frm_list) > max_box_num:
+                max_box_num = len(frm_list)
+        if max_box_num<=0:
+            return tube_list, score_list 
+
+        for frm_id, frm_list in bbx_bin_dict.items():
+            while len(frm_list)<max_box_num:
+                frm_list.append([0, 0, 1, 1])
+            bbx_mat = np.stack(frm_list, axis=0)
+            bbx_prp_mat = bbx_sc_list[frm_id][1]
+            attr_list  = []
+            sc_score_list = []
+            for box_id, tmp_box in enumerate(frm_list):
+                if tmp_box==[0, 0, 1, 1]:
+                    attr_list.append(['', '', ''])
+                    sc_score_list.append(0.0)
+                    continue 
+                sim_mat = compute_batch_IoU(np.tile(np.array(tmp_box).reshape(1, 4), (len(bbx_prp_mat), 1)), bbx_prp_mat)
+                box_id = np.argmax(sim_mat) 
+                max_score = sim_mat[box_id]
+                assert max_score>0.99
+                attr_list.append(bbx_sc_list[frm_id][2][box_id])
+                sc_score = float(bbx_sc_list[frm_id][0][box_id])
+                sc_score_list.append(sc_score)
+            
+            sc_mat = np.array(sc_score_list).reshape(max_box_num, 1)
+            if not opt['use_attr_flag']:
+                bbx_sc_list_new.append([sc_mat, bbx_mat])
+            else:
+                bbx_sc_list_new.append([sc_mat, bbx_mat, attr_list])
+        
+        tube_list_new, score_list_new = get_tubes_v1(bbx_sc_list_new, opt['connect_w'], opt['use_attr_flag'], opt['attr_w'])
+        # merge tube list
+        new_valid_frm_num_list = [] 
+        new_valid_frm_num_list = [0 for i in range(len(tube_list_new))]
+        for tube_id, tmp_list in enumerate(tube_list_new):
+            for frm_id, tmp_box in enumerate(tmp_list):
+                if tmp_box!=[0, 0, 1, 1]:
+                    new_valid_frm_num_list[tube_id] +=1
+        for tube_id, tmp_list in enumerate(tube_list_new):
+            if new_valid_frm_num_list[tube_id]<=opt['valid_frm_thre_hold']:
+                continue
+            tube_list.append(tmp_list)
+            score_list.append(score_list_new[tube_id])
+        
+        # remove invalid tubes
+        valid_frm_num_list = [0 for i in range(len(tube_list))]
+        for tube_id, tmp_list in enumerate(tube_list):
+            for frm_id, tmp_box in enumerate(tmp_list):
+                if tmp_box!=[0, 0, 1, 1]:
+                    valid_frm_num_list[tube_id] +=1
+        """
+        delete invalid tubes
+        """
+        tube_num_ori = len(tube_list)
+        for tube_id in range(tube_num_ori-1, -1, -1): 
+            if valid_frm_num_list[tube_id]>opt['valid_frm_thre_hold']:
+                continue
+            del tube_list[tube_id]
+            del score_list[tube_id]
+        
+        return tube_list, score_list
+    tube_list, bbx_bin_dict =  reassign_boxes(tube_list, valid_frm_num_list, bbx_bin_dict, opt)
+    tube_list, bbx_bin_dict, max_seg_list = delete_small_connected_regions(tube_list, valid_frm_num_list, bbx_bin_dict, opt)
+    tube_list, bbx_bin_dict =  reassign_boxes(tube_list, valid_frm_num_list, bbx_bin_dict, opt, max_seg_list)
+    tube_list, score_list = make_new_tubes(bbx_bin_dict, bbx_sc_list, opt, tube_list, score_list)
+    padding_valid_list = [128 for ii in range(len(tube_list))] 
+    #pdb.set_trace()
+    tube_list, bbx_bin_dict, max_seg_list = delete_small_connected_regions(tube_list, padding_valid_list, bbx_bin_dict, opt)
+    return tube_list, score_list 
+
+def compute_batch_IoU(bbox1_xyxy, bbox2_xyxy):
+    bbox1_x1 = bbox1_xyxy[:, 0]
+    bbox1_x2 = bbox1_xyxy[:, 2]
+    bbox1_y1 = bbox1_xyxy[:, 1]
+    bbox1_y2 = bbox1_xyxy[:, 3]
+
+    bbox2_x1 = bbox2_xyxy[:, 0]
+    bbox2_x2 = bbox2_xyxy[:, 2]
+    bbox2_y1 = bbox2_xyxy[:, 1]
+    bbox2_y2 = bbox2_xyxy[:, 3]
+
+    w = np.clip(np.minimum(bbox1_x2, bbox2_x2) - np.maximum(bbox1_x1, bbox2_x1), 0, 10000)
+    h = np.clip(np.minimum(bbox1_y2, bbox2_y2) - np.maximum(bbox1_y1, bbox2_y1), 0, 10000)
+    inter = w * h
+    bbox1_area  = np.clip((bbox1_x2 - bbox1_x1), 0, 10000) * np.clip((bbox1_y2 - bbox1_y1), 0, 10000)
+    bbox2_area  = np.clip((bbox2_x2 - bbox2_x1), 0, 10000) * np.clip((bbox2_y2 - bbox2_y1), 0, 10000)
+    ovr = inter / (bbox1_area + bbox2_area - inter+EPS)
+    return ovr
 
 
 if __name__=='__main__':
     parms, opt = parse_opt()
-    extract_tube_v0(opt)
-    compute_recall_and_precision(opt)
+    #extract_tube_v0(opt)
+    extract_tube_v1(opt)
+    #compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)

@@ -577,6 +577,7 @@ class clevrerDataset(Dataset):
         load_counter_fact_flag = False
         counterfact_list = [q_id for q_id, ques_info in enumerate(meta_ann['questions']) if ques_info['question_type']=='counterfactual']
         sample_counterfact_list = random.sample(counterfact_list, self.args.max_counterfact_num) if self.phase=='train' and len(counterfact_list)>=self.args.max_counterfact_num else  counterfact_list 
+        pdb.set_trace()
         # getting programs
         for q_id, ques_info in enumerate(meta_ann['questions']):
             valid_flag = True

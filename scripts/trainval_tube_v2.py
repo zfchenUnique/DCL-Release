@@ -103,7 +103,10 @@ def main():
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
-   
+    for ii in range(100):
+        feed_dict = train_dataset.__getitem__(ii)
+        pdb.set_trace()
+
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)
 
@@ -172,6 +175,12 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     if args.embed:
         from IPython import embed; embed()
 
+    if args.debug:
+        shuffle_flag=False
+        args.data_workers = 0
+    else:
+        shuffle_flag=True
+
     logger.critical('Building the data loader.')
     validation_dataloader = validation_dataset.make_dataloader(args.batch_size, shuffle=False, drop_last=False, nr_workers=args.data_workers)
     if extra_dataset is not None:
@@ -186,11 +195,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         logger.critical(meters.format_simple('Validation', {k: v for k, v in meters.avg.items() if v != 0}, compressed=False))
         return meters
 
-    if args.debug:
-        shuffle_flag=False
-        args.num_workers = 0
-    else:
-        shuffle_flag=True
 
     for epoch in range(args.start_epoch + 1, args.epochs + 1):
         meters.reset()
