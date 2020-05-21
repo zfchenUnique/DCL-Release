@@ -682,7 +682,8 @@ def compute_recall_and_precision(opt):
     gt_num = 0
 
     if opt['use_attr_flag']:
-        tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w']))
+        #tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w']))
+        tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w'])+ '_'+str(opt['match_thre']))
     else:
         tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']))
     out_gt_path = os.path.join(opt['tube_folder_new_path'])
@@ -713,7 +714,8 @@ def compute_recall_and_precision(opt):
         prp_num +=len(prp_tube_dict['tubes'])
         gt_num +=len(gt_tube_dict['tubes'])
 
-        if f_id % 500==0 or f_id==(len(pk_fn_list)-1):
+        #if f_id % 500==0 or f_id==(len(pk_fn_list)-1) or f_id==99:
+        if  f_id==(len(pk_fn_list)-1) or f_id==99:
             print('processing %d/%d videos.\n' %(f_id, len(pk_fn_list)))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
                 print('precision@%3f is %3f\n' %(iou_thre, precision_list[thre_idx]*1.0/prp_num))
@@ -791,17 +793,13 @@ def extract_tube_v1(opt):
     sample_folder_path= '../clevrer/proposals'
     file_list = get_sub_file_list(sample_folder_path, '.json')
     file_list.sort()
-    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_v1')
+    #out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_v1')
+    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_'+str(opt['match_thre']))
     if not os.path.isdir(out_path):
         os.makedirs(out_path)
     for file_idx, sample_file in enumerate(file_list):
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
-
-        if file_idx >=100:
-            break
-        if file_idx <=22:
-            continue 
 
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
@@ -810,6 +808,8 @@ def extract_tube_v1(opt):
             tmp_obj_num = len(frm_info['objects']) 
             if max_obj_num<tmp_obj_num:
                 max_obj_num = tmp_obj_num 
+        if os.path.isfile(out_fn_path):
+            continue
 
         if opt['use_attr_flag']:
             attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
@@ -819,7 +819,7 @@ def extract_tube_v1(opt):
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list) 
         else:
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt) 
-        tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
+        #tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
         out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
         pickledump(out_fn_path, out_dict)
         if file_idx%100==0:
@@ -1249,5 +1249,5 @@ if __name__=='__main__':
     parms, opt = parse_opt()
     #extract_tube_v0(opt)
     extract_tube_v1(opt)
-    #compute_recall_and_precision(opt)
+    compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)
