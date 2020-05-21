@@ -808,9 +808,11 @@ def extract_tube_v1(opt):
             tmp_obj_num = len(frm_info['objects']) 
             if max_obj_num<tmp_obj_num:
                 max_obj_num = tmp_obj_num 
-        if os.path.isfile(out_fn_path):
-            continue
-
+        if file_idx >99:
+            break
+        #if os.path.isfile(out_fn_path):
+        #    continue
+        
         if opt['use_attr_flag']:
             attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
             if not os.path.isfile(attr_dict_path):
@@ -819,7 +821,7 @@ def extract_tube_v1(opt):
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list) 
         else:
             tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v1(f_dict, opt) 
-        #tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
+        tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
         out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
         pickledump(out_fn_path, out_dict)
         if file_idx%100==0:
