@@ -800,6 +800,9 @@ def extract_tube_v1(opt):
     for file_idx, sample_file in enumerate(file_list):
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
+        
+        if os.path.isfile(out_fn_path):
+            continue
 
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
@@ -808,10 +811,6 @@ def extract_tube_v1(opt):
             tmp_obj_num = len(frm_info['objects']) 
             if max_obj_num<tmp_obj_num:
                 max_obj_num = tmp_obj_num 
-        if file_idx >99:
-            break
-        #if os.path.isfile(out_fn_path):
-        #    continue
         
         if opt['use_attr_flag']:
             attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
