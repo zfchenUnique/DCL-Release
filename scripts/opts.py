@@ -93,7 +93,7 @@ def load_param_parser():
     parser.add_argument('--max_counterfact_num', type=int, default=2)
     
     # for temporal prediction model
-    parser.add_argument('--pred_model_path', required=True, type='checked_file', metavar='FILE')
+    parser.add_argument('--pred_model_path', type=str, default='')
     #parser.add_argument('--pretrain_pred_model_path', required=True, type='checked_file', metavar='FILE')
     parser.add_argument('--pretrain_pred_model_path', type=str,  default='')
     parser.add_argument('--attr_dim', type=int, default=5)
@@ -110,6 +110,10 @@ def load_param_parser():
     parser.add_argument('--pstep', type=int, default=2)
     parser.add_argument('--frame_offset', type=int, default=5)
     parser.add_argument('--colli_threshold', type=float, default=0.0)
+    # use correct question parser
+    parser.add_argument('--correct_question_path', type=str, default='../question_parsing/data/new_results/')
+    parser.add_argument('--correct_question_flag', type=int, default=1)
+    parser.add_argument('--dataset_stage', type=int, default=0, help='0 for descriptive only')
 
     args = parser.parse_args()
     return args 

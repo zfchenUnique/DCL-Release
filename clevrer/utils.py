@@ -273,7 +273,6 @@ def predict_future_feature(model, feed_dict, f_sng, args):
     data = prepare_future_prediction_input(feed_dict, f_sng, args)
     #x: obj_num, state_dim*(n_his+1)
     x_step = args.n_his + 1
-    #pdb.set_trace()
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
     pred_obj_list = []
     pred_rel_list = []
@@ -366,7 +365,6 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     data = prepare_future_prediction_input(feed_dict, f_sng, args)
     #x: obj_num, state_dim*(n_his+1)
     x_step = args.n_his + 1
-    #pdb.set_trace()
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
     pred_obj_list = []
     pred_rel_list = []
@@ -930,6 +928,19 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
     obj_stack = None
     buffer_for_ancestor = []
     for block_id, block in enumerate(clevr_program):
+        if block == 'query_collision_partner':
+            block = 'get_col_partner'
+        if block == 'query_frame':
+            block = 'get_frame'
+        if block == 'filter_counterfact':
+            block = 'get_counterfact'
+        if block == 'query_object':
+            block = 'get_object'
+        if block == 'filter_start':
+            block = 'start'
+        if block == 'filter_end':
+            block = 'end'
+
         if block == 'scene':
             current = dict(op='scene')
         elif block=='filter_shape' or block=='filter_color' or block=='filter_material':
@@ -1010,7 +1021,10 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
             if block =='end' or block == 'start':
                 current['inputs'] = []
             elif block =='get_frame':
-                current['inputs'] = [inputs_idx - 1, inputs_idx ]
+                off_set = 0
+                if len(nscl_program)>=2 and nscl_program[-2]['op']=='events':
+                    off_set +=1
+                current['inputs'] = [inputs_idx - 1 - off_set, inputs_idx ]
             elif block =='get_col_partner':
                 current['inputs'] = [inputs_idx, col_idx]
             elif block == 'filter_stationary' or block == 'filter_moving':

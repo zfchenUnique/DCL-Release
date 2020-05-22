@@ -103,9 +103,6 @@ def main():
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
-    for ii in range(100):
-        feed_dict = train_dataset.__getitem__(ii)
-        pdb.set_trace()
 
     extra_dataset = None
     main_train(train_dataset, validation_dataset, extra_dataset)

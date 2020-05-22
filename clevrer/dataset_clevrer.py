@@ -20,7 +20,7 @@ import random
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
-_ignore_list = []
+#_ignore_list = []
 #_ignore_list = ['get_counterfact']
 #_used_list = ['filter_order']
 
@@ -105,14 +105,56 @@ class clevrerDataset(Dataset):
         self.args = args
         self.phase = phase
         self.img_transform = img_transform  
-        question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
-        self.question_ann = jsonload(question_ann_full_path)
+        if self.args.correct_question_flag==1:
+            self._init_correct_question(phase)
+        else:
+            question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
+            self.question_ann = jsonload(question_ann_full_path)
         self.vocab = gen_vocab(self)
         self.W = 480; self.H = 320
+        self._set_dataset_mode()
         self._filter_program_types()
         if self.args.extract_region_attr_flag:
             self.__intialize_frm_ann()
         self.background = None
+
+    def _set_dataset_mode(self):
+        if self.args.dataset_stage ==0:
+            self._ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_counterfact']
+
+    def _init_correct_question(self, phase):
+        if phase=='validation':
+            phase =  'val'
+        oe_ques_full_path = os.path.join(self.args.correct_question_path, 'oe_1000pg_'+phase+'_new.json')
+        mc_ques_full_path = os.path.join(self.args.correct_question_path, 'mc_1000q_4000c_'+phase+'_new.json')
+        oe_ques_info_dict = jsonload(oe_ques_full_path)
+        mc_ques_info_dict = jsonload(mc_ques_full_path)
+        question_ann_list = []
+        vid_list = list(oe_ques_info_dict.keys())
+        vid_list.sort()
+        for idx, vid_id in enumerate(vid_list):
+            vid_dict  = {'scene_index': int(vid_id), 'video_filename': 'video_'+ vid_id+'.mp4' }
+            question_ann = []
+            q_idx = 0
+            oe_ques_info = oe_ques_info_dict[vid_id]
+            mc_ques_info = mc_ques_info_dict[vid_id]
+            for q_id, ques_info in enumerate(oe_ques_info['questions']):
+                tmp_dict = {'question': ques_info['question'], 'question_id': q_idx, 'question_type': 'descriptive'}
+                tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
+                tmp_dict['program'] = ques_info['program']
+                tmp_dict['answer'] = ques_info['answer']
+                q_idx +=1
+                question_ann.append(tmp_dict)
+            for q_id, ques_info in enumerate(mc_ques_info['questions']):
+                tmp_dict = {'question': ques_info['question'], 'question_id': q_idx, 'question_type': ques_info['question_type'].split('_')[0]}
+                tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
+                tmp_dict['program'] = ques_info['question_program']
+                tmp_dict['choices'] = ques_info['choices']
+                question_ann.append(tmp_dict)
+                q_idx +=1
+            vid_dict['questions'] = question_ann 
+            question_ann_list.append(vid_dict)
+        self.question_ann =  question_ann_list 
 
     def merge_frames_for_prediction(self, img_list, obj_list):
         if self.background is None:
@@ -508,7 +550,7 @@ class clevrerDataset(Dataset):
             for ques_info in meta_ann['questions']:
                 valid_flag = True
                 for pg in ques_info['program']:
-                    if pg in _ignore_list:
+                    if pg in self._ignore_list:
                         valid_flag = False
                         break
                     
@@ -577,20 +619,15 @@ class clevrerDataset(Dataset):
         load_counter_fact_flag = False
         counterfact_list = [q_id for q_id, ques_info in enumerate(meta_ann['questions']) if ques_info['question_type']=='counterfactual']
         sample_counterfact_list = random.sample(counterfact_list, self.args.max_counterfact_num) if self.phase=='train' and len(counterfact_list)>=self.args.max_counterfact_num else  counterfact_list 
-        pdb.set_trace()
         # getting programs
         for q_id, ques_info in enumerate(meta_ann['questions']):
             valid_flag = True
             for pg in ques_info['program']:
-                if pg in _ignore_list:
+                if pg in self._ignore_list:
                     valid_flag = False
                     break
             if not valid_flag:
                 continue
-            #if 'answer' not in ques_info.keys():
-            #if 'answer' not in ques_info.keys() and ques_info['question_type']!='explanatory':
-            #if ('answer' not in ques_info.keys() and ques_info['question_type']!='explanatory' and ques_info['question_type']!='predictive' ):
-            #    continue
                         
             if ques_info['question_type']=='predictive':
                 load_predict_flag = True
@@ -775,7 +812,7 @@ class clevrerDataset(Dataset):
         for q_id, ques_info in enumerate(meta_ann['questions']):
             valid_flag = True
             for pg in ques_info['program']:
-                if pg in _ignore_list:
+                if pg in self._ignore_list:
                     valid_flag = False
                     break
             if not valid_flag:
