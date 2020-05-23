@@ -770,6 +770,7 @@ class ProgramExecutorContext(nn.Module):
         return new_selected 
 
     def filter_temporal(self, selected, group, concept_groups):
+        #pdb.set_trace()
         if group is None:
             return selected
         if isinstance(selected, list) and len(selected)==2:
@@ -777,6 +778,9 @@ class ProgramExecutorContext(nn.Module):
                 time_mask = selected[1][1]
             else:
                 time_mask = selected[1]
+                if time_mask.shape[0]!=128:
+                    print('invalid time mask of size %d\n' %(time_mask.shape[0]))
+                    time_mask = None
             if isinstance(selected[0], list):
                 selected = selected[0][0]
             else:
