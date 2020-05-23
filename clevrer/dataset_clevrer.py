@@ -121,6 +121,8 @@ class clevrerDataset(Dataset):
     def _set_dataset_mode(self):
         if self.args.dataset_stage ==0:
             self._ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_counterfact']
+        elif self.args.dataset_stage ==1:
+            self._ignore_list = ['get_counterfact', 'unseen_events', 'filter_counterfact']
 
     def _init_correct_question(self, phase):
         if phase=='validation':
