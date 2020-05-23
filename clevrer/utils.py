@@ -944,6 +944,11 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
         if block == 'scene':
             current = dict(op='scene')
         elif block=='filter_shape' or block=='filter_color' or block=='filter_material':
+            if len(exe_stack)==0:
+                print('fail to parse program!')
+                print(clevr_program)
+                print(block_id)
+                continue 
             concept = exe_stack.pop()
             if len(nscl_program)>0:
                 last = nscl_program[-1]
