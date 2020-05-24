@@ -143,7 +143,7 @@ class clevrerDataset(Dataset):
         dataset_len = len(vid_list)
         if phase == 'train' and self.args.data_train_length!=-1:
             dataset_len = min(dataset_len, self.args.data_train_length)
-        pdb.set_trace()
+        #pdb.set_trace()
         #for idx, vid_id in enumerate(vid_list):
         for idx in range(dataset_len):
             vid_id = vid_list[idx]
