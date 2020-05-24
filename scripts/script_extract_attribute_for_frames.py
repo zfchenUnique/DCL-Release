@@ -115,6 +115,10 @@ parser.add_argument('--setname', type=str, default='validation')
 parser.add_argument('--extract_region_attr_flag', type=int, default=0)
 parser.add_argument('--output_attr_path', type=str, default='dumps/clevrer/tmpProposalsAttr')
 parser.add_argument('--start_index', type=int, default=0)
+parser.add_argument('--correct_question_path', type=str, default='../question_parsing/data/new_results/')
+parser.add_argument('--correct_question_flag', type=int, default=1)
+parser.add_argument('--dataset_stage', type=int, default=0, help='0 for descriptive only')
+parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
 
 args = parser.parse_args()
 
