@@ -120,6 +120,7 @@ parser.add_argument('--correct_question_flag', type=int, default=1)
 parser.add_argument('--dataset_stage', type=int, default=0, help='0 for descriptive only')
 parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
 parser.add_argument('--colli_ftr_type', type=int, default=1, help='0 for average rgb, 1 for KNN sampling')
+parser.add_argument('--smp_coll_frm_num', type=int, default=32)
 
 args = parser.parse_args()
 
@@ -198,7 +199,7 @@ def main():
 
 def main_train(validation_dataset):
     logger.critical('Building the model.')
-    model = desc.make_model(args, validation_dataset.vocab)
+    model = desc.make_model(args)
 
     if args.use_gpu:
         model.cuda()
