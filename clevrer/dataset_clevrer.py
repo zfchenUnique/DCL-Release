@@ -110,6 +110,10 @@ class clevrerDataset(Dataset):
         else:
             question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
             self.question_ann = jsonload(question_ann_full_path)
+            if phase == 'train' and self.args.data_train_length!=-1:
+                dataset_len = len(self.question_ann)
+                dataset_len = min(dataset_len, self.args.data_train_length)
+                self.question_ann = self.question_ann[:dataset_len]
         self.vocab = gen_vocab(self)
         self.W = 480; self.H = 320
         self._set_dataset_mode()
@@ -135,8 +139,14 @@ class clevrerDataset(Dataset):
         mc_ques_info_dict = jsonload(mc_ques_full_path)
         question_ann_list = []
         vid_list = list(oe_ques_info_dict.keys())
-        vid_list.sort()
-        for idx, vid_id in enumerate(vid_list):
+        vid_list.sort(key=float)
+        dataset_len = len(vid_list)
+        if phase == 'train' and self.args.data_train_length!=-1:
+            dataset_len = min(dataset_len, self.args.data_train_length)
+        pdb.set_trace()
+        #for idx, vid_id in enumerate(vid_list):
+        for idx in range(dataset_len):
+            vid_id = vid_list[idx]
             vid_dict  = {'scene_index': int(vid_id), 'video_filename': 'video_'+ vid_id+'.mp4' }
             question_ann = []
             q_idx = 0

@@ -19,6 +19,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --tube_prp_path ../clevrer/tubeProposals/1.0_1.0 \
     --scene_add_supervision 0 \
     --correct_question_flag 1 \
-    --batch-size 1 --epoch 100 --validation-interval 2 \
-    --resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_stage1/checkpoints/epoch_2.pth
+    --batch-size 1 --epoch 100 --validation-interval 5 \
+    --resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_stage1_ori/checkpoints/epoch_4.pth \
+    --data_train_length 1000
     #--debug
