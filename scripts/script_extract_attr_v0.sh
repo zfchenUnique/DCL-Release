@@ -14,10 +14,13 @@ jac-crun ${GPU_ID} scripts/script_extract_attribute_for_frames.py --desc clevrer
     --box_iou_for_collision_flag 1 \
     --diff_for_moving_stationary_flag 1 \
     --extract_region_attr_flag 1 \
-    --setname train \
-    --load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_stage1_ori/checkpoints/epoch_10.pth \
-    --start_index 2537 \
-    --output_attr_path dumps/clevrer/tmpProposalsAttrNew
+    --setname test \
+    --start_index 15000 \
+    --output_attr_path dumps/clevrer/tmpProposalsAttrTest \
+    --load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_stage1_small_v2/checkpoints/epoch_10.pth 
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_stage1_ori/checkpoints/epoch_10.pth \
     #--load dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_prp_new_col_diff_mov_new_mask_gau_std1/checkpoints/epoch_10.pth
     #--load dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_new_col_diff_mov/checkpoints/epoch_20.pth \
     #--load dumps/clevrer/desc_nscl_derender_clevrer/derender_norm_box_even_smp6_col_box_ftr_v5_gt_new_col_scene_super_05/checkpoints/epoch_15.pth

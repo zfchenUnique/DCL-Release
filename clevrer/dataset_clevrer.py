@@ -129,6 +129,10 @@ class clevrerDataset(Dataset):
             self._ignore_list = ['get_counterfact', 'unseen_events', 'filter_counterfact']
         elif self.args.dataset_stage ==-1:
             self._ignore_list = []
+        elif self.args.dataset_stage ==2:
+            self._ignore_list = ['filter_counterfact', 'get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_moving', 'filter_stationary', 'filter_order']
+        elif self.args.dataset_stage ==3:
+            self._ignore_list = ['filter_counterfact', 'get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_order']
 
     def _init_correct_question(self, phase):
         if phase=='validation':
@@ -492,8 +496,7 @@ class clevrerDataset(Dataset):
             sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
             ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
             scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
-            scene_gt = jsonload(scene_gt_path)
-        
+
             gt_id_to_tube_id = {}
             for attr, concept_group in gdef.all_concepts_clevrer['attribute'].items():
                 attr_list = []
