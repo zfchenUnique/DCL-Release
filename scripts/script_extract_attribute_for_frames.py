@@ -27,7 +27,7 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger, jsondump 
+from clevrer.utils import set_debugger, jsondump, jsonload 
 from nscl.datasets.definition import gdef
 import torch
 import os
@@ -236,6 +236,7 @@ def main_train(validation_dataset):
 def validate_attribute(model, val_dataloader, meters, meter_prefix='validation', logger=None, output_attr_path=''):
     end = time.time()
     video_num  = len(val_dataloader)
+    #pdb.set_trace()
     with tqdm_pbar(total= int(len(val_dataloader)*args.batch_size/128)) as pbar:
         output_dict_list = []
         frame_id_list = []
@@ -248,7 +249,11 @@ def validate_attribute(model, val_dataloader, meters, meter_prefix='validation',
                 full_path = os.path.join(output_attr_path, 'attribute_'+str(scene_idx).zfill(5)+'.json') 
                 if os.path.isfile(full_path):
                     print('File exists. %s\n' %(full_path))
-                    continue 
+                    tmp_dict = jsonload(full_path)
+                    if len(tmp_dict)== len(feed_dict['tube_info']['box_seq']['tubes'][0]):
+                        continue 
+                    print('size didn\'t match. %s\n' %(full_path))
+                    #pdb.set_trace()
                 if args.use_gpu:
                     if not args.gpu_parallel:
                         feed_dict = async_copy_to(feed_dict, 0)

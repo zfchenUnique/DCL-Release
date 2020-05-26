@@ -823,7 +823,7 @@ def extract_tube_v1(opt):
         tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
         out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
         pickledump(out_fn_path, out_dict)
-        if file_idx%100==0:
+        if file_idx%1000==0 or file_idx==100:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
 
 def extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list=None):
