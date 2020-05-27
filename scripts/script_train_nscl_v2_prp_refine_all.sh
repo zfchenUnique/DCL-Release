@@ -2,7 +2,7 @@ GPU_ID=$1
 jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender_clevrer_v2.py\
     --training-target v2 \
     --dataset clevrer --data-dir ../clevrer \
-    --batch-size 1 --epoch 100 --validation-interval 2 \
+    --batch-size 1 --epoch 100 --validation-interval 5 \
     --save-interval 1 --data-split 0.95 --data-workers 2 \
     --normalized_boxes 1 \
     --rel_box_flag 0 --acc-grad 1 --dynamic_ftr_flag  1 \
@@ -12,17 +12,19 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --prefix prp_all_pretrain_ori \
+    --prefix prp_all_pretrain_epoch_3_iter_30k \
     --colli_ftr_type 1 \
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
     --tube_prp_path ../clevrer/tubeProposalsAttrV3/1.0_1.0_0.4_0.7 \
     --scene_add_supervision 0 \
-    --load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_31_no_scene_refine/checkpoints/epoch_10.pth \
     --version v3 \
     --pred_model_path ../temporal_reasoningv2/models_latent.py \
     --dataset_stage -1 \
-    --pretrain_pred_model_path ../remote_models/ori_epoch_1_iter_200000.pth
+    --load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    --pretrain_pred_model_path ../temporal_reasoningv2/dumps/prpNewRefine_latent_norm_ftr_n_his_2_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/tube_net_epoch_3_iter_300000.pth
+    #--pretrain_pred_model_path ../remote_models/ori_epoch_1_iter_200000.pth
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_31_no_scene_refine/checkpoints/epoch_10.pth \
     #--resume  dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_prp_v2_new_refined/checkpoints/epoch_1.pth\
     #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_31_no_scene_refine/checkpoints/epoch_10.pth \
     #--debug \
