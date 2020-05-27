@@ -115,6 +115,8 @@ def load_param_parser():
     parser.add_argument('--correct_question_flag', type=int, default=1)
     parser.add_argument('--dataset_stage', type=int, default=-1, help='0 for descriptive only')
     parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
+    parser.add_argument('--testing_flag', type=int, default=9, help='1 for testing on the testing set')
+    parser.add_argument('--test_result_path', type=str, default='', help='file path to store the result')
 
     args = parser.parse_args()
     return args 

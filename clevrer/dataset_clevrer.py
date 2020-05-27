@@ -714,74 +714,78 @@ class clevrerDataset(Dataset):
             sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
             ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
             scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
-            scene_gt = jsonload(scene_gt_path)
-            mask_gt = jsonload(mask_gt_path)
-            tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
-            # TODO: this may raise bug since it hack the data property for gt
-            prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
-            #pdb.set_trace()
-            for attri_group, attribute in gdef.all_concepts_clevrer.items():
-                if attri_group=='attribute':
-                    for attr, concept_group in attribute.items(): 
-                        attr_list = []
-                        obj_num = len(data['tube_info']) -2 
-                        for t_id in range(obj_num):
-                            concept_index = concept_group.index(tube_key_dict[t_id][attr])
-                            attr_list.append(concept_index)
-                        attr_key = attri_group + '_' + attr 
-                        data[attr_key] = torch.tensor(attr_list)
-                elif attri_group=='relation':
-                    for attr, concept_group in attribute.items(): 
-                        if attr=='event1':
+            if os.path.isfile(scene_gt_path):
+                scene_gt = jsonload(scene_gt_path)
+            else:
+                scene_gt = None
+            if scene_gt  is not None:
+                mask_gt = jsonload(mask_gt_path)
+                tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
+                # TODO: this may raise bug since it hack the data property for gt
+                prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+                #pdb.set_trace()
+                for attri_group, attribute in gdef.all_concepts_clevrer.items():
+                    if attri_group=='attribute':
+                        for attr, concept_group in attribute.items(): 
+                            attr_list = []
                             obj_num = len(data['tube_info']) -2 
-                            rela_coll = torch.zeros(obj_num, obj_num)
-
-                            for event_id, event in enumerate(scene_gt['collision']):
-                                obj_id_pair = event['object_ids']
-                                gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
-                                prp_id1 = gt_id_to_prp_id[gt_id1]
-                                prp_id2 = gt_id_to_prp_id[gt_id2]
-                                rela_coll[prp_id1, prp_id2] = 1
-                                rela_coll[prp_id2, prp_id1] = 1
-                            attr_key = attri_group + '_' + 'collision'
-                            data[attr_key] = rela_coll
-                elif attri_group=='temporal':
-                    for attr, concept_group in attribute.items(): 
-                        if attr=='event2':
-                            obj_num = len(data['tube_info']) -2 
-                            attr_frm_id_st = []
-                            attr_frm_id_ed = []
-                            min_frm = 2
-                            box_thre = 0.0001
-
                             for t_id in range(obj_num):
-                                box_seq = data['tube_info']['box_seq']['tubes'][t_id]
-                                box_seq_np = np.stack(box_seq, axis=0)
-                                tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
-                                
-                                time_step = len(tar_area)
-                                # filter_in 
-                                for t_id in range(time_step):
-                                    end_id = min(t_id + min_frm, time_step-1)
-                                    if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
-                                        attr_frm_id_st.append(t_id)
-                                        #pdb.set_trace()
-                                        break 
-                                    if t_id == time_step - 1:
-                                        attr_frm_id_st.append(0)
-                                # filter out
-                                for t_id in range(time_step, -1, -1):
-                                    st_id = max(t_id - min_frm, 0)
-                                    if np.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
-                                        attr_frm_id_ed.append(t_id)
-                                        break 
-                                    if t_id == 0:
-                                        attr_frm_id_ed.append(time_step-1)
+                                concept_index = concept_group.index(tube_key_dict[t_id][attr])
+                                attr_list.append(concept_index)
+                            attr_key = attri_group + '_' + attr 
+                            data[attr_key] = torch.tensor(attr_list)
+                    elif attri_group=='relation':
+                        for attr, concept_group in attribute.items(): 
+                            if attr=='event1':
+                                obj_num = len(data['tube_info']) -2 
+                                rela_coll = torch.zeros(obj_num, obj_num)
 
-                            attr_key = attri_group + '_in'
-                            data[attr_key] = torch.tensor(attr_frm_id_st)
-                            attr_key = attri_group + '_out'
-                            data[attr_key] = torch.tensor(attr_frm_id_ed)
+                                for event_id, event in enumerate(scene_gt['collision']):
+                                    obj_id_pair = event['object_ids']
+                                    gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
+                                    prp_id1 = gt_id_to_prp_id[gt_id1]
+                                    prp_id2 = gt_id_to_prp_id[gt_id2]
+                                    rela_coll[prp_id1, prp_id2] = 1
+                                    rela_coll[prp_id2, prp_id1] = 1
+                                attr_key = attri_group + '_' + 'collision'
+                                data[attr_key] = rela_coll
+                    elif attri_group=='temporal':
+                        for attr, concept_group in attribute.items(): 
+                            if attr=='event2':
+                                obj_num = len(data['tube_info']) -2 
+                                attr_frm_id_st = []
+                                attr_frm_id_ed = []
+                                min_frm = 2
+                                box_thre = 0.0001
+
+                                for t_id in range(obj_num):
+                                    box_seq = data['tube_info']['box_seq']['tubes'][t_id]
+                                    box_seq_np = np.stack(box_seq, axis=0)
+                                    tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
+                                    
+                                    time_step = len(tar_area)
+                                    # filter_in 
+                                    for t_id in range(time_step):
+                                        end_id = min(t_id + min_frm, time_step-1)
+                                        if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
+                                            attr_frm_id_st.append(t_id)
+                                            #pdb.set_trace()
+                                            break 
+                                        if t_id == time_step - 1:
+                                            attr_frm_id_st.append(0)
+                                    # filter out
+                                    for t_id in range(time_step, -1, -1):
+                                        st_id = max(t_id - min_frm, 0)
+                                        if np.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
+                                            attr_frm_id_ed.append(t_id)
+                                            break 
+                                        if t_id == 0:
+                                            attr_frm_id_ed.append(time_step-1)
+
+                                attr_key = attri_group + '_in'
+                                data[attr_key] = torch.tensor(attr_frm_id_st)
+                                attr_key = attri_group + '_out'
+                                data[attr_key] = torch.tensor(attr_frm_id_ed)
                             #pdb.set_trace()
         return data 
 

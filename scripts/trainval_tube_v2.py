@@ -39,7 +39,7 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger
+from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump 
 from opts import load_param_parser 
 
 
@@ -101,7 +101,11 @@ def main():
 
     initialize_dataset(args.dataset, args.version)
     # to replace dataset
-    validation_dataset = build_clevrer_dataset(args, 'validation')
+    #validation_dataset = extra_dataset 
+    if args.testing_flag==1:
+        validation_dataset = build_clevrer_dataset(args, 'test')
+    else:
+        validation_dataset = build_clevrer_dataset(args, 'validation')
     train_dataset = build_clevrer_dataset(args, 'train')
 
     extra_dataset = None
@@ -293,8 +297,10 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
 
 
 def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validation'):
+    if args.testing_flag:
+        json_output_list = []
+    
     end = time.time()
-    #pdb.set_trace()
     with tqdm_pbar(total=len(val_dataloader)*val_dataloader.batch_size) as pbar:
         for feed_dict in val_dataloader:
             if args.use_gpu:
@@ -302,9 +308,11 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                     feed_dict = async_copy_to(feed_dict, 0)
 
             data_time = time.time() - end; end = time.time()
-            #pdb.set_trace()
             output_dict_list, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
-            
+            #pdb.set_trace()
+            if args.testing_flag:
+                prepare_data_for_testing(output_dict_list, feed_dict, json_output_list)
+
             step_time = time.time() - end; end = time.time()
             for idx, mon_dict  in enumerate(output_dict_list['monitors']): 
                 monitors = {meter_prefix + '/' + k: v for k, v in as_float(mon_dict).items()}
@@ -333,7 +341,9 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                 pbar.update()
 
             end = time.time()
-    #pdb.set_trace()
+    pdb.set_trace()    
+    if args.testing_flag:
+        jsondump(args.test_result_path, json_output_list)
 
 if __name__ == '__main__':
     main()

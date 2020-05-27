@@ -18,6 +18,47 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
+def prepare_data_for_testing(output_dict_list, feed_dict_list, json_output_list):
+    for vid, output_answer_list in enumerate(output_dict_list['answer']):
+        vid_id = feed_dict_list[vid]['meta_ann']['scene_index']
+        tmp_vid_dict = {'scene_index': vid_id, 'questions': []}
+        for q_id, q_info in enumerate(output_answer_list):
+            tmp_ques_ann = feed_dict_list[vid]['meta_ann']['questions'][q_id]
+            question_id = tmp_ques_ann['question_id']
+            tmp_q_dict = {'question_id': question_id}
+            ques_type =feed_dict_list[vid]['question_type'][q_id] 
+            response_query_type = gdef.qtype2atype_dict[ques_type]
+            ori_answer = q_info[-1] 
+            if response_query_type== 'integer':
+                ans = int(ori_answer)
+            elif response_query_type == 'bool':
+            
+                if isinstance(ori_answer, list):
+                    tmp_choice_list = []
+                    for idx in range(len(ori_answer)):
+                        tmp_choice = {'choice_id': idx}
+                        if ori_answer[idx] > 0:
+                            tmp_choice['answer'] = 'correct'
+                        else:
+                            tmp_choice['answer'] = 'wrong'
+                        tmp_choice_list.append(tmp_choice)
+                else:
+                    ans = 'yes' if ori_answer>=0 else 'no'
+
+            elif response_query_type == 'word': 
+                a, word2idx = ori_answer 
+                argmax = a.argmax(dim=-1).item()
+                idx2word = {v: k for k, v in word2idx.items()}
+                ans = idx2word[argmax]
+
+            if isinstance(ori_answer, list):
+                tmp_q_dict['choices'] = tmp_choice_list 
+            else:
+                tmp_q_dict['answer'] = str(ans)
+            tmp_vid_dict['questions'].append(tmp_q_dict)
+        json_output_list.append(tmp_vid_dict)
+        #pdb.set_trace()
+
 def _norm(x, dim=-1):
     return x / (x.norm(2, dim=dim, keepdim=True)+1e-7)
 

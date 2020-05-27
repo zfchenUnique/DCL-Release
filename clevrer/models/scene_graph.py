@@ -37,7 +37,6 @@ class SceneGraph(nn.Module):
         self.output_dims = output_dims
         self.downsample_rate = downsample_rate
         self.args = args 
-
         if self.args.rel_box_flag:
             self.col_fuse = nn.Linear(128*4*4, output_dims[1]) 
 
