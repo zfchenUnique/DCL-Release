@@ -596,6 +596,7 @@ class clevrerDataset(Dataset):
 
     def __getitem__model_v2(self, index):
         data = {}
+
         meta_ann = copy.deepcopy(self.question_ann[index])
         scene_idx = meta_ann['scene_index']
         sub_idx = int(scene_idx/1000)
@@ -1034,12 +1035,14 @@ class clevrerDataset(Dataset):
         smp_diff = int(frm_num/img_num)
         frm_offset = 0 if img_num==6 else int(img_num/2)
         frm_list = list(range(frm_offset, frm_num, smp_diff))
+        
+        
         for tube_id, tmp_tube in enumerate(tube_info['tubes']):
             tmp_dict = {}
             tmp_list = []
             count_idx = 0
             frm_ids = []
-            for frm_id in frm_list:
+            for exist_id, frm_id in enumerate(frm_list):
                 if tmp_tube[frm_id] == [0, 0, 1, 1]:
                     continue 
                 tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
@@ -1061,8 +1064,18 @@ class clevrerDataset(Dataset):
         frm_list_unique = list(set(frm_list))
         frm_list_unique.sort()
 
-        tube_box_dict['frm_list'] = frm_list_unique  
+        # making sure each frame has at least one object
+        for exist_id in range(len(frm_list_unique)-1, -1, -1):
+            exist_flag = False
+            frm_id = frm_list_unique[exist_id]
+            for tube_id, tube in tube_box_dict.items():
+                if frm_id in tube['frm_name']:
+                    exist_flag = True
+                    break
+            if not exist_flag:
+                del frm_list_unique[exist_id]
 
+        tube_box_dict['frm_list'] = frm_list_unique  
         if self.args.normalized_boxes:
             frm_num = len(tube_info['tubes'][0]) 
             tube_num = len(tube_info['tubes']) 

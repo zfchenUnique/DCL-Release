@@ -309,7 +309,6 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
 
             data_time = time.time() - end; end = time.time()
             output_dict_list, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
-            #pdb.set_trace()
             if args.testing_flag:
                 prepare_data_for_testing(output_dict_list, feed_dict, json_output_list)
 
@@ -341,9 +340,10 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                 pbar.update()
 
             end = time.time()
-    pdb.set_trace()    
+            pdb.set_trace()
     if args.testing_flag:
         jsondump(args.test_result_path, json_output_list)
+    pdb.set_trace()    
 
 if __name__ == '__main__':
     main()

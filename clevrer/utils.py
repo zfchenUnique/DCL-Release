@@ -254,9 +254,10 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     pred_frm_num = len(pred_obj_list) 
     ftr_dim = f_sng[1].shape[1]
     box_dim = 4
-    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
-    #visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
-    #pdb.set_trace()
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim)
+    if args.visualize_flag:
+        visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
+        pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
@@ -469,8 +470,9 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
-    #visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
-    #pdb.set_trace()
+    if args.visualize_flag:
+        visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
+        pdb.set_trace()
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
@@ -484,8 +486,9 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
     filename = str(feed_dict['meta_ann']['scene_index'])
     videoname = 'dumps/'+ filename + '_' + str(int(whatif_id)) +'.avi'
     #videoname = filename + '.mp4'
-    os.system('mkdir -p ' + filename)
-
+    if store_img:
+        img_folder = 'dumps/'+filename 
+        os.system('mkdir -p ' + img_folder)
 
     background_fn = '../temporal_reasoning-master/background.png'
     bg = cv2.imread(background_fn)
@@ -555,14 +558,12 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
                         x2=1
                     if y2>1:
                         y2=1
-                    patch_resize = cv2.resize(padding_patch_list[tube_id], (int(x2*W) - int(x*W), int(y2*H) - int(y*H)))
+                    patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
                     img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
                     cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
         
-            store_img = True
-
             if store_img:
-                cv2.imwrite(os.path.join( 'tmp/%s_%d.png' % (filename, i)), img.astype(np.uint8))
+                cv2.imwrite(os.path.join( img_folder, '%s_%d.png' % (filename, i)), img.astype(np.uint8))
         else:
             frm_id = feed_dict['tube_info']['frm_list'][i]
             img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
@@ -609,7 +610,7 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
                 img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
                 cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
             if store_img:
-                cv2.imwrite(os.path.join( 'tmp/%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
+                cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
         out.write(img)
 
 def collate_dict(batch):

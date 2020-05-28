@@ -19,9 +19,15 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --version v3 \
     --pred_model_path ../temporal_reasoning-master/models_latent.py \
     --colli_threshold 0 \
-    --testing_flag 1 \
     --test_result_path 'test_v2.json' \
-    --load dumps/remote_models/refine_full_12.pth 
+    --testing_flag 1 \
+    --visualize_flag 1 \
+    --pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/net_best.pth  \
+    --load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    --debug
+    #--load dumps/remote_models/refine_full_12.pth \
+    #--testing_flag 1 \
+    #--visualize_flag 1 \
     #--load dumps/remote_models/frm_31_epoch_24.pth \
     #--pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/net_best.pth  \
     #--debug \

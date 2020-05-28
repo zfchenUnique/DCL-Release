@@ -117,6 +117,7 @@ def load_param_parser():
     parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
     parser.add_argument('--testing_flag', type=int, default=9, help='1 for testing on the testing set')
     parser.add_argument('--test_result_path', type=str, default='', help='file path to store the result')
+    parser.add_argument('--visualize_flag', type=int, default=0, help='1 for visualizing data')
 
     args = parser.parse_args()
     return args 
