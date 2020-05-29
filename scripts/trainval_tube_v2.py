@@ -340,10 +340,8 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
                 pbar.update()
 
             end = time.time()
-            pdb.set_trace()
     if args.testing_flag==1:
         jsondump(args.test_result_path, json_output_list)
-    pdb.set_trace()    
 
 if __name__ == '__main__':
     main()
