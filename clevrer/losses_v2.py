@@ -31,8 +31,24 @@ class SceneParsingLoss(MultitaskLossBase):
         self.add_supervision = add_supervision
         self.args = args
 
-    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None):
+    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None):
         outputs, monitors = dict(), dict()
+
+        if pred_ftr_list is not None:
+            ftr_loss = 0.0
+            for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
+                if tmp_ftr is not None:
+                    if len(tmp_ftr.shape)==3:
+                        frm_num = tmp_ftr.shape[1]
+                        tmp_gt = f_sng[0][ftr_id][:,:frm_num]
+                    elif len(tmp_ftr.shape)==4:
+                        frm_num = tmp_ftr.shape[2]
+                        tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
+                    elif len(tmp_ftr.shape)==2:
+                        continue  # to be fixed!     
+                    ftr_loss += self._mse_loss(tmp_ftr, tmp_gt)
+            monitors['regu_loss'] = ftr_loss
+            pdb.set_trace()
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

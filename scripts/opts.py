@@ -108,16 +108,18 @@ def load_param_parser():
     parser.add_argument('--use_attr', type=int, default=0, help='whether using attributes or not')
     parser.add_argument('--pred_frm_num', type=int, default=12, help='number of frames to predict')
     parser.add_argument('--pstep', type=int, default=2)
-    parser.add_argument('--frame_offset', type=int, default=5)
+    parser.add_argument('--frame_offset', type=int, default=4)
     parser.add_argument('--colli_threshold', type=float, default=0.0)
     # use correct question parser
     parser.add_argument('--correct_question_path', type=str, default='../question_parsing/data/new_results/')
     parser.add_argument('--correct_question_flag', type=int, default=1)
     parser.add_argument('--dataset_stage', type=int, default=-1, help='0 for descriptive only')
     parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
-    parser.add_argument('--testing_flag', type=int, default=9, help='1 for testing on the testing set')
+    parser.add_argument('--testing_flag', type=int, default=0, help='1 for testing on the testing set')
     parser.add_argument('--test_result_path', type=str, default='', help='file path to store the result')
     parser.add_argument('--visualize_flag', type=int, default=0, help='1 for visualizing data')
+    parser.add_argument('--regu_flag', type=int, default=0, help='1 for visualizing data')
+    parser.add_argument('--pred_normal_num', type=int, default=12, help='number of frames to predict for regularization')
 
     args = parser.parse_args()
     return args 

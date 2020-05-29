@@ -62,6 +62,47 @@ def prepare_data_for_testing(output_dict_list, feed_dict_list, json_output_list)
 def _norm(x, dim=-1):
     return x / (x.norm(2, dim=dim, keepdim=True)+1e-7)
 
+def prepare_normal_prediction_input(feed_dict, f_sng, args):
+    """"
+    attr: obj_num, attr_dim, 1, 1 (None)
+    x: obj_num, state_dim*(n_his+1)
+    rel: return from prepare_relations
+    label_obj: obj_num, state_dim, 1 , 1
+    label_rel: obj_num * obj_num, rela_dim, 1, 1
+    """""
+    x_step = args.n_his +1 
+    first_frm_id_list = [frm_id for frm_id in feed_dict['tube_info']['frm_list'][:args.n_his+1]]
+    obj_num, ftr_t_dim = f_sng[3].shape
+    ftr_dim = f_sng[1].shape[-1]
+    box_dim = 4
+    t_dim = ftr_t_dim//box_dim
+    spatial_seq = f_sng[3].view(obj_num, t_dim, box_dim)
+    tmp_box_list = [spatial_seq[:, frm_id] for frm_id in first_frm_id_list]
+    x_box = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, args.n_his+1, box_dim)  
+    x_ftr = f_sng[0][:, :x_step] .view(obj_num, x_step, ftr_dim)
+    x = torch.cat([x_box, x_ftr], dim=2).view(obj_num, x_step*(ftr_dim+box_dim), 1, 1).contiguous()
+
+
+    # obj_num*obj_num, box_dim*total_step, 1, 1
+    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim))
+    ftr_rela = f_sng[2][:, :, :x_step].view(obj_num*obj_num, x_step*ftr_dim, 1, 1) 
+    rela = torch.cat([spatial_rela, ftr_rela], dim=1)
+    rel = prepare_relations(obj_num)
+    for idx in range(len(rel)-2):
+        rel[idx] = rel[idx].to(ftr_rela.device)
+    rel.append(rela)
+    attr = None 
+    node_r_idx, node_s_idx, Ra = rel[3], rel[4], rel[5]
+    Rr_idx, Rs_idx, value = rel[0], rel[1], rel[2]
+
+    Rr = torch.sparse.FloatTensor(
+        Rr_idx, value, torch.Size([node_r_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+    Rs = torch.sparse.FloatTensor(
+        Rs_idx, value, torch.Size([node_s_idx.shape[0], value.size(0)])).to(ftr_rela.device)
+
+    return attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx 
+
+
 def prepare_future_prediction_input(feed_dict, f_sng, args):
     """"
     attr: obj_num, attr_dim, 1, 1 (None)
@@ -197,16 +238,25 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     x[counter_fact_id] = 0.0
 
     pred_obj_list = []
-    pred_rel_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    Ra_spatial = Ra[:, :box_dim*x_step]
+    Ra_ftr = Ra[:, box_dim*x_step:]
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-        pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
+
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
     box_dim = 4
     for p_id, frm_id  in enumerate(range(0, args.n_seen_frames, args.frame_offset)):
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
-        Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
 
         valid_object_id_list = check_valid_object_id_list(x, args)
 
@@ -238,18 +288,20 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
             pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
-        pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
+        pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects + ori_id_2
-                pred_rel[ori_idx] = pred_rel_valid[valid_idx]
-                pred_rel[ori_id, box_dim:] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+                pred_rel_ftr[ori_idx] =  _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
-        pred_rel_list.append(pred_rel.view(n_objects_ori*n_objects_ori, relation_dim, 1, 1)) 
+        pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) 
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
     ftr_dim = f_sng[1].shape[1]
@@ -258,7 +310,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
         pdb.set_trace()
-    rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def predict_counterfact_features(model, feed_dict, f_sng, args, counter_fact_id):
@@ -316,18 +368,160 @@ def predict_future_feature(model, feed_dict, f_sng, args):
     #x: obj_num, state_dim*(n_his+1)
     x_step = args.n_his + 1
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
-    pred_obj_list = []
-    pred_rel_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    Ra_spatial = Ra[:, :box_dim*x_step]
+    Ra_ftr = Ra[:, box_dim*x_step:]
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-        pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
 
     n_objects = x.shape[0]
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
     for p_id in range(args.pred_frm_num):
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
-        Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
+        feats = x
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
+        # update relation
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+
+        pred_obj, pred_rel = model._model_pred(
+            attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
+        pred_obj_list.append(pred_obj)
+        pred_rel_spatial_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)[:, :box_dim]) 
+        pred_rel_ftr_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)[:, box_dim:]) 
+    #make the output consitent with video scene graph
+    pred_frm_num = args.pred_frm_num 
+    ftr_dim = f_sng[1].shape[1]
+    box_dim = 4
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[:pred_frm_num], dim=1).view(n_objects, n_objects, pred_frm_num, ftr_dim)
+    return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
+
+
+def predict_future_feature_v2(model, feed_dict, f_sng, args):
+    data = prepare_future_prediction_input(feed_dict, f_sng, args)
+    #x: obj_num, state_dim*(n_his+1)
+    x_step = args.n_his + 1
+    attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
+    pred_obj_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    Ra_spatial = Ra[:, :box_dim*x_step]
+    Ra_ftr = Ra[:, box_dim*x_step:]
+    for t_step in range(args.n_his+1):
+        pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
+
+    n_objects_ori = x.shape[0]
+    relation_dim = args.relation_dim
+    state_dim = args.state_dim 
+    box_dim = 4
+
+    for p_id in range(args.pred_frm_num):
+        x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
+    
+        # remove invalid object, object coordinates that has been out of size
+        valid_object_id_list = check_valid_object_id_list(x, args) 
+        if len(valid_object_id_list) == 0:
+            break 
+        data_valid = prepare_valid_input(x, Ra, valid_object_id_list, args)
+        attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
+        n_objects = x.shape[0]
+        feats = x
+        # update relation
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+
+        # normalize data
+
+
+        pred_obj_valid, pred_rel_valid = model._model_pred(
+            attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
+       
+        pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            pred_obj[ori_id] = pred_obj_valid[valid_id]
+            pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
+        
+        pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
+                valid_idx = valid_id * n_objects + valid_id_2 
+                ori_idx = ori_id * n_objects + ori_id_2
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+
+        pred_obj_list.append(pred_obj)
+        pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) 
+
+    #make the output consitent with video scene graph
+    pred_frm_num = len(pred_obj_list) 
+    ftr_dim = f_sng[1].shape[1]
+    box_dim = 4
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
+    if args.visualize_flag:
+        visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
+        pdb.set_trace()
+    return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
+
+def predict_normal_feature(model, feed_dict, f_sng, args):
+    data = prepare_normal_prediction_input(feed_dict, f_sng, args)
+    #x: obj_num, state_dim*(n_his+1)
+    x_step = args.n_his + 1
+    attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
+    pred_obj_list = []
+    #pred_rel_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    Ra_spatial = Ra[:, :box_dim*x_step]
+    Ra_ftr = Ra[:, box_dim*x_step:]
+    for t_step in range(args.n_his+1):
+        pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
+
+    n_objects = x.shape[0]
+    relation_dim = args.relation_dim
+    state_dim = args.state_dim 
+    for p_id in range(args.pred_normal_num):
+        x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
         feats = x
         # update relation
         for i in range(n_objects):
@@ -341,14 +535,17 @@ def predict_future_feature(model, feed_dict, f_sng, args):
         pred_obj, pred_rel = model._model_pred(
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
         pred_obj_list.append(pred_obj)
-        pred_rel_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)[:, :box_dim]) 
+        pred_rel_ftr_list.append(pred_rel.view(n_objects*n_objects, relation_dim, 1, 1)[:, box_dim:]) 
     #make the output consitent with video scene graph
-    pred_frm_num = args.pred_frm_num 
-    ftr_dim = f_sng[1].shape[1]
-    box_dim = 4
-    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
-    rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects, n_objects, pred_frm_num, ftr_dim)
-    return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
+    pred_frm_num = len(pred_obj_list) 
+    box_ftr = torch.stack(pred_obj_list[:pred_frm_num], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[:pred_frm_num], dim=1).view(n_objects, n_objects, pred_frm_num, ftr_dim)
+    obj_ftr = torch.stack(pred_obj_list[:pred_frm_num], dim=1)[:, :, box_dim:].contiguous().view(n_objects, pred_frm_num, ftr_dim) 
+    
+    #pdb.set_trace()
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
+
 
 def check_valid_object_id_list(x, args):
     valid_object_id_list = []
@@ -403,25 +600,32 @@ def prepare_valid_input(x, Ra, valid_object_id_list, args):
 
     return attr, x_valid, Rr, Rs, Ra_valid, node_r_idx, node_s_idx 
 
-def predict_future_feature_v2(model, feed_dict, f_sng, args):
-    data = prepare_future_prediction_input(feed_dict, f_sng, args)
+def predict_normal_feature_v2(model, feed_dict, f_sng, args):
+    data = prepare_normal_prediction_input(feed_dict, f_sng, args)
     #x: obj_num, state_dim*(n_his+1)
     x_step = args.n_his + 1
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
     pred_obj_list = []
-    pred_rel_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    Ra_spatial = Ra[:, :box_dim*x_step]
+    Ra_ftr = Ra[:, box_dim*x_step:]
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-        pred_rel_list.append(Ra[:,t_step*args.relation_dim:(t_step+1)*args.relation_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
 
     n_objects_ori = x.shape[0]
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
-    box_dim = 4
 
-    for p_id in range(args.pred_frm_num):
+    for p_id in range(args.pred_normal_num):
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
-        Ra = torch.cat(pred_rel_list[p_id:p_id+x_step], dim=1) 
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
     
         # remove invalid object, object coordinates that has been out of size
         valid_object_id_list = check_valid_object_id_list(x, args) 
@@ -442,7 +646,6 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
 
         # normalize data
 
-
         pred_obj_valid, pred_rel_valid = model._model_pred(
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
        
@@ -451,29 +654,31 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
         for valid_id, ori_id in enumerate(valid_object_id_list):
             pred_obj[ori_id] = pred_obj_valid[valid_id]
             pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
-        pred_rel = torch.zeros(n_objects_ori*n_objects_ori, relation_dim, dtype=pred_obj_valid.dtype, \
+        
+        pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects + ori_id_2
-                pred_rel[ori_idx] = pred_rel_valid[valid_idx]
-                pred_rel[ori_id, box_dim:] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
-        pred_rel_list.append(pred_rel.view(n_objects_ori*n_objects_ori, relation_dim, 1, 1)) 
+        pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) # just padding
     
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
-    ftr_dim = f_sng[1].shape[1]
-    box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
-    rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
+    obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
-        visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
+        visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
         pdb.set_trace()
-    return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 

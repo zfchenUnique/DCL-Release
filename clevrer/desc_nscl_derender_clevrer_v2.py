@@ -13,7 +13,7 @@ to get the supervision for the VSE modules. This model tests the implementation 
 from jacinle.utils.container import GView
 from nscl.models.utils import canonize_monitors, update_from_loss_module
 from clevrer.models.reasoning_v2 import ReasoningV2ModelForCLEVRER, make_reasoning_v2_configs
-from clevrer.utils import predict_future_feature, predict_future_feature_v2 
+from clevrer.utils import predict_future_feature, predict_future_feature_v2, predict_normal_feature_v2  
 
 configs = make_reasoning_v2_configs()
 configs.model.vse_known_belong = False
@@ -96,6 +96,15 @@ class Model(ReasoningV2ModelForCLEVRER):
             _ignore_list.append(tmp_ignore_list)
         programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
                 fd=feed_dict_list, future_features_list=f_sng_future_list, nscl_model=self, ignore_list = _ignore_list)
+        
+        if self.args.regu_flag ==1:
+            output_ftr_list = []
+            for vid in range(len(feed_dict_list)):
+                output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                output_ftr_list.append(output_pred_ftr)
+        else:
+            output_ftr_list = None
+
         monitors_list = [] 
         output_list = []
         for idx, buffers  in enumerate(buffers_list): 
@@ -105,11 +114,17 @@ class Model(ReasoningV2ModelForCLEVRER):
             feed_dict = feed_dict_list[idx]
             f_sng = [f_sng_list[idx]]
             answers = answers_list[idx]
-            
+           
+            if output_ftr_list is not None:
+                output_ftr = output_ftr_list[idx]
+            else:
+                output_ftr = None
+
             update_from_loss_module(monitors, outputs, self.scene_loss(
                 feed_dict, f_sng,
                 self.reasoning.embedding_attribute, self.reasoning.embedding_relation,
-                self.reasoning.embedding_temporal 
+                self.reasoning.embedding_temporal,
+                pred_ftr_list = output_ftr 
             ))
             update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
             monitors_list.append(monitors)
@@ -124,6 +139,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                 loss += qa_loss
                 if self.args.scene_add_supervision:
                     loss_scene = self.args.scene_supervision_weight * monitors['loss/scene']
+                    loss +=loss_scene 
             return loss, monitors, outputs
         else:
             outputs['monitors'] = monitors_list 
