@@ -17,6 +17,7 @@ from nscl.nn.losses import MultitaskLossBase
 from nscl.datasets.definition import gdef
 from clevrer.models.quasi_symbolic_v2 import fuse_box_ftr, fuse_box_overlap, do_apply_self_mask_3d, Gaussin_smooth    
 import pdb
+import torch.nn as nn
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
@@ -36,6 +37,8 @@ class SceneParsingLoss(MultitaskLossBase):
 
         if pred_ftr_list is not None:
             ftr_loss = 0.0
+            loss_list = []
+            mse_loss = nn.MSELoss()
             for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
                 if tmp_ftr is not None:
                     if len(tmp_ftr.shape)==3:
@@ -45,10 +48,16 @@ class SceneParsingLoss(MultitaskLossBase):
                         frm_num = tmp_ftr.shape[2]
                         tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
                     elif len(tmp_ftr.shape)==2:
-                        continue  # to be fixed!     
-                    ftr_loss += self._mse_loss(tmp_ftr, tmp_gt)
-            monitors['regu_loss'] = ftr_loss
-            pdb.set_trace()
+                        obj_num = f_sng[0][3].shape[0]
+                        list_num = 128
+                        box_dim = 4
+                        frm_num = tmp_ftr.shape[1] // box_dim 
+                        gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
+                        tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1)    
+                    tmp_loss = mse_loss(tmp_ftr, tmp_gt)
+                    loss_list.append(tmp_loss)
+            ftr_loss = sum(loss_list)
+            monitors['loss/regu'] = ftr_loss
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

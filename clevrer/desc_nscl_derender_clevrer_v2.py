@@ -139,7 +139,9 @@ class Model(ReasoningV2ModelForCLEVRER):
                 loss += qa_loss
                 if self.args.scene_add_supervision:
                     loss_scene = self.args.scene_supervision_weight * monitors['loss/scene']
-                    loss +=loss_scene 
+                    loss +=loss_scene
+                if self.args.regu_flag:
+                    loss_regu = self.args.regu_weight * monitors['loss/regu']
             return loss, monitors, outputs
         else:
             outputs['monitors'] = monitors_list 

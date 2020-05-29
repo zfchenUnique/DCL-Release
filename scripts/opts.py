@@ -120,6 +120,7 @@ def load_param_parser():
     parser.add_argument('--visualize_flag', type=int, default=0, help='1 for visualizing data')
     parser.add_argument('--regu_flag', type=int, default=0, help='1 for visualizing data')
     parser.add_argument('--pred_normal_num', type=int, default=12, help='number of frames to predict for regularization')
+    parser.add_argument('--regu_weight', type=float, default=10.0)
 
     args = parser.parse_args()
     return args 
