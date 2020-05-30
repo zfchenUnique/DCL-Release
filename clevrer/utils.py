@@ -711,7 +711,7 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
     if whatif_id == -1:
         n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1]
     else:
-        n_frame = box_ftr.shape[1] 
+        n_frame = min(box_ftr.shape[1], len(feed_dict['tube_info']['frm_list']))
     padding_patch_list = []
     for i in range(n_frame):
         if whatif_id==-1:

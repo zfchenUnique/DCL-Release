@@ -46,6 +46,8 @@ class Model(ReasoningV2ModelForCLEVRER):
         if isinstance(feed_dict_list, dict):
             feed_dict_list = [feed_dict_list]
 
+        #pdb.set_trace()
+
         video_num = len(feed_dict_list)
         f_sng_list = []
         f_sng_future_list = []
@@ -94,8 +96,9 @@ class Model(ReasoningV2ModelForCLEVRER):
                 feed_dict['question_type_new'].append(ques['question_type'])
             programs.append(tmp_prog)
             _ignore_list.append(tmp_ignore_list)
-        programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
-                fd=feed_dict_list, future_features_list=f_sng_future_list, nscl_model=self, ignore_list = _ignore_list)
+        if self.args.regu_only_flag !=1:
+            programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
+                    fd=feed_dict_list, future_features_list=f_sng_future_list, nscl_model=self, ignore_list = _ignore_list)
         
         if self.args.regu_flag ==1:
             output_ftr_list = []
@@ -142,7 +145,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                     loss +=loss_scene
                 if self.args.regu_flag:
                     loss_regu = self.args.regu_weight * monitors['loss/regu']
-                    loss +=loss_regu 
+                    loss +=loss_regu
             return loss, monitors, outputs
         else:
             outputs['monitors'] = monitors_list 
