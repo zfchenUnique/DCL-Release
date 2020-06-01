@@ -128,7 +128,10 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         optimizer = desc.make_optimizer(model, args.lr)
     else:
         from jactorch.optim import AdamW
-        trainable_parameters = filter(lambda x: x.requires_grad, model.parameters())
+        if args.freeze_learner_flag==1:
+            trainable_parameters = filter(lambda x: x.requires_grad, model._model_pred.parameters())
+        else:
+            trainable_parameters = filter(lambda x: x.requires_grad, model.parameters())
         optimizer = AdamW(trainable_parameters, args.lr, weight_decay=configs.train.weight_decay)
 
     if args.acc_grad > 1:

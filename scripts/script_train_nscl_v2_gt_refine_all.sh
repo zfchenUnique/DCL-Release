@@ -12,7 +12,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --prefix gt_joint_train \
+    --prefix gt_joint_train_freeze \
     --colli_ftr_type 1 \
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
@@ -24,6 +24,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --regu_flag 1 \
     --regu_only_flag 1 \
     --load dumps/remote_models/frm_31_epoch_24.pth \
+    --freeze_learner_flag 1
     #--debug
     #--tube_prp_path ../clevrer/tubeProposalsAttrV3/1.0_1.0_0.4_0.7 \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix/checkpoints/epoch_5.pth
