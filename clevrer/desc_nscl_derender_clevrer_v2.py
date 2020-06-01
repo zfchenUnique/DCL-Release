@@ -162,6 +162,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                     outputs = {}
             return loss, monitors, outputs
         else:
+            outputs = {}
             outputs['monitors'] = monitors_list 
             outputs['buffers'] = buffers_list 
             outputs['answer'] = answers_list  
