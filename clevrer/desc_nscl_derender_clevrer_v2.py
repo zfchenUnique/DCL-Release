@@ -13,7 +13,7 @@ to get the supervision for the VSE modules. This model tests the implementation 
 from jacinle.utils.container import GView
 from nscl.models.utils import canonize_monitors, update_from_loss_module
 from clevrer.models.reasoning_v2 import ReasoningV2ModelForCLEVRER, make_reasoning_v2_configs
-from clevrer.utils import predict_future_feature, predict_future_feature_v2, predict_normal_feature_v2  
+from clevrer.utils import predict_future_feature, predict_future_feature_v2, predict_normal_feature_v2 
 
 configs = make_reasoning_v2_configs()
 configs.model.vse_known_belong = False
@@ -110,48 +110,61 @@ class Model(ReasoningV2ModelForCLEVRER):
 
         monitors_list = [] 
         output_list = []
-        for idx, buffers  in enumerate(buffers_list): 
-            monitors, outputs = {}, {}
-            outputs['buffers'] = buffers 
-            outputs['answer'] = answers_list[idx] 
-            feed_dict = feed_dict_list[idx]
-            f_sng = [f_sng_list[idx]]
-            answers = answers_list[idx]
-           
-            if output_ftr_list is not None:
-                output_ftr = output_ftr_list[idx]
-            else:
-                output_ftr = None
+        if self.args.regu_only_flag!=1:
+            for idx, buffers  in enumerate(buffers_list):
+                monitors, outputs = {}, {}
+                outputs['buffers'] = buffers 
+                outputs['answer'] = answers_list[idx] 
+                feed_dict = feed_dict_list[idx]
+                f_sng = [f_sng_list[idx]]
+                answers = answers_list[idx]
+               
+                if output_ftr_list is not None:
+                    output_ftr = output_ftr_list[idx]
+                else:
+                    output_ftr = None
 
-            update_from_loss_module(monitors, outputs, self.scene_loss(
-                feed_dict, f_sng,
-                self.reasoning.embedding_attribute, self.reasoning.embedding_relation,
-                self.reasoning.embedding_temporal,
-                pred_ftr_list = output_ftr 
-            ))
-            update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
-            monitors_list.append(monitors)
-            output_list.append(outputs)
+                update_from_loss_module(monitors, outputs, self.scene_loss(
+                    feed_dict, f_sng,
+                    self.reasoning.embedding_attribute, self.reasoning.embedding_relation,
+                    self.reasoning.embedding_temporal,
+                    pred_ftr_list = output_ftr 
+                ))
+                update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
+                monitors_list.append(monitors)
+                output_list.append(outputs)
+
+        elif self.args.regu_only_flag==1:
+            for idx, output_ftr in enumerate(output_ftr_list):
+                monitors = {}
+                feed_dict = feed_dict_list[idx]
+                f_sng = [f_sng_list[idx]]
+                self.scene_loss.compute_regu_loss(output_ftr, f_sng, feed_dict, monitors)
+                monitors_list.append(monitors)
 
         loss = 0
         loss_scene = 0
         if self.training:
             for monitors in monitors_list:
-                qa_loss_list = [qa_loss[0] for qa_loss in monitors['loss/qa']] 
-                qa_loss = sum(qa_loss_list)/(len(qa_loss_list)+0.000001)
-                loss += qa_loss
-                if self.args.scene_add_supervision:
-                    loss_scene = self.args.scene_supervision_weight * monitors['loss/scene']
-                    loss +=loss_scene
-                if self.args.regu_flag:
+                if self.args.regu_only_flag!=1:
+                    qa_loss_list = [qa_loss[0] for qa_loss in monitors['loss/qa']] 
+                    qa_loss = sum(qa_loss_list)/(len(qa_loss_list)+0.000001)
+                    loss += qa_loss
+                    if self.args.scene_add_supervision:
+                        loss_scene = self.args.scene_supervision_weight * monitors['loss/scene']
+                        loss +=loss_scene
+                    if self.args.regu_flag:
+                        loss_regu = self.args.regu_weight * monitors['loss/regu']
+                        loss +=loss_regu
+                elif self.args.regu_only_flag==1:
                     loss_regu = self.args.regu_weight * monitors['loss/regu']
                     loss +=loss_regu
+                    outputs = {}
             return loss, monitors, outputs
         else:
             outputs['monitors'] = monitors_list 
             outputs['buffers'] = buffers_list 
-            outputs['answer'] = buffers_list 
-            #pdb.set_trace()
+            outputs['answer'] = answers_list  
             return outputs
 
 

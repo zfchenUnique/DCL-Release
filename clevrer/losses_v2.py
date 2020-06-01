@@ -32,32 +32,43 @@ class SceneParsingLoss(MultitaskLossBase):
         self.add_supervision = add_supervision
         self.args = args
 
+    def compute_regu_loss(self, pred_ftr_list, f_sng, feed_dict, monitors):
+        ftr_loss = 0.0
+        loss_list = []
+        mse_loss = nn.MSELoss()
+        for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
+            obj_num = f_sng[0][3].shape[0]
+            list_num = 128
+            box_dim = 4
+            invalid_mask = f_sng[0][3].view(obj_num, -1, box_dim).sum(dim=2)==-2 
+            if tmp_ftr is not None:
+                if len(tmp_ftr.shape)==3:
+                    frm_num = tmp_ftr.shape[1]
+                    tmp_gt = f_sng[0][ftr_id][:,:frm_num]
+                elif len(tmp_ftr.shape)==4:
+                    frm_num = tmp_ftr.shape[2]
+                    tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
+                elif len(tmp_ftr.shape)==2:
+                    frm_num = tmp_ftr.shape[1] // box_dim 
+                    gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
+                    tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1)    
+                tmp_loss = mse_loss(tmp_ftr, tmp_gt)
+                loss_list.append(tmp_loss)
+                if ftr_id==0:
+                    monitors['loss/regu/obj_ftr'] = tmp_loss
+                elif ftr_id ==2:
+                    monitors['loss/regu/rel_ftr'] = tmp_loss
+                elif ftr_id ==3:
+                    monitors['loss/regu/obj_box'] = tmp_loss
+        ftr_loss = sum(loss_list)
+        monitors['loss/regu'] = ftr_loss
+        return monitors 
+
     def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None):
         outputs, monitors = dict(), dict()
 
         if pred_ftr_list is not None:
-            ftr_loss = 0.0
-            loss_list = []
-            mse_loss = nn.MSELoss()
-            for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
-                if tmp_ftr is not None:
-                    if len(tmp_ftr.shape)==3:
-                        frm_num = tmp_ftr.shape[1]
-                        tmp_gt = f_sng[0][ftr_id][:,:frm_num]
-                    elif len(tmp_ftr.shape)==4:
-                        frm_num = tmp_ftr.shape[2]
-                        tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
-                    elif len(tmp_ftr.shape)==2:
-                        obj_num = f_sng[0][3].shape[0]
-                        list_num = 128
-                        box_dim = 4
-                        frm_num = tmp_ftr.shape[1] // box_dim 
-                        gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
-                        tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1)    
-                    tmp_loss = mse_loss(tmp_ftr, tmp_gt)
-                    loss_list.append(tmp_loss)
-            ftr_loss = sum(loss_list)
-            monitors['loss/regu'] = ftr_loss
+            monitors = compute_regu_loss(pred_ftr_list, f_sng, feed_dict, monitors)
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

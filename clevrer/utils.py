@@ -292,6 +292,8 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
                 device=pred_obj_valid.device) #- 1.0
         pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial[:, 0] = -1
+        pred_rel_spatial[:, 1] = -1
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
@@ -659,6 +661,8 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
                 device=pred_obj_valid.device) #- 1.0
         pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial[:, 0] = -1
+        pred_rel_spatial[:, 1] = -1
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
