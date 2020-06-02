@@ -60,10 +60,12 @@ class Model(ReasoningV2ModelForCLEVRER):
                 f_scene_future = self.resnet(feed_dict['img_future']) 
                 f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
                 f_sng_future_list.append(f_sng_future)
-            elif self.args.version=='v3' and feed_dict['load_predict_flag']:
+            elif self.args.version=='v3' and feed_dict['load_predict_flag'] and self.args.regu_only_flag!=1:
                 f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
-            else:
+            elif self.args.regu_only_flag==1 and not self.training and self.args.visualize_flag:
+                self.args.pred_frm_num = 1
+                f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(None)
 
         programs = []
@@ -99,7 +101,10 @@ class Model(ReasoningV2ModelForCLEVRER):
         if self.args.regu_only_flag !=1:
             programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
                     fd=feed_dict_list, future_features_list=f_sng_future_list, nscl_model=self, ignore_list = _ignore_list)
-        
+        else:
+            buffers_list = []
+            answers_list = []
+
         if self.args.regu_flag ==1:
             output_ftr_list = []
             for vid in range(len(feed_dict_list)):
