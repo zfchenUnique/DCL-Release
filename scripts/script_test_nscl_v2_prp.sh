@@ -19,12 +19,30 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --version v3 \
     --pred_model_path ../temporal_reasoning-master/models_latent.py \
     --colli_threshold 0 \
-    --test_result_path 'test_v2.json' \
+    --test_result_path 'test_ep0.json' \
+    --testing_flag 1 \
     --testing_flag 1 \
     --visualize_flag 1 \
-    --pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/net_best.pth  \
-    --load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
-    --debug
+    --regu_flag 1 \
+    --regu_only_flag 1 \
+    --debug \
+    --resume dumps/remote_models/freeze_ep4.pth \
+    --pred_normal_num 25 \
+    --residual_rela_prop 1 \
+    --residual_rela_pred 1 \
+    --rela_spatial_only 1
+    #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix_resume/checkpoints/epoch_11.pth
+
+    #--pretrain_pred_model_path ../temporal_reasoning-master/dumps/prpNewRefine_latent_norm_ftr_n_his_2_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/tube_net_epoch_3_iter_300000.pth \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix_resume/checkpoints/epoch_6.pth
+    #--visualize_flag 1 \
+    #--pretrain_pred_model_path ../temporal_reasoning-master/dumps/prpNewRefine_latent_norm_ftr_n_his_2_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/tube_net_epoch_3_iter_300000.pth \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    #--pred_normal_num 1 \
+    #--debug
+    #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix/checkpoints/epoch_5.pth
+    #--pretrain_pred_model_path ../temporal_reasoning-master/dumps/latent_prp_CLEVRER_noAttr_noEdgeSuperv_pn_pstep_2_version_v3/net_best.pth  \
     #--load dumps/remote_models/refine_full_12.pth \
     #--testing_flag 1 \
     #--visualize_flag 1 \
