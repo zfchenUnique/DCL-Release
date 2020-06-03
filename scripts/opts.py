@@ -99,8 +99,6 @@ def load_param_parser():
     parser.add_argument('--attr_dim', type=int, default=5)
     # [dx, dy, dw, dh, ftr_dim]
     parser.add_argument('--state_dim', type=int, default=260)
-    # [dx, dy, dw, dh, collision_ftr]
-    parser.add_argument('--relation_dim', type=int, default=260)
     parser.add_argument('--n_his', type=int, default=2)
     parser.add_argument('--nf_relation', type=int, default=128)
     parser.add_argument('--nf_particle', type=int, default=128)
@@ -123,7 +121,14 @@ def load_param_parser():
     parser.add_argument('--regu_weight', type=float, default=10.0)
     parser.add_argument('--regu_only_flag', type=int, default=0, help='1 for visualizing data')
     parser.add_argument('--freeze_learner_flag', type=int, default=0, help='1 for visualizing data')
-
+    parser.add_argument('--residual_rela_prop', type=int, default=0, help='1 for residual encoding for relations')
+    parser.add_argument('--residual_rela_pred', type=int, default=0, help='1 for residual encoding for relations')
+    parser.add_argument('--rela_spatial_only', type=int, default=0, help='1 for residual encoding for relations')
+    # [dx, dy, dw, dh, collision_ftr]
+    parser.add_argument('--relation_dim', type=int, default=260)
+    parser.add_argument('--rela_spatial_dim', type=int, default=4)
+    parser.add_argument('--rela_ftr_dim', type=int, default=256)
+    
     args = parser.parse_args()
     return args 
 

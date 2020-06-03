@@ -24,8 +24,8 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --regu_flag 1 \
     --regu_only_flag 1 \
     --load dumps/remote_models/frm_31_epoch_24.pth \
-    --freeze_learner_flag 1
-    #--debug
+    --freeze_learner_flag 1 \
+    --debug
     #--tube_prp_path ../clevrer/tubeProposalsAttrV3/1.0_1.0_0.4_0.7 \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix/checkpoints/epoch_5.pth
     #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
