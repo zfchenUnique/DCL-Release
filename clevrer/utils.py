@@ -298,7 +298,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
-                ori_idx = ori_id * n_objects + ori_id_2
+                ori_idx = ori_id * n_objects_ori + ori_id_2
                 pred_rel_ftr[ori_idx] =  _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
@@ -480,7 +480,7 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
-                ori_idx = ori_id * n_objects + ori_id_2
+                ori_idx = ori_id * n_objects_ori + ori_id_2
                 pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
@@ -667,7 +667,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
-                ori_idx = ori_id * n_objects + ori_id_2
+                ori_idx = ori_id * n_objects_ori + ori_id_2
                 pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
