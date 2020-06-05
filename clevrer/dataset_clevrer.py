@@ -1033,7 +1033,9 @@ class clevrerDataset(Dataset):
         tube_box_dict = {}
         frm_num = len(tube_info['tubes'][0]) 
         smp_diff = int(frm_num/img_num)
-        frm_offset = 0 if img_num==6 else int(img_num/2)
+        frm_offset = 0 if img_num==6 else int(smp_diff/2)
+        if self.args.regu_only_flag==1 and self.phase=='train':
+            frm_offset = random.choice([*range(0, smp_diff)]) 
         frm_list = list(range(frm_offset, frm_num, smp_diff))
         
         
