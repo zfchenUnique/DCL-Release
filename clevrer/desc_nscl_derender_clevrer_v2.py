@@ -110,6 +110,7 @@ class Model(ReasoningV2ModelForCLEVRER):
             for vid in range(len(feed_dict_list)):
                 if self.training:
                     output_pred_ftr = predict_normal_feature_v3(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    #output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 else:
                     output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 output_ftr_list.append(output_pred_ftr)

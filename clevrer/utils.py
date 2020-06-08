@@ -57,7 +57,6 @@ def prepare_data_for_testing(output_dict_list, feed_dict_list, json_output_list)
                 tmp_q_dict['answer'] = str(ans)
             tmp_vid_dict['questions'].append(tmp_q_dict)
         json_output_list.append(tmp_vid_dict)
-        #pdb.set_trace()
 
 def _norm(x, dim=-1):
     return x / (x.norm(2, dim=dim, keepdim=True)+1e-7)
@@ -617,7 +616,6 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
 
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
-
     for p_id in range(args.pred_normal_num):
 
         data = prepare_normal_prediction_input(feed_dict, f_sng, args, p_id)
@@ -627,7 +625,8 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
         n_objects_ori = x.shape[0]
         
-        if p_id ==0 and args.visualize_flag:
+        #if p_id ==0 and args.visualize_flag:
+        if p_id ==0:
             Ra_spatial = Ra[:, :box_dim*x_step]
             Ra_ftr = Ra[:, box_dim*x_step:]
             for t_step in range(args.n_his+1):
@@ -659,6 +658,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
+        if p_id ==0 and args.visualize_flag:
             pred_obj[ori_id] = pred_obj_valid[valid_id]
             pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
         
@@ -762,7 +762,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
         pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) # just padding
-    
+        #pdb.set_trace() 
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
