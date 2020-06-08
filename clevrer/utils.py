@@ -658,7 +658,6 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         for valid_id, ori_id in enumerate(valid_object_id_list):
-        if p_id ==0 and args.visualize_flag:
             pred_obj[ori_id] = pred_obj_valid[valid_id]
             pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
         
