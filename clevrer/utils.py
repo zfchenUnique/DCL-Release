@@ -615,7 +615,8 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     ftr_dim = f_sng[1].shape[1]
 
     relation_dim = args.relation_dim
-    state_dim = args.state_dim 
+    state_dim = args.state_dim
+    valid_object_id_stack = []
     for p_id in range(args.pred_normal_num):
 
         data = prepare_normal_prediction_input(feed_dict, f_sng, args, p_id)
@@ -637,7 +638,8 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         # remove invalid object, object coordinates that has been out of size
         valid_object_id_list = check_valid_object_id_list(x, args) 
         if len(valid_object_id_list) == 0:
-            break 
+            break
+        valid_object_id_stack.append(valid_object_id_list) 
         data_valid = prepare_valid_input(x, Ra, valid_object_id_list, args)
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
@@ -686,7 +688,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
         pdb.set_trace()
-    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack   
 
 
 
@@ -702,6 +704,8 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     ftr_dim = f_sng[1].shape[1]
     Ra_spatial = Ra[:, :box_dim*x_step]
     Ra_ftr = Ra[:, box_dim*x_step:]
+    valid_object_id_stack = []
+    
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
         pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
@@ -720,7 +724,8 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
         # remove invalid object, object coordinates that has been out of size
         valid_object_id_list = check_valid_object_id_list(x, args) 
         if len(valid_object_id_list) == 0:
-            break 
+            break
+        valid_object_id_stack.append(valid_object_id_list)
         data_valid = prepare_valid_input(x, Ra, valid_object_id_list, args)
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
@@ -770,7 +775,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
         pdb.set_trace()
-    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack   
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 

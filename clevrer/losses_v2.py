@@ -18,7 +18,7 @@ from nscl.datasets.definition import gdef
 from clevrer.models.quasi_symbolic_v2 import fuse_box_ftr, fuse_box_overlap, do_apply_self_mask_3d, Gaussin_smooth    
 import pdb
 import torch.nn as nn
-
+import copy
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 
@@ -31,6 +31,101 @@ class SceneParsingLoss(MultitaskLossBase):
         self.used_concepts = used_concepts
         self.add_supervision = add_supervision
         self.args = args
+
+    def compute_regu_loss_v2(self, pred_ftr_list, f_sng, feed_dict, monitors):
+        ftr_loss = 0.0
+        loss_list = []
+        mse_loss = nn.MSELoss()
+        assert len(pred_ftr_list[-1]) == pred_ftr_list[0].shape[1] - self.args.n_his -1
+
+
+        for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
+            obj_num = f_sng[0][3].shape[0]
+            list_num = 128
+            box_dim = 4
+            frm_num = pred_ftr_list[0].shape[1]
+            gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
+            tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1, box_dim)    
+            invalid_mask = tmp_gt.sum(dim=2)==-2
+            # masking  out objects that didn't show up in the first n_his frames
+            valid_object_id_stack = pred_ftr_list[-1]
+            if tmp_ftr is not None and not isinstance(tmp_ftr, list):
+                if len(tmp_ftr.shape)==3:
+                    # tmp_ftr: (obj_num, frm_num , ftr_dim)
+                    frm_num = tmp_ftr.shape[1]
+                    tmp_gt = f_sng[0][ftr_id][:,:frm_num]
+                    for obj_id in range(invalid_mask.shape[0]):
+                        for frm_id in range(invalid_mask.shape[1]):
+                            if invalid_mask[obj_id, frm_id]:
+                                tmp_ftr[obj_id, frm_id] = 0.0
+                                tmp_gt[obj_id, frm_id] = 0.0
+                    
+                    for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
+                        frm_id = self.args.n_his + 1 + frm_idx
+                        for obj_id in range(obj_num):
+                            if obj_id not in valid_obj_list:
+                                tmp_ftr[obj_id, frm_id] = 0.0
+                                tmp_gt[obj_id, frm_id] = 0.0
+
+
+                elif len(tmp_ftr.shape)==4:
+                    frm_num = tmp_ftr.shape[2]
+                    tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
+                    for obj_id in range(invalid_mask.shape[0]):
+                        for frm_id in range(invalid_mask.shape[1]):
+                            if invalid_mask[obj_id, frm_id]:
+                                tmp_ftr[obj_id, :, frm_id] = 0.0
+                                tmp_ftr[:, obj_id, frm_id] = 0.0
+                                tmp_gt[obj_id, :, frm_id] = 0.0
+                                tmp_gt[:, obj_id, frm_id] = 0.0
+
+                    # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
+                    for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
+                        frm_id = self.args.n_his + 1 + frm_idx
+                        for obj_id in range(obj_num):
+                            if obj_id not in valid_obj_list:
+                                tmp_ftr[obj_id, :, frm_id] = 0.0
+                                tmp_ftr[:, obj_id, frm_id] = 0.0
+                                tmp_gt[obj_id, :, frm_id] = 0.0
+                                tmp_gt[:, obj_id, frm_id] = 0.0
+
+
+                elif len(tmp_ftr.shape)==2:
+                    frm_num = tmp_ftr.shape[1] // box_dim 
+                    gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
+                    tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1, box_dim)    
+                    tmp_ftr = tmp_ftr.view(obj_num, -1, box_dim)    
+                    
+                    for obj_id in range(invalid_mask.shape[0]):
+                        for frm_id in range(invalid_mask.shape[1]):
+                            if invalid_mask[obj_id, frm_id]:
+                                tmp_ftr[obj_id, frm_id, 2:] = 0.0
+                                tmp_ftr[obj_id, frm_id, :2] = -1.0
+                                tmp_gt[obj_id, frm_id, 2:] = 0.0
+                                tmp_gt[obj_id, frm_id, :2] = -1.0
+                        
+                    # tmp_ftr: (obj_num, frm_num , box_dim)
+                    for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
+                        frm_id = self.args.n_his + 1 + frm_idx
+                        for obj_id in range(obj_num):
+                            if obj_id not in valid_obj_list:
+                                tmp_ftr[obj_id, frm_id, 2:] = 0.0
+                                tmp_ftr[obj_id, frm_id, :2] = -1.0
+                                tmp_gt[obj_id, frm_id, 2:] = 0.0
+                                tmp_gt[obj_id, frm_id, :2] = -1.0
+
+                tmp_loss = mse_loss(tmp_ftr, tmp_gt)
+                loss_list.append(tmp_loss)
+                if ftr_id==0:
+                    monitors['loss/regu/obj_ftr'] = tmp_loss
+                elif ftr_id ==2:
+                    monitors['loss/regu/rel_ftr'] = tmp_loss
+                elif ftr_id ==3:
+                    monitors['loss/regu/obj_box'] = tmp_loss
+        ftr_loss = sum(loss_list)
+        monitors['loss/regu'] = ftr_loss
+
+
 
     def compute_regu_loss(self, pred_ftr_list, f_sng, feed_dict, monitors):
         ftr_loss = 0.0
