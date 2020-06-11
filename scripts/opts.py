@@ -129,6 +129,8 @@ def load_param_parser():
     parser.add_argument('--rela_spatial_dim', type=int, default=4)
     parser.add_argument('--rela_ftr_dim', type=int, default=256)
     parser.add_argument('--pred_res_flag', type=int, default=0, help='1 for residual encoding for prediction')
+    parser.add_argument('--add_rela_dist_mode', type=int, default=0)
+    parser.add_argument('--rela_dist_thre', type=float, default=0.2)
     
     args = parser.parse_args()
     return args 

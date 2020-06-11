@@ -64,7 +64,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                 f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
             elif self.args.regu_only_flag==1 and not self.training and self.args.visualize_flag:
-                self.args.pred_frm_num = 1
+                #self.args.pred_frm_num = 1
                 f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(None)
 
@@ -109,8 +109,8 @@ class Model(ReasoningV2ModelForCLEVRER):
             output_ftr_list = []
             for vid in range(len(feed_dict_list)):
                 if self.training:
-                    output_pred_ftr = predict_normal_feature_v3(self, feed_dict_list[vid], f_sng_list[vid], self.args)
-                    #output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    #output_pred_ftr = predict_normal_feature_v3(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 else:
                     output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 output_ftr_list.append(output_pred_ftr)

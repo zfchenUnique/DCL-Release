@@ -12,7 +12,7 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --prefix gt_joint_train_freeze \
+    --prefix gt_joint_train_v2 \
     --colli_ftr_type 1 \
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
@@ -23,9 +23,39 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --dataset_stage -1 \
     --regu_flag 1 \
     --regu_only_flag 1 \
-    --load dumps/remote_models/frm_31_epoch_24.pth \
     --freeze_learner_flag 1 \
-    --debug
+    --pred_normal_num 27 \
+    --pred_frm_num 12 \
+    --rela_spatial_dim 5 \
+    --relation_dim 261 \
+    --add_rela_dist_mode 2 \
+    --debug \
+    --visualize_flag 1 \
+    --rela_dist_thre 1.0 \
+    --load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_joint_train_l2_v2/checkpoints/epoch_2.pth 
+    #--evaluate \
+    #--load dumps/remote_models/v2_fix_ep5.pth
+    #--evaluate \
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gtTrain_freeze_normal12_v2_fixed_loss_v2/checkpoints/epoch_5.pth 
+    #--evaluate \
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_joint_train_freeze_res/checkpoints/epoch_10.pth \
+    #--evaluate \
+    #--visualize_flag 1 \
+    #--n_his 4 \
+    #--load dumps/remote_models/nhis4_ep5.pth \
+    #--residual_rela_prop 1 \
+    #--residual_rela_pred 1 \
+    #--rela_spatial_only 1 \
+    #--debug
+    #--visualize_flag 1 \
+    #--load dumps/remote_models/freeze_seqTrain_ep7.pth \
+    #--pred_res_flag 1 \
+   #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_freeze_normal12/checkpoints/epoch_7.pth \
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_joint_train_freeze_res/checkpoints/epoch_2.pth \
+    #--load dumps/remote_models/freeze_gtTrain_ep3.pth \
+    #--evaluate \
+    #--resume dumps/remote_models/freeze_ep1.pth \
+    #--load dumps/remote_models/frm_31_epoch_24.pth \
     #--tube_prp_path ../clevrer/tubeProposalsAttrV3/1.0_1.0_0.4_0.7 \
     #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix/checkpoints/epoch_5.pth
     #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \

@@ -87,7 +87,7 @@ def prepare_normal_prediction_input(feed_dict, f_sng, args, p_id=0):
 
 
     # obj_num*obj_num, box_dim*total_step, 1, 1
-    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim))
+    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim), args)
     ftr_rela = f_sng[2][:, :, st_id:ed_id].view(obj_num*obj_num, x_step*ftr_dim, 1, 1) 
     rela = torch.cat([spatial_rela, ftr_rela], dim=1)
     rel = prepare_relations(obj_num)
@@ -128,7 +128,7 @@ def prepare_future_prediction_input(feed_dict, f_sng, args):
 
 
     # obj_num*obj_num, box_dim*total_step, 1, 1
-    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim))
+    spatial_rela = extract_spatial_relations(x_box.view(obj_num, x_step, box_dim), args)
     ftr_rela = f_sng[2][:, :, -x_step:].view(obj_num*obj_num, x_step*ftr_dim, 1, 1) 
     rela = torch.cat([spatial_rela, ftr_rela], dim=1)
     rel = prepare_relations(obj_num)
@@ -202,7 +202,7 @@ def prepare_relations(n):
     rel = [Rr_idx, Rs_idx, value, node_r_idx, node_s_idx]
     return rel
 
-def extract_spatial_relations(feats):
+def extract_spatial_relations(feats, args=None):
     """
     Extract spatial relations
     """
@@ -210,7 +210,12 @@ def extract_spatial_relations(feats):
     n_objects, t_frame, box_dim = feats.shape
     feats = feats.view(n_objects, t_frame*box_dim, 1, 1)
     n_relations = n_objects * n_objects
-    relation_dim =  box_dim
+    if args is None or args.add_rela_dist_mode ==0:
+        relation_dim =  box_dim
+    elif args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2:
+        relation_dim =  box_dim + 1
+    else:
+        raise NotImplementedError 
     state_dim = box_dim 
     Ra = torch.ones([n_relations, relation_dim *t_frame, 1, 1], device=feats.device) * -0.5
 
@@ -224,6 +229,11 @@ def extract_spatial_relations(feats):
             Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
             Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
             Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+            if  args is not None and (args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2):
+                Ra_x = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra_y = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra_dist = torch.sqrt(Ra_x**2+Ra_y**2) #+0.0000000001) 
+                Ra[idx, 4::relation_dim] = Ra_dist  
     return Ra
 
 def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_id):
@@ -421,6 +431,7 @@ def predict_future_feature(model, feed_dict, f_sng, args):
 def predict_future_feature_v2(model, feed_dict, f_sng, args):
     data = prepare_future_prediction_input(feed_dict, f_sng, args)
     #x: obj_num, state_dim*(n_his+1)
+    print('BUGs')
     x_step = args.n_his + 1
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
     pred_obj_list = []
@@ -428,11 +439,13 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     pred_rel_ftr_list = []
     box_dim = 4
     ftr_dim = f_sng[1].shape[1]
-    Ra_spatial = Ra[:, :box_dim*x_step]
-    Ra_ftr = Ra[:, box_dim*x_step:]
+    rela_spa_dim = args.rela_spatial_dim
+    rela_ftr_dim = args.rela_ftr_dim
+    Ra_spatial = Ra[:, :rela_spa_dim*x_step]
+    Ra_ftr = Ra[:, rela_spa_dim*x_step:]
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*rela_spa_dim:(t_step+1)*rela_spa_dim]) 
         pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
 
     n_objects_ori = x.shape[0]
@@ -454,17 +467,26 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
         feats = x
+        invalid_rela_list = []
         # update relation
         for i in range(n_objects):
             for j in range(n_objects):
                 idx = i * n_objects + j
-                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
-                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
-                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
-                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                Ra[idx, 0:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                if args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2:
+                    Ra_x = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                    Ra_y = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                    Ra_dist = torch.sqrt(Ra_x**2+Ra_y**2+0.0000000001) 
+                    Ra[idx, 4:rela_spa_dim*x_step:rela_spa_dim] = Ra_dist  
 
-        # normalize data
-
+                    if Ra_dist[-1] > args.rela_dist_thre:
+                        invalid_rela_list.append(idx)
+                    #print(Ra_dist[-1])
+        if args.add_rela_dist_mode==2:
+            Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
 
         pred_obj_valid, pred_rel_valid = model._model_pred(
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
@@ -477,18 +499,18 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
         
         pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
-        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         
         for valid_id, ori_id in enumerate(valid_object_id_list):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects_ori + ori_id_2
-                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
-        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) 
 
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
@@ -605,6 +627,32 @@ def prepare_valid_input(x, Ra, valid_object_id_list, args):
 
     return attr, x_valid, Rr, Rs, Ra_valid, node_r_idx, node_s_idx 
 
+def update_valid_rela_input(n_objects, invalid_rela_list, feats, args):
+    rel = prepare_relations(n_objects)
+    for idx in range(len(rel)-2):
+        rel[idx] = rel[idx].to(feats.device)
+    n_rel = n_objects * n_objects  
+    Rr_idx, Rs_idx, value = rel[0], rel[1], rel[2]
+    
+    Rr_idx_list = []
+    Rs_idx_list = []
+    value_list = []
+    for rel_idx in range(n_rel): 
+        if rel_idx in invalid_rela_list:
+            continue 
+        Rr_idx_list.append(Rr_idx[:, rel_idx])
+        Rs_idx_list.append(Rs_idx[:, rel_idx])
+        value_list.append(value[rel_idx])
+
+    Rr_idx_new =  torch.stack(Rr_idx_list, dim=1)
+    Rs_idx_new =  torch.stack(Rs_idx_list, dim=1)
+    value_new =  torch.stack(value_list, dim=0)
+
+    Rr_new = torch.sparse.FloatTensor(
+        Rr_idx_new, value_new, torch.Size([n_objects, value.size(0)])).to(value.device)
+    Rs_new = torch.sparse.FloatTensor(
+        Rs_idx_new, value_new, torch.Size([n_objects, value.size(0)])).to(value.device)
+    return Rr_new, Rs_new 
 
 def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     pred_obj_list = []
@@ -617,8 +665,9 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     relation_dim = args.relation_dim
     state_dim = args.state_dim
     valid_object_id_stack = []
+    rela_spa_dim = args.rela_spatial_dim
+    rela_ftr_dim = args.rela_ftr_dim
     for p_id in range(args.pred_normal_num):
-
         data = prepare_normal_prediction_input(feed_dict, f_sng, args, p_id)
         if data is None:
             break 
@@ -628,11 +677,12 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         
         #if p_id ==0 and args.visualize_flag:
         if p_id ==0:
-            Ra_spatial = Ra[:, :box_dim*x_step]
-            Ra_ftr = Ra[:, box_dim*x_step:]
+            Ra_spatial = Ra[:, :rela_spa_dim*x_step]
+            Ra_ftr = Ra[:, rela_spa_dim*x_step:]
+            assert Ra.shape[1]==(rela_spa_dim+rela_ftr_dim)*x_step
             for t_step in range(args.n_his+1):
                 pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-                pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+                pred_rel_spatial_list.append(Ra_spatial[:, t_step*rela_spa_dim:(t_step+1)*rela_spa_dim]) 
                 pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
     
         # remove invalid object, object coordinates that has been out of size
@@ -644,14 +694,27 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
         feats = x
+        
+        invalid_rela_list = []
         # update relation
         for i in range(n_objects):
             for j in range(n_objects):
                 idx = i * n_objects + j
-                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
-                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
-                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
-                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                Ra[idx, 0:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                if args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2:
+                    Ra_x = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                    Ra_y = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                    Ra_dist = torch.sqrt(Ra_x**2+Ra_y**2) #+0.0000000001) 
+                    Ra[idx, 4:rela_spa_dim*x_step:rela_spa_dim] = Ra_dist  
+                    if Ra_dist[-1] > args.rela_dist_thre:
+                        invalid_rela_list.append(idx)
+                    #print(Ra_dist[-1])
+        #pdb.set_trace()
+        if args.add_rela_dist_mode==2:
+            Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
 
         # normalize data
         pred_obj_valid, pred_rel_valid = model._model_pred(
@@ -665,7 +728,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         
         pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
-        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         pred_rel_spatial[:, 0] = -1
         pred_rel_spatial[:, 1] = -1
@@ -674,11 +737,11 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects_ori + ori_id_2
-                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
-        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) # just padding
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
     
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
@@ -702,13 +765,15 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     pred_rel_ftr_list = []
     box_dim = 4
     ftr_dim = f_sng[1].shape[1]
-    Ra_spatial = Ra[:, :box_dim*x_step]
-    Ra_ftr = Ra[:, box_dim*x_step:]
+    rela_spa_dim = args.rela_spatial_dim
+    rela_ftr_dim = args.rela_ftr_dim
+    Ra_spatial = Ra[:, :rela_spa_dim*x_step]
+    Ra_ftr = Ra[:, rela_spa_dim*x_step:]
     valid_object_id_stack = []
     
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
-        pred_rel_spatial_list.append(Ra_spatial[:, t_step*box_dim:(t_step+1)*box_dim]) 
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*rela_spa_dim:(t_step+1)*rela_spa_dim]) 
         pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
 
     n_objects_ori = x.shape[0]
@@ -730,17 +795,28 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
         attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
         n_objects = x.shape[0]
         feats = x
+        invalid_rela_list = []
         # update relation
         for i in range(n_objects):
             for j in range(n_objects):
                 idx = i * n_objects + j
-                Ra[idx, 0::relation_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
-                Ra[idx, 1::relation_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
-                Ra[idx, 2::relation_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
-                Ra[idx, 3::relation_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                Ra[idx, 0:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                if args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2:
+                    Ra_x = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                    Ra_y = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                    Ra_dist = torch.sqrt(Ra_x**2+Ra_y**2+0.0000000001) 
+                    Ra[idx, 4:rela_spa_dim*x_step:rela_spa_dim] = Ra_dist  
+                    
+                    if Ra_dist[-1] > args.rela_dist_thre:
+                        invalid_rela_list.append(idx)
+                    #print(Ra_dist[-1])
+        if args.add_rela_dist_mode==2:
+            Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
 
         # normalize data
-
         pred_obj_valid, pred_rel_valid = model._model_pred(
             attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
        
@@ -752,7 +828,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
         
         pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
-        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, box_dim, dtype=pred_obj_valid.dtype, \
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=pred_obj_valid.dtype, \
                 device=pred_obj_valid.device) #- 1.0
         pred_rel_spatial[:, 0] = -1
         pred_rel_spatial[:, 1] = -1
@@ -761,11 +837,11 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
             for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects_ori + ori_id_2
-                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, box_dim:], dim=0)
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
 
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
-        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, box_dim, 1, 1)) # just padding
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
         #pdb.set_trace() 
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
