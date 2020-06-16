@@ -431,7 +431,7 @@ def predict_future_feature(model, feed_dict, f_sng, args):
 def predict_future_feature_v2(model, feed_dict, f_sng, args):
     data = prepare_future_prediction_input(feed_dict, f_sng, args)
     #x: obj_num, state_dim*(n_his+1)
-    print('BUGs')
+    #print('BUGs')
     x_step = args.n_his + 1
     attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
     pred_obj_list = []
@@ -520,7 +520,7 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
-        pdb.set_trace()
+        #pdb.set_trace()
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def predict_normal_feature(model, feed_dict, f_sng, args):
@@ -661,6 +661,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     x_step = args.n_his + 1
     box_dim = 4
     ftr_dim = f_sng[1].shape[1]
+    pred_rel_spatial_gt_list = []
 
     relation_dim = args.relation_dim
     state_dim = args.state_dim
@@ -715,6 +716,18 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         #pdb.set_trace()
         if args.add_rela_dist_mode==2:
             Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
+        # update gt spatial relations         
+        pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=Ra.dtype, \
+                device=Ra.device) #- 1.0
+        pred_rel_spatial_gt[:, 0] = -1
+        pred_rel_spatial_gt[:, 1] = -1
+        pred_rel_spatial_gt_valid = Ra[:, (x_step-1)*rela_spa_dim:x_step*rela_spa_dim].squeeze(3).squeeze(2) 
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
+                valid_idx = valid_id * n_objects + valid_id_2 
+                ori_idx = ori_id * n_objects_ori + ori_id_2
+                pred_rel_spatial_gt[ori_idx] = pred_rel_spatial_gt_valid[valid_idx]
+        pred_rel_spatial_gt_list.append(pred_rel_spatial_gt)
 
         # normalize data
         pred_obj_valid, pred_rel_valid = model._model_pred(
@@ -738,6 +751,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects_ori + ori_id_2
                 pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
+                pred_rel_spatial[ori_idx] = pred_rel_valid[valid_idx, :rela_spa_dim]
 
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
@@ -751,7 +765,7 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
         pdb.set_trace()
-    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack   
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list    
 
 
 
@@ -770,7 +784,9 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     Ra_spatial = Ra[:, :rela_spa_dim*x_step]
     Ra_ftr = Ra[:, rela_spa_dim*x_step:]
     valid_object_id_stack = []
-    
+   
+    pred_rel_spatial_gt_list = []
+
     for t_step in range(args.n_his+1):
         pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
         pred_rel_spatial_list.append(Ra_spatial[:, t_step*rela_spa_dim:(t_step+1)*rela_spa_dim]) 
@@ -815,6 +831,19 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
                     #print(Ra_dist[-1])
         if args.add_rela_dist_mode==2:
             Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
+        
+        # padding spatial relation feature
+        pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=Ra.dtype, \
+                device=Ra.device) #- 1.0
+        pred_rel_spatial_gt[:, 0] = -1
+        pred_rel_spatial_gt[:, 1] = -1
+        pred_rel_spatial_gt_valid = Ra[:, (x_step-1)*rela_spa_dim:x_step*rela_spa_dim].squeeze(3).squeeze(2) 
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
+                valid_idx = valid_id * n_objects + valid_id_2 
+                ori_idx = ori_id * n_objects_ori + ori_id_2
+                pred_rel_spatial_gt[ori_idx] = pred_rel_spatial_gt_valid[valid_idx]
+        pred_rel_spatial_gt_list.append(pred_rel_spatial_gt)
 
         # normalize data
         pred_obj_valid, pred_rel_valid = model._model_pred(
@@ -838,11 +867,11 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
                 valid_idx = valid_id * n_objects + valid_id_2 
                 ori_idx = ori_id * n_objects_ori + ori_id_2
                 pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
+                pred_rel_spatial[ori_idx] = pred_rel_valid[valid_idx, :rela_spa_dim]
 
         pred_obj_list.append(pred_obj)
         pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
         pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
-        #pdb.set_trace() 
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_list) 
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
@@ -850,8 +879,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
-        pdb.set_trace()
-    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack   
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 
@@ -861,11 +889,12 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
 
     # print(actions[:, 0, :])
     # print(states[:20, 0, :])
+    base_folder = os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = 'dumps/'+ filename + '_' + str(int(whatif_id)) +'.avi'
+    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
     #videoname = filename + '.mp4'
     if store_img:
-        img_folder = 'dumps/'+filename 
+        img_folder = 'dumps/'+base_folder +'/'+filename 
         os.system('mkdir -p ' + img_folder)
 
     background_fn = '../temporal_reasoning-master/background.png'

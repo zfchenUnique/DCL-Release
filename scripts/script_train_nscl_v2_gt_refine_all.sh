@@ -31,8 +31,11 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --add_rela_dist_mode 2 \
     --debug \
     --visualize_flag 1 \
-    --rela_dist_thre 1.0 \
-    --load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_joint_train_l2_v2/checkpoints/epoch_2.pth 
+    --rela_dist_thre 1 \
+    --load dumps/remote_models/v3_fix_1_ep5.pth \
+    --rela_dist_loss_flag 1
+    #--evaluate \
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_gt_joint_train_l2_v2/checkpoints/epoch_2.pth 
     #--evaluate \
     #--load dumps/remote_models/v2_fix_ep5.pth
     #--evaluate \

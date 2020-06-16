@@ -131,6 +131,7 @@ def load_param_parser():
     parser.add_argument('--pred_res_flag', type=int, default=0, help='1 for residual encoding for prediction')
     parser.add_argument('--add_rela_dist_mode', type=int, default=0)
     parser.add_argument('--rela_dist_thre', type=float, default=0.2)
+    parser.add_argument('--rela_dist_loss_flag', type=int, default=0)
     
     args = parser.parse_args()
     return args 
