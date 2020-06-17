@@ -925,16 +925,17 @@ def visualize_prediction_v2(box_ftr, feed_dict, whatif_id=-1, store_img=False, a
                 frm_id = feed_dict['tube_info']['frm_list'][i]
                 img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
                 img_ori = cv2.imread(img_full_path)
+                img = copy.deepcopy(img_ori)
                 for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
                     tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
                     x = float(tmp_box[0] - tmp_box[2]*0.5)
                     y = float(tmp_box[1] - tmp_box[3]*0.5)
                     w = float(tmp_box[2])
                     h = float(tmp_box[3])
-                    img = cv2.rectangle(img_ori, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
                     cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
                     if i==len(feed_dict['tube_info']['frm_list'])-1:
-                        padding_patch = img_ori[int(h*H):int(y*H+h*H),int(x*W):int(W*x+w*W)]
+                        padding_patch = img_ori[int(y*H):int(y*H+h*H),int(x*W):int(W*x+w*W)]
                         hh, ww, c = padding_patch.shape
                         if hh*ww*c==0:
                             padding_patch  = np.zeros((24, 24, 3), dtype=np.float32)
