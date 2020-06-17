@@ -879,6 +879,7 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
         visualize_prediction(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
+        pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
@@ -898,6 +899,8 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
         os.system('mkdir -p ' + img_folder)
 
     background_fn = '../temporal_reasoning-master/background.png'
+    if not os.path.isfile(background_fn):
+        background_fn = '../temporal_reasoningv2/background.png'
     bg = cv2.imread(background_fn)
     H, W, C = bg.shape
     bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
