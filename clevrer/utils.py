@@ -574,6 +574,30 @@ def predict_normal_feature(model, feed_dict, f_sng, args):
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
 
 
+def check_valid_object_id_list_v2(x, args):
+    valid_object_id_list = []
+    x_step  = args.n_his + 1
+    box_dim = 4
+    for obj_id in range(x.shape[0]):
+        tmp_obj_feat = x[obj_id].view(x_step, -1)
+        obj_valid = True
+        for tmp_step in range(x_step):
+            last_obj_box = tmp_obj_feat[tmp_step, :box_dim]
+            x_c, y_c, w, h = last_obj_box
+            x1 = x_c - w*0.5
+            y1 = y_c - h*0.5
+            x2 = x_c + w*0.5
+            y2 = y_c + h*0.5
+            if w <=0 or h<=0:
+                obj_valid = False
+            elif x2<=0 or y2<=0:
+                obj_valid = False
+            elif x1>=1 or y1>=1:
+                obj_valid = False
+        if obj_valid:
+            valid_object_id_list.append(obj_id)
+    return valid_object_id_list 
+
 def check_valid_object_id_list(x, args):
     valid_object_id_list = []
     x_step  = args.n_his + 1
@@ -767,7 +791,145 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
         pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list    
 
+def update_new_appear_objects(x, Ra, feed_dict, f_sng, args, p_id, object_appear_id_list):
+    data_v3 = prepare_normal_prediction_input(feed_dict, f_sng, args, p_id)
+    attr_v3, x_v3, Rr_v3, Rs_v3, Ra_v3, node_r_idx_v3, node_s_idx_v3 = data_v3
+    valid_obj_id_list = check_valid_object_id_list_v2(x_v3, args) 
+    n_obj = x.shape[0]
+    new_valid_id_list = []
+    for new_id in valid_obj_id_list:
+        if new_id not in object_appear_id_list:
+            x[new_id] = x_v3[new_id]
+            for i in range(n_obj):
+                idx = i * n_obj + new_id
+                idx2 = new_id * n_obj + i
+                Ra[idx] = Ra_v3[idx]
+                Ra[idx] = Ra_v3[idx2]
+        new_valid_id_list.append(new_id)
+    return x, Ra, new_valid_id_list
 
+def predict_normal_feature_v4(model, feed_dict, f_sng, args):
+    data = prepare_normal_prediction_input(feed_dict, f_sng, args)
+    #x: obj_num, state_dim*(n_his+1)
+    x_step = args.n_his + 1
+    attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data
+    pred_obj_list = []
+    pred_rel_spatial_list = []
+    pred_rel_ftr_list = []
+    box_dim = 4
+    ftr_dim = f_sng[1].shape[1]
+    rela_spa_dim = args.rela_spatial_dim
+    rela_ftr_dim = args.rela_ftr_dim
+    Ra_spatial = Ra[:, :rela_spa_dim*x_step]
+    Ra_ftr = Ra[:, rela_spa_dim*x_step:]
+    valid_object_id_stack = []
+   
+    pred_rel_spatial_gt_list = []
+
+    for t_step in range(args.n_his+1):
+        pred_obj_list.append(x[:,t_step*args.state_dim:(t_step+1)*args.state_dim])
+        pred_rel_spatial_list.append(Ra_spatial[:, t_step*rela_spa_dim:(t_step+1)*rela_spa_dim]) 
+        pred_rel_ftr_list.append(Ra_ftr[:, t_step*ftr_dim:(t_step+1)*ftr_dim]) 
+
+    n_objects_ori = x.shape[0]
+    relation_dim = args.relation_dim
+    state_dim = args.state_dim 
+
+    object_appear_id_list = []
+
+    for p_id in range(args.pred_normal_num):
+        x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
+        Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
+        Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
+        Ra = torch.cat([Ra_spatial, Ra_ftr], dim=1)
+
+
+        # remove invalid object, object coordinates that has been out of size
+        valid_object_id_list = check_valid_object_id_list_v2(x, args) 
+        if len(valid_object_id_list) == 0:
+            break
+        object_appear_id_list +=valid_object_id_list 
+        #update new appear objects
+        x, Ra, obj_appear_new_ids = update_new_appear_objects(x, Ra, feed_dict, f_sng, args, p_id, object_appear_id_list)
+        
+        valid_object_id_list = check_valid_object_id_list_v2(x, args) 
+        data_valid = prepare_valid_input(x, Ra, valid_object_id_list, args)
+        attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx = data_valid 
+        valid_object_id_stack.append(valid_object_id_list)
+        
+
+        n_objects = x.shape[0]
+        feats = x
+        invalid_rela_list = []
+        # update relation
+        for i in range(n_objects):
+            for j in range(n_objects):
+                idx = i * n_objects + j
+                Ra[idx, 0:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 2::state_dim] - feats[j, 2::state_dim]  # h
+                Ra[idx, 3:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 3::state_dim] - feats[j, 3::state_dim]  # w
+                if args.add_rela_dist_mode==1 or args.add_rela_dist_mode==2:
+                    Ra_x = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
+                    Ra_y = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
+                    Ra_dist = torch.sqrt(Ra_x**2+Ra_y**2+0.0000000001) 
+                    Ra[idx, 4:rela_spa_dim*x_step:rela_spa_dim] = Ra_dist  
+                    
+                    if Ra_dist[-1] > args.rela_dist_thre:
+                        invalid_rela_list.append(idx)
+                    #print(Ra_dist[-1])
+        if args.add_rela_dist_mode==2:
+            Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
+        
+        # padding spatial relation feature
+        pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=Ra.dtype, \
+                device=Ra.device) #- 1.0
+        pred_rel_spatial_gt[:, 0] = -1
+        pred_rel_spatial_gt[:, 1] = -1
+        pred_rel_spatial_gt_valid = Ra[:, (x_step-1)*rela_spa_dim:x_step*rela_spa_dim].squeeze(3).squeeze(2) 
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
+                valid_idx = valid_id * n_objects + valid_id_2 
+                ori_idx = ori_id * n_objects_ori + ori_id_2
+                pred_rel_spatial_gt[ori_idx] = pred_rel_spatial_gt_valid[valid_idx]
+        pred_rel_spatial_gt_list.append(pred_rel_spatial_gt)
+
+        # normalize data
+        pred_obj_valid, pred_rel_valid = model._model_pred(
+            attr, x, Rr, Rs, Ra, node_r_idx, node_s_idx, args.pstep)
+       
+        pred_obj = torch.zeros(n_objects_ori, state_dim, 1, 1, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            pred_obj[ori_id] = pred_obj_valid[valid_id]
+            pred_obj[ori_id, box_dim:] = _norm(pred_obj_valid[valid_id, box_dim:], dim=0)
+        
+        pred_rel_ftr = torch.zeros(n_objects_ori*n_objects_ori, ftr_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, dtype=pred_obj_valid.dtype, \
+                device=pred_obj_valid.device) #- 1.0
+        pred_rel_spatial[:, 0] = -1
+        pred_rel_spatial[:, 1] = -1
+        
+        for valid_id, ori_id in enumerate(valid_object_id_list):
+            for valid_id_2, ori_id_2 in enumerate(valid_object_id_list):
+                valid_idx = valid_id * n_objects + valid_id_2 
+                ori_idx = ori_id * n_objects_ori + ori_id_2
+                pred_rel_ftr[ori_idx] = _norm(pred_rel_valid[valid_idx, rela_spa_dim:], dim=0)
+                pred_rel_spatial[ori_idx] = pred_rel_valid[valid_idx, :rela_spa_dim]
+
+        pred_obj_list.append(pred_obj)
+        pred_rel_ftr_list.append(pred_rel_ftr.view(n_objects_ori*n_objects_ori, ftr_dim, 1, 1)) 
+        pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
+    #make the output consitent with video scene graph
+    pred_frm_num = len(pred_obj_list) 
+    box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim) 
+    rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
+    obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
+    if args.visualize_flag:
+        visualize_prediction_v2(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
+        pdb.set_trace()
+    return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     data = prepare_normal_prediction_input(feed_dict, f_sng, args)
