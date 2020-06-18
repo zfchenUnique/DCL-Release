@@ -123,6 +123,22 @@ class SceneParsingLoss(MultitaskLossBase):
                 monitors['loss/regu/rel_ftr'] = tmp_loss
             elif ftr_id ==3:
                 monitors['loss/regu/obj_box'] = tmp_loss
+                if self.args.rela_dist_loss_flag==2:
+                    state_dim = box_dim
+                    n_relations = obj_num * obj_num
+                    t_frame = tmp_ftr.shape[1]
+                    Ra_spatial = torch.ones([n_relations, t_frame, box_dim], device=tmp_ftr.device) * -1.5
+                    Ra_spatial_gt = torch.ones([n_relations, t_frame, box_dim], device=tmp_ftr.device) * -1.5
+                    for i in range(obj_num):
+                        for j in range(obj_num):
+                            idx = i * obj_num + j
+                            Ra_spatial[idx] = tmp_ftr[i] - tmp_ftr[j]
+                            Ra_spatial_gt[idx] = tmp_gt[i] - tmp_gt[j]
+                    tmp_rela_loss = mse_loss(Ra_spatial_gt, Ra_spatial)
+                    loss_list.append(tmp_rela_loss)
+                    monitors['loss/regu/rel_spa'] = tmp_rela_loss
+                    #pdb.set_trace()
+
         # adding rela loss
         if self.args.rela_dist_loss_flag==1:
             # 0:pred_frm
@@ -136,8 +152,6 @@ class SceneParsingLoss(MultitaskLossBase):
             #pdb.set_trace()
             monitors['loss/regu/rel_spa'] = tmp_loss
             loss_list.append(tmp_loss)
-        elif self.args.rela_dist_loss_flag==2:
-            pdb.set_trace()
 
         ftr_loss = sum(loss_list)
         monitors['loss/regu'] = ftr_loss
