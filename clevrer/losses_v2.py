@@ -136,6 +136,8 @@ class SceneParsingLoss(MultitaskLossBase):
             #pdb.set_trace()
             monitors['loss/regu/rel_spa'] = tmp_loss
             loss_list.append(tmp_loss)
+        elif self.args.rela_dist_loss_flag==2:
+            pdb.set_trace()
 
         ftr_loss = sum(loss_list)
         monitors['loss/regu'] = ftr_loss
