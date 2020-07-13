@@ -129,10 +129,6 @@ class clevrerDataset(Dataset):
             self._ignore_list = ['get_counterfact', 'unseen_events', 'filter_counterfact']
         elif self.args.dataset_stage ==-1:
             self._ignore_list = []
-        elif self.args.dataset_stage ==2:
-            self._ignore_list = ['filter_counterfact', 'get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_moving', 'filter_stationary', 'filter_order']
-        elif self.args.dataset_stage ==3:
-            self._ignore_list = ['filter_counterfact', 'get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'filter_order']
 
     def _init_correct_question(self, phase):
         if phase=='validation':
@@ -147,7 +143,6 @@ class clevrerDataset(Dataset):
         dataset_len = len(vid_list)
         if phase == 'train' and self.args.data_train_length!=-1:
             dataset_len = min(dataset_len, self.args.data_train_length)
-        #pdb.set_trace()
         #for idx, vid_id in enumerate(vid_list):
         for idx in range(dataset_len):
             vid_id = vid_list[idx]
@@ -496,7 +491,8 @@ class clevrerDataset(Dataset):
             sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
             ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
             scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
-
+            scene_gt = jsonload(scene_gt_path)
+        
             gt_id_to_tube_id = {}
             for attr, concept_group in gdef.all_concepts_clevrer['attribute'].items():
                 attr_list = []
@@ -589,14 +585,13 @@ class clevrerDataset(Dataset):
         if self.args.extract_region_attr_flag:
             return self.__get_video_frame__(index)
         else:
-            if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4':
+            if self.args.version == 'v2' or self.args.version == 'v3':
                 return self.__getitem__model_v2(index)
             else:
                 return self.__getitem__model(index)
 
     def __getitem__model_v2(self, index):
         data = {}
-
         meta_ann = copy.deepcopy(self.question_ann[index])
         scene_idx = meta_ann['scene_index']
         sub_idx = int(scene_idx/1000)
@@ -715,78 +710,74 @@ class clevrerDataset(Dataset):
             sub_ann_folder = 'annotation_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
             ann_full_folder = os.path.join(self.args.scene_gt_path, sub_ann_folder) 
             scene_gt_path = os.path.join(ann_full_folder, 'annotation_'+str(scene_idx).zfill(5)+'.json') 
-            if os.path.isfile(scene_gt_path):
-                scene_gt = jsonload(scene_gt_path)
-            else:
-                scene_gt = None
-            if scene_gt  is not None:
-                mask_gt = jsonload(mask_gt_path)
-                tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
-                # TODO: this may raise bug since it hack the data property for gt
-                prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
-                #pdb.set_trace()
-                for attri_group, attribute in gdef.all_concepts_clevrer.items():
-                    if attri_group=='attribute':
-                        for attr, concept_group in attribute.items(): 
-                            attr_list = []
+            scene_gt = jsonload(scene_gt_path)
+            mask_gt = jsonload(mask_gt_path)
+            tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
+            # TODO: this may raise bug since it hack the data property for gt
+            prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+            #pdb.set_trace()
+            for attri_group, attribute in gdef.all_concepts_clevrer.items():
+                if attri_group=='attribute':
+                    for attr, concept_group in attribute.items(): 
+                        attr_list = []
+                        obj_num = len(data['tube_info']) -2 
+                        for t_id in range(obj_num):
+                            concept_index = concept_group.index(tube_key_dict[t_id][attr])
+                            attr_list.append(concept_index)
+                        attr_key = attri_group + '_' + attr 
+                        data[attr_key] = torch.tensor(attr_list)
+                elif attri_group=='relation':
+                    for attr, concept_group in attribute.items(): 
+                        if attr=='event1':
                             obj_num = len(data['tube_info']) -2 
+                            rela_coll = torch.zeros(obj_num, obj_num)
+
+                            for event_id, event in enumerate(scene_gt['collision']):
+                                obj_id_pair = event['object_ids']
+                                gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
+                                prp_id1 = gt_id_to_prp_id[gt_id1]
+                                prp_id2 = gt_id_to_prp_id[gt_id2]
+                                rela_coll[prp_id1, prp_id2] = 1
+                                rela_coll[prp_id2, prp_id1] = 1
+                            attr_key = attri_group + '_' + 'collision'
+                            data[attr_key] = rela_coll
+                elif attri_group=='temporal':
+                    for attr, concept_group in attribute.items(): 
+                        if attr=='event2':
+                            obj_num = len(data['tube_info']) -2 
+                            attr_frm_id_st = []
+                            attr_frm_id_ed = []
+                            min_frm = 2
+                            box_thre = 0.0001
+
                             for t_id in range(obj_num):
-                                concept_index = concept_group.index(tube_key_dict[t_id][attr])
-                                attr_list.append(concept_index)
-                            attr_key = attri_group + '_' + attr 
-                            data[attr_key] = torch.tensor(attr_list)
-                    elif attri_group=='relation':
-                        for attr, concept_group in attribute.items(): 
-                            if attr=='event1':
-                                obj_num = len(data['tube_info']) -2 
-                                rela_coll = torch.zeros(obj_num, obj_num)
+                                box_seq = data['tube_info']['box_seq']['tubes'][t_id]
+                                box_seq_np = np.stack(box_seq, axis=0)
+                                tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
+                                
+                                time_step = len(tar_area)
+                                # filter_in 
+                                for t_id in range(time_step):
+                                    end_id = min(t_id + min_frm, time_step-1)
+                                    if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
+                                        attr_frm_id_st.append(t_id)
+                                        #pdb.set_trace()
+                                        break 
+                                    if t_id == time_step - 1:
+                                        attr_frm_id_st.append(0)
+                                # filter out
+                                for t_id in range(time_step, -1, -1):
+                                    st_id = max(t_id - min_frm, 0)
+                                    if np.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
+                                        attr_frm_id_ed.append(t_id)
+                                        break 
+                                    if t_id == 0:
+                                        attr_frm_id_ed.append(time_step-1)
 
-                                for event_id, event in enumerate(scene_gt['collision']):
-                                    obj_id_pair = event['object_ids']
-                                    gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
-                                    prp_id1 = gt_id_to_prp_id[gt_id1]
-                                    prp_id2 = gt_id_to_prp_id[gt_id2]
-                                    rela_coll[prp_id1, prp_id2] = 1
-                                    rela_coll[prp_id2, prp_id1] = 1
-                                attr_key = attri_group + '_' + 'collision'
-                                data[attr_key] = rela_coll
-                    elif attri_group=='temporal':
-                        for attr, concept_group in attribute.items(): 
-                            if attr=='event2':
-                                obj_num = len(data['tube_info']) -2 
-                                attr_frm_id_st = []
-                                attr_frm_id_ed = []
-                                min_frm = 2
-                                box_thre = 0.0001
-
-                                for t_id in range(obj_num):
-                                    box_seq = data['tube_info']['box_seq']['tubes'][t_id]
-                                    box_seq_np = np.stack(box_seq, axis=0)
-                                    tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
-                                    
-                                    time_step = len(tar_area)
-                                    # filter_in 
-                                    for t_id in range(time_step):
-                                        end_id = min(t_id + min_frm, time_step-1)
-                                        if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
-                                            attr_frm_id_st.append(t_id)
-                                            #pdb.set_trace()
-                                            break 
-                                        if t_id == time_step - 1:
-                                            attr_frm_id_st.append(0)
-                                    # filter out
-                                    for t_id in range(time_step, -1, -1):
-                                        st_id = max(t_id - min_frm, 0)
-                                        if np.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id):
-                                            attr_frm_id_ed.append(t_id)
-                                            break 
-                                        if t_id == 0:
-                                            attr_frm_id_ed.append(time_step-1)
-
-                                attr_key = attri_group + '_in'
-                                data[attr_key] = torch.tensor(attr_frm_id_st)
-                                attr_key = attri_group + '_out'
-                                data[attr_key] = torch.tensor(attr_frm_id_ed)
+                            attr_key = attri_group + '_in'
+                            data[attr_key] = torch.tensor(attr_frm_id_st)
+                            attr_key = attri_group + '_out'
+                            data[attr_key] = torch.tensor(attr_frm_id_ed)
                             #pdb.set_trace()
         return data 
 
@@ -1033,17 +1024,14 @@ class clevrerDataset(Dataset):
         tube_box_dict = {}
         frm_num = len(tube_info['tubes'][0]) 
         smp_diff = int(frm_num/img_num)
-        frm_offset = 0 if img_num==6 else int(smp_diff/2)
-        if self.args.regu_only_flag==1 and self.phase=='train':
-            frm_offset = random.choice([*range(0, smp_diff)]) 
+        frm_offset = 0 if img_num==6 else int(img_num/2)
         frm_list = list(range(frm_offset, frm_num, smp_diff))
-        
         for tube_id, tmp_tube in enumerate(tube_info['tubes']):
             tmp_dict = {}
             tmp_list = []
             count_idx = 0
             frm_ids = []
-            for exist_id, frm_id in enumerate(frm_list):
+            for frm_id in frm_list:
                 if tmp_tube[frm_id] == [0, 0, 1, 1]:
                     continue 
                 tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
@@ -1065,18 +1053,8 @@ class clevrerDataset(Dataset):
         frm_list_unique = list(set(frm_list))
         frm_list_unique.sort()
 
-        # making sure each frame has at least one object
-        for exist_id in range(len(frm_list_unique)-1, -1, -1):
-            exist_flag = False
-            frm_id = frm_list_unique[exist_id]
-            for tube_id, tube in tube_box_dict.items():
-                if frm_id in tube['frm_name']:
-                    exist_flag = True
-                    break
-            if not exist_flag:
-                del frm_list_unique[exist_id]
-
         tube_box_dict['frm_list'] = frm_list_unique  
+
         if self.args.normalized_boxes:
             frm_num = len(tube_info['tubes'][0]) 
             tube_num = len(tube_info['tubes']) 

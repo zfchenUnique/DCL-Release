@@ -133,6 +133,15 @@ def load_param_parser():
     parser.add_argument('--rela_dist_thre', type=float, default=0.2)
     parser.add_argument('--rela_dist_loss_flag', type=int, default=0)
     
+    # for v5 that separately encode spatial and semantics
+    parser.add_argument('--pred_spatial_model_path', type=str, default='')
+    parser.add_argument('--pretrain_pred_spatial_model_path', type=str,  default='')
+    parser.add_argument('--box_only_flag', type=int, default=0)
+    parser.add_argument('--bbox_size', type=int, default=24)
+    parser.add_argument('--tube_mode', type=int, default=0)
+    parser.add_argument('--semantic_only_flag', type=int, default=0)
+    parser.add_argument('--residual_obj_pred', type=int, default=0)
+    
     args = parser.parse_args()
     return args 
 

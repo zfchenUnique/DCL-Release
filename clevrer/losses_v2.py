@@ -37,7 +37,7 @@ class SceneParsingLoss(MultitaskLossBase):
         loss_list = []
         mse_loss = nn.MSELoss()
         assert len(pred_ftr_list[4]) == pred_ftr_list[0].shape[1] - self.args.n_his -1
-
+        #pdb.set_trace()
         # masking  out objects that didn't show up in the first n_his frames
         valid_object_id_stack = pred_ftr_list[4]
         for ftr_id, tmp_ftr in enumerate(pred_ftr_list):
@@ -56,7 +56,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 frm_num = tmp_ftr.shape[1]
                 tmp_gt = f_sng[0][ftr_id][:,:frm_num]
                 for obj_id in range(invalid_mask.shape[0]):
-                    for frm_id in range(invalid_mask.shape[1]):
+                    for frm_id in range(tmp_ftr.shape[1]):
                         if invalid_mask[obj_id, frm_id]:
                             tmp_ftr[obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, frm_id] = 0.0
@@ -73,7 +73,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 frm_num = tmp_ftr.shape[2]
                 tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
                 for obj_id in range(invalid_mask.shape[0]):
-                    for frm_id in range(invalid_mask.shape[1]):
+                    for frm_id in range(tmp_ftr.shape[1]):
                         if invalid_mask[obj_id, frm_id]:
                             tmp_ftr[obj_id, :, frm_id] = 0.0
                             tmp_ftr[:, obj_id, frm_id] = 0.0
@@ -83,6 +83,8 @@ class SceneParsingLoss(MultitaskLossBase):
                 # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
+                    if frm_id >= tmp_ftr.shape[1]:
+                        break 
                     for obj_id in range(obj_num):
                         if obj_id not in valid_obj_list:
                             tmp_ftr[obj_id, :, frm_id] = 0.0
@@ -98,7 +100,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 tmp_ftr = tmp_ftr.view(obj_num, -1, box_dim)    
                 
                 for obj_id in range(invalid_mask.shape[0]):
-                    for frm_id in range(invalid_mask.shape[1]):
+                    for frm_id in range(tmp_ftr.shape[1]):
                         if invalid_mask[obj_id, frm_id]:
                             tmp_ftr[obj_id, frm_id, 2:] = 0.0
                             tmp_ftr[obj_id, frm_id, :2] = -1.0
@@ -108,6 +110,8 @@ class SceneParsingLoss(MultitaskLossBase):
                 # tmp_ftr: (obj_num, frm_num , box_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
+                    if frm_id >= tmp_ftr.shape[1]:
+                        break 
                     for obj_id in range(obj_num):
                         if obj_id not in valid_obj_list:
                             tmp_ftr[obj_id, frm_id, 2:] = 0.0
@@ -116,6 +120,8 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_gt[obj_id, frm_id, :2] = -1.0
 
             tmp_loss = mse_loss(tmp_ftr, tmp_gt)
+            #if tmp_loss>5:
+            #    pdb.set_trace()
             loss_list.append(tmp_loss)
             if ftr_id==0:
                 monitors['loss/regu/obj_ftr'] = tmp_loss
@@ -152,10 +158,13 @@ class SceneParsingLoss(MultitaskLossBase):
             #pdb.set_trace()
             monitors['loss/regu/rel_spa'] = tmp_loss
             loss_list.append(tmp_loss)
-
-        ftr_loss = sum(loss_list)
+        ftr_loss = 0
+        for ftr_id, tmp_loss in enumerate(loss_list):
+            if ftr_id>1 and self.args.version=='v4':
+                continue 
+            ftr_loss += tmp_loss
         monitors['loss/regu'] = ftr_loss
-
+        return monitors 
 
 
     def compute_regu_loss(self, pred_ftr_list, f_sng, feed_dict, monitors):
@@ -192,7 +201,7 @@ class SceneParsingLoss(MultitaskLossBase):
                     tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1, box_dim)    
                     tmp_ftr = tmp_ftr.view(obj_num, -1, box_dim)    
                     for obj_id in range(invalid_mask.shape[0]):
-                        for frm_id in range(invalid_mask.shape[1]):
+                        for frm_id in range(tmp_ftr.shape[1]):
                             if invalid_mask[obj_id, frm_id]:
                                 tmp_ftr[obj_id, frm_id, 2:] = 0.0
                                 tmp_ftr[obj_id, frm_id, :2] = -1.0
@@ -213,7 +222,7 @@ class SceneParsingLoss(MultitaskLossBase):
         outputs, monitors = dict(), dict()
 
         if pred_ftr_list is not None:
-            monitors = compute_regu_loss(pred_ftr_list, f_sng, feed_dict, monitors)
+            monitors = self.compute_regu_loss_v2(pred_ftr_list, f_sng, feed_dict, monitors)
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

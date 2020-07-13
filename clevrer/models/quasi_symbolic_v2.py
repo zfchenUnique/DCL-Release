@@ -32,7 +32,7 @@ import torch.nn.functional as F
 import copy
 from scipy import signal 
 import numpy as np
-from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2  
+from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5  
 
 logger = get_logger(__file__)
 
@@ -359,6 +359,54 @@ class ProgramExecutorContext(nn.Module):
             return self.init_counterfactual_events_v2(selected, feed_dict)
         elif self.args.version == 'v3':
             return self.init_counterfactual_events_v3(selected, feed_dict)
+        elif self.args.version == 'v4':
+            return self.init_counterfactual_events_v4(selected, feed_dict)
+
+
+    def init_counterfactual_events_v4(self, selected, feed_dict):
+        what_if_obj_id = selected.argmax()
+        self._counterfact_features = predict_counterfact_features_v5(self._nscl_model, feed_dict, self.features, self.args, what_if_obj_id)
+        
+        obj_num, obj_num2, pred_frm_num, ftr_dim = self._counterfact_features[2].shape
+        box_dim = self._counterfact_features[3].shape[1]//pred_frm_num
+        #pdb.set_trace()
+        if self.args.colli_ftr_type ==1:
+            # B*B*T*D
+            coll_ftr = self._counterfact_features[2]
+            # bilinear sampling for target box feature
+            # B*T*d1
+            box_ftr = self._counterfact_features[3].clone().view(obj_num, 1, pred_frm_num, box_dim)
+            # B*B*(T*sample_frames)*d1
+            # TODO: making it constant with the seen video
+            box_ftr_exp = F.interpolate(box_ftr, size=[pred_frm_num*self._seg_frm_num, box_dim], mode='bilinear') 
+            ftr = box_ftr_exp.view(obj_num, pred_frm_num, -1)
+            rel_box_ftr = fuse_box_ftr(ftr)
+            rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+            if self.args.box_iou_for_collision_flag:
+                # N*N*(T*sample_frames)
+                box_iou_ftr  = fuse_box_overlap(ftr.view(obj_num, -1))
+                box_iou_ftr_view = box_iou_ftr.view(obj_num, obj_num, pred_frm_num, self._seg_frm_num)
+                rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr_view], dim=-1)
+        else:
+            raise NotImplementedError 
+
+        k = 2
+        masks = list()
+        for cg in ['collision']:
+            if isinstance(cg, six.string_types):
+                cg = [cg]
+            mask = None
+            for c in cg:
+                new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
+                mask = torch.min(mask, new_mask) if mask is not None else new_mask
+                if _symmetric_collision_flag:
+                    mask = 0.5*(mask + mask.transpose(1, 0))
+            mask = do_apply_self_mask_3d(mask)
+            masks.append(mask)
+        event_colli_set = torch.stack(masks, dim=0)
+        event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
+        self._counterfact_event_buffer = [event_colli_score , frm_idx]
+        return event_colli_score 
 
     def init_counterfactual_events_v3(self, selected, feed_dict):
         what_if_obj_id = selected.argmax()

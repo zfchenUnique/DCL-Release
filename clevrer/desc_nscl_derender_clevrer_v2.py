@@ -13,7 +13,7 @@ to get the supervision for the VSE modules. This model tests the implementation 
 from jacinle.utils.container import GView
 from nscl.models.utils import canonize_monitors, update_from_loss_module
 from clevrer.models.reasoning_v2 import ReasoningV2ModelForCLEVRER, make_reasoning_v2_configs
-from clevrer.utils import predict_future_feature, predict_future_feature_v2, predict_normal_feature_v2, predict_normal_feature_v3, predict_normal_feature_v4   
+from clevrer.utils import predict_future_feature, predict_future_feature_v2, predict_normal_feature_v2, predict_normal_feature_v3, predict_normal_feature_v4, predict_normal_feature_v5, predict_future_feature_v5    
 
 configs = make_reasoning_v2_configs()
 configs.model.vse_known_belong = False
@@ -29,9 +29,29 @@ class Model(ReasoningV2ModelForCLEVRER):
         self.args = args
         super().__init__(configs, args)
 
-    def build_temporal_prediction_model(self, args, desc_pred):
-        model_pred = desc_pred.PropagationNetwork(args, residual=True, use_gpu=True)
-        self._model_pred = model_pred 
+    def build_temporal_prediction_model(self, args, desc_pred, desc_spatial_pred=None):
+        if args.version=='v3':
+            model_pred = desc_pred.PropagationNetwork(args, residual=True, use_gpu=True)
+            self._model_pred = model_pred 
+        elif args.version=='v4':
+            state_dim_bp = args.state_dim
+            args.state_dim = 256
+            model_pred = desc_pred.PropagationNetwork(args, residual=True, use_gpu=True)
+            self._model_pred = model_pred 
+            
+            relation_dim_bp = args.relation_dim
+            box_only_flag_bp = args.box_only_flag
+
+            args.relation_dim = 3
+            args.state_dim = 4
+            args.box_only_flag = 1 
+
+            model_spatial_pred = desc_spatial_pred.PropagationNetwork(args, residual=True, use_gpu=True)
+            self._model_spatial_pred = model_spatial_pred 
+            
+            args.state_dim = state_dim_bp 
+            args.box_only_flag = box_only_flag_bp 
+            args.relation_dim = relation_dim_bp
 
     def forward(self, feed_dict_list):
         if self.training:
@@ -45,8 +65,6 @@ class Model(ReasoningV2ModelForCLEVRER):
 
         if isinstance(feed_dict_list, dict):
             feed_dict_list = [feed_dict_list]
-
-        #pdb.set_trace()
 
         video_num = len(feed_dict_list)
         f_sng_list = []
@@ -63,10 +81,10 @@ class Model(ReasoningV2ModelForCLEVRER):
             elif self.args.version=='v3' and feed_dict['load_predict_flag'] and self.args.regu_only_flag!=1:
                 f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
-            elif self.args.regu_only_flag==1 and not self.training and self.args.visualize_flag:
-                #self.args.pred_frm_num = 1
-                f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
-                f_sng_future_list.append(None)
+            #elif self.args.regu_only_flag==1 and not self.training and self.args.visualize_flag:
+            elif self.args.version=='v4' and self.args.regu_only_flag!=1:
+                f_sng_future = predict_future_feature_v5(self, feed_dict, f_sng, self.args)
+                f_sng_future_list.append(f_sng_future)
 
         programs = []
         _ignore_list = []
@@ -98,6 +116,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                 feed_dict['question_type_new'].append(ques['question_type'])
             programs.append(tmp_prog)
             _ignore_list.append(tmp_ignore_list)
+        
         if self.args.regu_only_flag !=1:
             programs_list, buffers_list, answers_list = self.reasoning(f_sng_list, programs, \
                     fd=feed_dict_list, future_features_list=f_sng_future_list, nscl_model=self, ignore_list = _ignore_list)
@@ -109,12 +128,18 @@ class Model(ReasoningV2ModelForCLEVRER):
             output_ftr_list = []
             for vid in range(len(feed_dict_list)):
                 if self.training:
-                    output_pred_ftr = predict_normal_feature_v4(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    if self.args.version=='v3':
+                        output_pred_ftr = predict_normal_feature_v4(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    elif self.args.version=='v4':
+                        output_pred_ftr = predict_normal_feature_v5(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                     #output_pred_ftr = predict_normal_feature_v3(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                     #output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 else:
                     #output_pred_ftr = predict_normal_feature_v2(self, feed_dict_list[vid], f_sng_list[vid], self.args)
-                    output_pred_ftr = predict_normal_feature_v4(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    if self.args.version=='v3':
+                        output_pred_ftr = predict_normal_feature_v4(self, feed_dict_list[vid], f_sng_list[vid], self.args)
+                    else:
+                        output_pred_ftr = predict_normal_feature_v5(self, feed_dict_list[vid], f_sng_list[vid], self.args)
                 output_ftr_list.append(output_pred_ftr)
         else:
             output_ftr_list = None

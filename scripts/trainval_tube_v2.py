@@ -117,6 +117,10 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     if args.version=='v3':
         desc_pred = load_source(args.pred_model_path)
         model.build_temporal_prediction_model(args, desc_pred)
+    elif args.version=='v4':
+        desc_pred = load_source(args.pred_model_path)
+        desc_spatial_pred = load_source(args.pred_spatial_model_path)
+        model.build_temporal_prediction_model(args, desc_pred, desc_spatial_pred)
 
     if args.use_gpu:
         model.cuda()
@@ -149,11 +153,19 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     elif args.load:
         if trainer.load_weights(args.load):
             logger.critical('Loaded weights from pretrained model: "{}".'.format(args.load))
+        #pdb.set_trace()
         if args.version=='v3':
             if args.pretrain_pred_model_path:
                 model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
                 logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
-            #pdb.set_trace()
+        elif args.version=='v4':
+            if args.pretrain_pred_spatial_model_path:
+                model._model_spatial_pred.load_state_dict(torch.load(args.pretrain_pred_spatial_model_path))
+                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
+            if args.pretrain_pred_model_path:
+                model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
+                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
+    #pdb.set_trace()
     if args.use_tb and not args.debug:
         from jactorch.train.tb import TBLogger, TBGroupMeters
         tb_logger = TBLogger(args.tb_dir)
@@ -261,7 +273,6 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
                     feed_dict = async_copy_to(feed_dict, 0)
 
             data_time = time.time() - end; end = time.time()
-
             #if feed_dict[0]['meta_ann']['scene_index']!=7398:
             #    continue 
             loss, monitors, output_dict, extra_info = trainer.step(feed_dict, cast_tensor=False)
