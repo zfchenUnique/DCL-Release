@@ -47,5 +47,9 @@ Step3, Joint optimizing both the latent features and the dynamic nscl models
 ## Temporal reasoning
 - [ ] Design neoral operations for temporal reasoning programs
 
+## Dynamic models
+- [ ] Feature replacement RGB vs latent
+- [ ] Collision feature
+
 ## Minor to do list:
 - [ ] RGB for stationary and moving
