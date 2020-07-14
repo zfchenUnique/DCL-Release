@@ -1106,7 +1106,7 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
             tmp_box_list = [spatial_gt[:, frm_id] for frm_id in frm_id_list]
             x_spatial = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, x_step * box_dim, 1, 1)  
         else:
-            if p_id + x_step >len(spatial_feature):
+            if p_id + x_step >spatial_feature.shape[1]:
                 break
             x_spatial = spatial_feature[:, p_id:p_id+x_step].view(n_objects_ori, -1, 1, 1) 
         x_ftr = torch.cat(pred_obj_ftr_list[p_id:p_id+x_step], dim=1) 
@@ -1167,7 +1167,7 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
         pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_ftr_list) 
-    #pdb.set_trace()
+
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_ftr_list[-pred_frm_num:], dim=1).contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag and 0:
