@@ -73,7 +73,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 frm_num = tmp_ftr.shape[2]
                 tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
                 for obj_id in range(invalid_mask.shape[0]):
-                    for frm_id in range(tmp_ftr.shape[1]):
+                    for frm_id in range(tmp_ftr.shape[2]):
                         if invalid_mask[obj_id, frm_id]:
                             tmp_ftr[obj_id, :, frm_id] = 0.0
                             tmp_ftr[:, obj_id, frm_id] = 0.0
