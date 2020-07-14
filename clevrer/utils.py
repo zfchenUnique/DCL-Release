@@ -1295,8 +1295,9 @@ def predict_normal_feature_v5(model, feed_dict, f_sng, args):
     spatial_feature = predict_spatial_feature(model, feed_dict, f_sng, args) 
     obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list \
             = predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature) 
-    obj_num = spatial_feature.shape[0] 
-    box_ftr = spatial_feature.view(obj_num, -1) 
+    obj_num = spatial_feature.shape[0]
+    frm_num = min(spatial_feature.shape[1], obj_ftr.shape[1])
+    box_ftr = spatial_feature[:, :frm_num].view(obj_num, -1).contiguous() 
     return obj_ftr, None, rel_ftr_exp, box_ftr, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def predict_future_spatial_feature(model, feed_dict, f_sng, args):
@@ -1409,7 +1410,8 @@ def predict_future_feature_v5(model, feed_dict, f_sng, args):
     obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list \
             = predict_future_semantic_feature(model, feed_dict, f_sng, args, spatial_feature) 
     obj_num = spatial_feature.shape[0] 
-    box_ftr = spatial_feature.view(obj_num, -1) 
+    frm_num = min(spatial_feature.shape[1], obj_ftr.shape[1])
+    box_ftr = spatial_feature[:, :frm_num].view(obj_num, -1).contiguous() 
     return obj_ftr, None, rel_ftr_exp, box_ftr, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def predict_counterfact_spatial_feature(model, feed_dict, f_sng, args, counter_fact_id):
@@ -1568,14 +1570,14 @@ def predict_counterfact_semantic_feature(model, feed_dict, f_sng, args, spatial_
         if p_id + x_step >=spatial_feature.shape[1]:
             break
         #x_spatial = torch.cat(pred_obj_spatial_list[p_id:p_id+x_step], dim=1)
-        if model.training:
-            st_id = p_id 
-            ed_id = st_id + x_step 
-            frm_id_list =  feed_dict['tube_info']['frm_list'][st_id:ed_id]
-            tmp_box_list = [spatial_gt[:, frm_id] for frm_id in frm_id_list]
-            x_spatial = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, x_step * box_dim, 1, 1)  
-        else:
-            x_spatial = spatial_feature[:, p_id:p_id+x_step].view(n_objects_ori, -1, 1, 1) 
+        #if model.training:
+        #    st_id = p_id 
+        #    ed_id = st_id + x_step 
+        #    frm_id_list =  feed_dict['tube_info']['frm_list'][st_id:ed_id]
+        #    tmp_box_list = [spatial_gt[:, frm_id] for frm_id in frm_id_list]
+        #    x_spatial = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, x_step * box_dim, 1, 1)  
+        #else:
+        x_spatial = spatial_feature[:, p_id:p_id+x_step].view(n_objects_ori, -1, 1, 1) 
         x_ftr = torch.cat(pred_obj_ftr_list[p_id:p_id+x_step], dim=1) 
         Ra_spatial = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
         Ra_ftr = torch.cat(pred_rel_ftr_list[p_id:p_id+x_step], dim=1) 
@@ -1662,7 +1664,8 @@ def predict_counterfact_features_v5(model, feed_dict, f_sng, args, counter_fact_
     obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list \
             = predict_counterfact_semantic_feature(model, feed_dict, f_sng, args, spatial_feature, counter_fact_id) 
     obj_num = spatial_feature.shape[0] 
-    box_ftr = spatial_feature.view(obj_num, -1) 
+    frm_num = min(spatial_feature.shape[1], obj_ftr.shape[1])
+    box_ftr = spatial_feature[:, :frm_num].view(obj_num, -1).contiguous() 
     return obj_ftr, None, rel_ftr_exp, box_ftr, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def predict_normal_feature_v4(model, feed_dict, f_sng, args):
