@@ -10,9 +10,9 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] Bugs for stationary/moving
 - [x] Filter for events: 'stationary' or 'moving' at a moment
 - [x] Filter for objects: 'in' or 'out' at a moment
-- [ ] Fail to track the object
-- [ ] Filter Order: 'first' and 'second' 
-- [ ] Filter for events: 'collisions'
+- [x] Fail to track the object
+- [x] Filter Order: 'first' and 'second' 
+- [x] Filter for events: 'collisions'
 
 ## Done List:
 - [x] Temporal operations for 'start', 'end', 'in', 'out', 'before' and 'end'
@@ -35,10 +35,13 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 
 ## To do list:
 More comprehensive features for temporal concepts 
+- [ ] Shortlist evaluation
+- [ ] Projecting feature into collision domain for understanding
 - [ ] Models with learnt tube proposals
 - [ ] Models with learnt programs
 - [ ] Threshold for collision performance
 - [ ] More supervision info from QA
+
 ### Details for learning dynamic modeles in the latent space
 Step1, extract visual features for each target object and their collision features
 Step2, using a dynamic models to learn corresponding features
