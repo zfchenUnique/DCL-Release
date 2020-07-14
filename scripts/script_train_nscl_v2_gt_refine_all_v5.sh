@@ -12,7 +12,6 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 1 \
     --new_mask_out_value_flag 1 \
     --apply_gaussian_smooth_flag 1 \
-    --prefix gt_sep_v5 \
     --colli_ftr_type 1 \
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
@@ -38,9 +37,10 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --pred_normal_num 28 \
     --regu_only_flag 0 \
     --pred_frm_num 12 \
-    --regu_flag 0 \
+    --regu_flag 1 \
     --visualize_flag 0 \
-    --evaluate \
+    --prefix gt_joint_v5 \
+    #--evaluate \
     #--debug \
     #--visualize_flag 1 \
     #--rela_spatial_dim 4 \
