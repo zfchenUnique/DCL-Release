@@ -24,6 +24,48 @@ DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 __all__ = ['SceneParsingLoss', 'QALoss', 'ParserV1Loss']
 
+def get_collision_embedding(tmp_ftr, f_sng, args, relation_embedding):
+    obj_num, ftr_dim = f_sng[3].shape
+    box_dim = 4
+    time_step = int(ftr_dim/box_dim) 
+    seg_frm_num = 4 
+    half_seg_frm_num = int(seg_frm_num/2)
+    frm_list = []
+    smp_coll_frm_num = tmp_ftr.shape[2]
+    ftr = f_sng[3].view(obj_num, time_step, box_dim)[:, :smp_coll_frm_num*seg_frm_num, :]
+    ftr = ftr.view(obj_num, smp_coll_frm_num, seg_frm_num*box_dim)
+    # N*N*smp_coll_frm_num*(seg_frm_num*box_dim*4)
+    rel_box_ftr = fuse_box_ftr(ftr)
+    # concatentate
+    if args.colli_ftr_type ==1:
+        vis_ftr_num = smp_coll_frm_num 
+        col_ftr_dim = tmp_ftr.shape[3]
+        off_set = smp_coll_frm_num % vis_ftr_num 
+        exp_dim = int(smp_coll_frm_num / vis_ftr_num )
+        exp_dim = max(1, exp_dim)
+        coll_ftr = torch.zeros(obj_num, obj_num, smp_coll_frm_num, col_ftr_dim, \
+                dtype=rel_box_ftr.dtype, device=rel_box_ftr.device)
+        coll_ftr_exp = tmp_ftr.unsqueeze(3).expand(obj_num, obj_num, vis_ftr_num, exp_dim, col_ftr_dim).contiguous()
+        coll_ftr_exp_view = coll_ftr_exp.view(obj_num, obj_num, vis_ftr_num*exp_dim, col_ftr_dim)
+        min_frm_num = min(vis_ftr_num*exp_dim, smp_coll_frm_num)
+        coll_ftr[:, :, :min_frm_num] = coll_ftr_exp_view[:,:, :min_frm_num] 
+        if vis_ftr_num*exp_dim<smp_coll_frm_num:
+            coll_ftr[:, :, -1*off_set:] = coll_ftr_exp_view[:,:, -1, :].unsqueeze(2) 
+        rel_ftr_norm = torch.cat([coll_ftr, rel_box_ftr], dim=-1)
+    else:
+        raise NotImplemented 
+
+    if args.box_iou_for_collision_flag:
+        # N*N*time_step 
+        box_iou_ftr  = fuse_box_overlap(ftr.view(obj_num, -1))
+        box_iou_ftr_view = box_iou_ftr.view(obj_num, obj_num, smp_coll_frm_num, seg_frm_num)
+        rel_ftr_norm = torch.cat([rel_ftr_norm, box_iou_ftr_view], dim=-1)
+
+    mappings = relation_embedding.get_all_attributes()
+    # shape: [batch, attributes, channel] or [attributes, channel]
+    query_mapped = torch.stack([m(rel_ftr_norm) for m in mappings], dim=-2)
+    query_mapped = query_mapped / query_mapped.norm(2, dim=-1, keepdim=True)
+    return query_mapped 
 
 class SceneParsingLoss(MultitaskLossBase):
     def __init__(self, used_concepts, add_supervision=False, args=None):
@@ -32,7 +74,7 @@ class SceneParsingLoss(MultitaskLossBase):
         self.add_supervision = add_supervision
         self.args = args
 
-    def compute_regu_loss_v2(self, pred_ftr_list, f_sng, feed_dict, monitors):
+    def compute_regu_loss_v2(self, pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding):
         ftr_loss = 0.0
         loss_list = []
         mse_loss = nn.MSELoss()
@@ -91,7 +133,9 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_ftr[:, obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, :, frm_id] = 0.0
                             tmp_gt[:, obj_id, frm_id] = 0.0
-
+                if self.args.ftr_in_collision_space_flag:
+                    tmp_ftr = get_collision_embedding(tmp_ftr, f_sng[0], self.args, relation_embedding)
+                    tmp_gt = get_collision_embedding(tmp_gt, f_sng[0], self.args, relation_embedding)
 
             elif len(tmp_ftr.shape)==2:
                 frm_num = tmp_ftr.shape[1] // box_dim 
@@ -155,7 +199,6 @@ class SceneParsingLoss(MultitaskLossBase):
             pred_frm_num = rel_spa_pred.shape[0]
             x_step = self.args.n_his + 1
             tmp_loss = mse_loss(rel_spa_pred[x_step:pred_frm_num-1], rel_spa_gt[1:])
-            #pdb.set_trace()
             monitors['loss/regu/rel_spa'] = tmp_loss
             loss_list.append(tmp_loss)
         ftr_loss = 0
@@ -222,7 +265,7 @@ class SceneParsingLoss(MultitaskLossBase):
         outputs, monitors = dict(), dict()
 
         if pred_ftr_list is not None:
-            monitors = self.compute_regu_loss_v2(pred_ftr_list, f_sng, feed_dict, monitors)
+            monitors = self.compute_regu_loss_v2(pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding)
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

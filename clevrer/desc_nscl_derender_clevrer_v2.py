@@ -175,7 +175,7 @@ class Model(ReasoningV2ModelForCLEVRER):
                 monitors = {}
                 feed_dict = feed_dict_list[idx]
                 f_sng = [f_sng_list[idx]]
-                self.scene_loss.compute_regu_loss_v2(output_ftr, f_sng, feed_dict, monitors)
+                self.scene_loss.compute_regu_loss_v2(output_ftr, f_sng, feed_dict, monitors, self.reasoning.embedding_relation)
                 monitors_list.append(monitors)
 
         loss = 0

@@ -1052,7 +1052,7 @@ def predict_spatial_feature(model, feed_dict, f_sng, args):
     spatial_feature = box_ftr*0.5 +0.5 
     if args.visualize_flag:
         visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=100, store_img=True, args=args)
-        #pdb.set_trace()
+        pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 
     return spatial_feature
 
@@ -1170,11 +1170,64 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
 
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_ftr_list[-pred_frm_num:], dim=1).contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
-    if args.visualize_flag and 0:
+    if args.visualize_flag:
         # estimate the l2 difference
-        pdb.set_trace()
+        compare_l2_distance(f_sng, feed_dict, obj_ftr, rel_ftr_exp, valid_object_id_stack, args)
     args.semantic_only_flag = semantic_only_flag_bp 
     return obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
+
+def compare_l2_distance(f_sng, feed_dict, obj_ftr, rel_ftr_exp, valid_object_id_stack, args):
+    frm_num = obj_ftr.shape[1]
+    obj_num = obj_ftr.shape[0]
+    box_dim = 4
+    gt_list = [f_sng[3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
+    tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1, box_dim)    
+    invalid_mask = tmp_gt.sum(dim=2)==-2
+
+    for tmp_ftr in [obj_ftr, rel_ftr_exp]:
+        if len(tmp_ftr.shape)==4:
+            frm_num = tmp_ftr.shape[2]
+            tmp_gt = f_sng[2][:, :, :frm_num]
+            for obj_id in range(invalid_mask.shape[0]):
+                for frm_id in range(tmp_ftr.shape[2]):
+                    if invalid_mask[obj_id, frm_id]:
+                        tmp_ftr[obj_id, :, frm_id] = 0.0
+                        tmp_ftr[:, obj_id, frm_id] = 0.0
+                        tmp_gt[obj_id, :, frm_id] = 0.0
+                        tmp_gt[:, obj_id, frm_id] = 0.0
+
+            # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
+            for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
+                frm_id = args.n_his + 1 + frm_idx
+                if frm_id >= tmp_ftr.shape[1]:
+                    break 
+                for obj_id in range(obj_num):
+                    if obj_id not in valid_obj_list:
+                        tmp_ftr[obj_id, :, frm_id] = 0.0
+                        tmp_ftr[:, obj_id, frm_id] = 0.0
+                        tmp_gt[obj_id, :, frm_id] = 0.0
+                        tmp_gt[:, obj_id, frm_id] = 0.0
+        
+        elif len(tmp_ftr.shape)==3:
+            frm_num = tmp_ftr.shape[1]
+            tmp_gt = f_sng[0][:,:frm_num]
+            for obj_id in range(invalid_mask.shape[0]):
+                for frm_id in range(tmp_ftr.shape[1]):
+                    if invalid_mask[obj_id, frm_id]:
+                        tmp_ftr[obj_id, frm_id] = 0.0
+                        tmp_gt[obj_id, frm_id] = 0.0
+            
+            for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
+                frm_id = args.n_his + 1 + frm_idx
+                for obj_id in range(obj_num):
+                    if obj_id not in valid_obj_list:
+                        tmp_ftr[obj_id, frm_id] = 0.0
+                        tmp_gt[obj_id, frm_id] = 0.0
+
+        l2_dist = torch.dist(tmp_ftr, tmp_gt)
+        print(l2_dist)
+        pdb.set_trace()
+
 
 def predict_future_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
     semantic_only_flag_bp = args.semantic_only_flag 
