@@ -161,7 +161,11 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         elif args.version=='v4':
             if args.pretrain_pred_spatial_model_path:
                 model._model_spatial_pred.load_state_dict(torch.load(args.pretrain_pred_spatial_model_path))
-                logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
+                logger.critical('Loaded spatial models from pretrained temporal model: "{}".'.format(args.pretrain_pred_spatial_model_path))
+            if args.pretrain_pred_feature_model_path:
+                model._model_pred.load_state_dict(torch.load(args.pretrain_pred_feature_model_path))
+                logger.critical('Loaded feature models from pretrained temporal model: "{}".'.format(args.pretrain_pred_feature_model_path))
+                #pdb.set_trace()
             if args.pretrain_pred_model_path:
                 model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
                 logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
