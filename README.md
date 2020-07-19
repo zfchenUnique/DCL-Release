@@ -35,6 +35,7 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 
 ## To do list:
 More comprehensive features for temporal concepts
+- [ ] Feed forward feature network only to learn the specific features  
 - [ ] Spatial preidctions based only on tubeID
 - [ ] Shortlist evaluation
 - [ ] Projecting feature into collision domain for understanding
