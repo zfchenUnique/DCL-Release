@@ -1095,11 +1095,12 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
     ftr_dim = f_sng[1].shape[-1]
     t_dim = ftr_t_dim//box_dim
     spatial_gt = f_sng[3].view(obj_num, t_dim, box_dim)
+    #pdb.set_trace()
 
     for p_id in range(args.pred_normal_num):
         
         #x_spatial = torch.cat(pred_obj_spatial_list[p_id:p_id+x_step], dim=1)
-        if model.training:
+        if spatial_feature is None:
             st_id = p_id 
             ed_id = st_id + x_step 
             frm_id_list =  feed_dict['tube_info']['frm_list'][st_id:ed_id]
@@ -1345,7 +1346,18 @@ def predict_normal_feature_v5(model, feed_dict, f_sng, args):
     """
     Separately encoding the spatial and semantic features using PropagationNetwork 
     """
-    spatial_feature = predict_spatial_feature(model, feed_dict, f_sng, args) 
+    if not model.training:
+        spatial_feature = predict_spatial_feature(model, feed_dict, f_sng, args) 
+    else:
+        box_dim = 4
+        obj_num, ftr_t_dim = f_sng[3].shape
+        ftr_dim = f_sng[1].shape[-1]
+        t_dim = ftr_t_dim//box_dim
+        spatial_gt = f_sng[3].view(obj_num, t_dim, box_dim)
+        frm_id_list =  feed_dict['tube_info']['frm_list']
+        tmp_box_list = [spatial_gt[:, frm_id] for frm_id in frm_id_list]
+        spatial_feature = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, -1, box_dim)  
+    
     obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list \
             = predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature) 
     obj_num = spatial_feature.shape[0]
