@@ -154,7 +154,7 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_gt[:, obj_id, frm_id] = 0.0
                         else:
                             for obj_id2 in range(obj_num):
-                                if not invalid_mask[obj_id2, frm_id]:
+                                if obj_id2 in valid_obj_list:
                                     valid_kl_ftr_list.append(tmp_ftr[obj_id, obj_id2, frm_id])
 
                 if self.args.ftr_in_collision_space_flag:
