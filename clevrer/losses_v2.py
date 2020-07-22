@@ -144,7 +144,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
-                    if frm_id >= tmp_ftr.shape[1]:
+                    if frm_id >= tmp_ftr.shape[2]:
                         break 
                     for obj_id in range(obj_num):
                         if obj_id not in valid_obj_list:
