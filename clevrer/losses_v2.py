@@ -24,6 +24,11 @@ DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 __all__ = ['SceneParsingLoss', 'QALoss', 'ParserV1Loss']
 
+
+def compute_kl_regu_loss(mean, var):
+    kl_loss = -0.5*torch.sum(1+torch.log(var)-mean.pow(2)-var)
+    return kl_loss 
+
 def get_collision_embedding(tmp_ftr, f_sng, args, relation_embedding):
     obj_num, ftr_dim = f_sng[3].shape
     box_dim = 4
@@ -77,6 +82,7 @@ class SceneParsingLoss(MultitaskLossBase):
     def compute_regu_loss_v2(self, pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding):
         ftr_loss = 0.0
         loss_list = []
+        kl_loss_list = []
         mse_loss = nn.MSELoss()
         assert len(pred_ftr_list[4]) == pred_ftr_list[0].shape[1] - self.args.n_his -1
         #pdb.set_trace()
@@ -94,6 +100,8 @@ class SceneParsingLoss(MultitaskLossBase):
             if tmp_ftr is None or isinstance(tmp_ftr, list):
                 continue 
             if len(tmp_ftr.shape)==3:
+                valid_kl_ftr_list = []
+                valid_kl_gt_list = []
                 # tmp_ftr: (obj_num, frm_num , ftr_dim)
                 frm_num = tmp_ftr.shape[1]
                 tmp_gt = f_sng[0][ftr_id][:,:frm_num]
@@ -102,6 +110,8 @@ class SceneParsingLoss(MultitaskLossBase):
                         if invalid_mask[obj_id, frm_id]:
                             tmp_ftr[obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, frm_id] = 0.0
+                        else:
+                            valid_kl_gt_list.append(tmp_gt[obj_id, frm_id])
                 
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
@@ -109,11 +119,16 @@ class SceneParsingLoss(MultitaskLossBase):
                         if obj_id not in valid_obj_list:
                             tmp_ftr[obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, frm_id] = 0.0
-
+                        else:
+                            valid_kl_ftr_list.append(tmp_ftr[obj_id, frm_id])
 
             elif len(tmp_ftr.shape)==4:
                 frm_num = tmp_ftr.shape[2]
                 tmp_gt = f_sng[0][ftr_id][:, :, :frm_num]
+                
+                valid_kl_gt_list = []
+                valid_kl_ftr_list = []
+
                 for obj_id in range(invalid_mask.shape[0]):
                     for frm_id in range(tmp_ftr.shape[2]):
                         if invalid_mask[obj_id, frm_id]:
@@ -121,6 +136,10 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_ftr[:, obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, :, frm_id] = 0.0
                             tmp_gt[:, obj_id, frm_id] = 0.0
+                        else:
+                            for obj_id2 in range(obj_num):
+                                if not invalid_mask[obj_id2, frm_id]:
+                                    valid_kl_gt_list.append(tmp_gt[obj_id, obj_id2, frm_id])
 
                 # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
@@ -133,6 +152,11 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_ftr[:, obj_id, frm_id] = 0.0
                             tmp_gt[obj_id, :, frm_id] = 0.0
                             tmp_gt[:, obj_id, frm_id] = 0.0
+                        else:
+                            for obj_id2 in range(obj_num):
+                                if not invalid_mask[obj_id2, frm_id]:
+                                    valid_kl_ftr_list.append(tmp_ftr[obj_id, obj_id2, frm_id])
+
                 if self.args.ftr_in_collision_space_flag:
                     tmp_ftr = get_collision_embedding(tmp_ftr, f_sng[0], self.args, relation_embedding)
                     tmp_gt = get_collision_embedding(tmp_gt, f_sng[0], self.args, relation_embedding)
@@ -142,7 +166,8 @@ class SceneParsingLoss(MultitaskLossBase):
                 gt_list = [f_sng[0][3].view(obj_num, -1, box_dim)[:, feed_dict['tube_info']['frm_list'][idx]] for idx in range(frm_num) ]
                 tmp_gt = torch.stack(gt_list, dim=1).view(obj_num, -1, box_dim)    
                 tmp_ftr = tmp_ftr.view(obj_num, -1, box_dim)    
-                
+               
+
                 for obj_id in range(invalid_mask.shape[0]):
                     for frm_id in range(tmp_ftr.shape[1]):
                         if invalid_mask[obj_id, frm_id]:
@@ -150,7 +175,7 @@ class SceneParsingLoss(MultitaskLossBase):
                             tmp_ftr[obj_id, frm_id, :2] = -1.0
                             tmp_gt[obj_id, frm_id, 2:] = 0.0
                             tmp_gt[obj_id, frm_id, :2] = -1.0
-                    
+
                 # tmp_ftr: (obj_num, frm_num , box_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
@@ -166,6 +191,25 @@ class SceneParsingLoss(MultitaskLossBase):
             tmp_loss = mse_loss(tmp_ftr, tmp_gt)
             #if tmp_loss>5:
             #    pdb.set_trace()
+            if self.args.add_kl_regu_flag:
+                if ftr_id==0:
+                    valid_ftr = torch.stack(valid_kl_ftr_list, dim=0)
+                    valid_gt = torch.stack(valid_kl_gt_list, dim=0)
+                    _, t_frame, ftr_dim = tmp_ftr.shape
+                    obj_ftr_var, obj_ftr_mean = torch.var_mean(valid_ftr.view(-1, ftr_dim), dim=0)
+                    monitors['loss/kl/obj_ftr'] = compute_kl_regu_loss(obj_ftr_mean, obj_ftr_var) / (ftr_dim*t_frame)
+                    gt_ftr_var, gt_ftr_mean = torch.var_mean(valid_gt.view(-1, ftr_dim).contiguous(), dim=0)
+                    monitors['loss/kl/gt_ftr'] = compute_kl_regu_loss(gt_ftr_mean, gt_ftr_var) / (ftr_dim*t_frame)
+                elif ftr_id==2:
+                    valid_ftr = torch.stack(valid_kl_ftr_list, dim=0)
+                    valid_gt = torch.stack(valid_kl_gt_list, dim=0)
+                    t_frame = tmp_ftr.shape[2]
+                    ftr_dim = valid_gt.shape[-1] 
+                    obj_ftr_var, obj_ftr_mean = torch.var_mean(valid_ftr.view(-1, ftr_dim), dim=0)
+                    monitors['loss/kl/rel_ftr'] = compute_kl_regu_loss(obj_ftr_mean, obj_ftr_var) / (ftr_dim*t_frame)
+                    gt_ftr_var, gt_ftr_mean = torch.var_mean(valid_gt.view(-1, ftr_dim).contiguous(), dim=0)
+                    monitors['loss/kl/rel_gt'] = compute_kl_regu_loss(gt_ftr_mean, gt_ftr_var) /(ftr_dim*t_frame)
+
             loss_list.append(tmp_loss)
             if ftr_id==0:
                 monitors['loss/regu/obj_ftr'] = tmp_loss
@@ -207,6 +251,9 @@ class SceneParsingLoss(MultitaskLossBase):
                 continue 
             ftr_loss += tmp_loss
         monitors['loss/regu'] = ftr_loss
+        if self.args.add_kl_regu_flag:
+            monitors['loss/kl'] = monitors['loss/kl/obj_ftr'] + monitors['loss/kl/gt_ftr'] \
+                    + monitors['loss/kl/rel_ftr'] + monitors['loss/kl/rel_gt'] 
         return monitors 
 
 

@@ -192,6 +192,9 @@ class Model(ReasoningV2ModelForCLEVRER):
                     if self.args.regu_flag:
                         loss_regu = self.args.regu_weight * monitors['loss/regu']
                         loss +=loss_regu
+                    if self.args.add_kl_regu_flag:
+                        loss_kl = self.args.kl_weight * monitors['loss/kl']
+                        loss +=loss_kl
                 elif self.args.regu_only_flag==1:
                     loss_regu = self.args.regu_weight * monitors['loss/regu']
                     loss +=loss_regu

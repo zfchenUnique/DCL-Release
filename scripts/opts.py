@@ -143,6 +143,8 @@ def load_param_parser():
     parser.add_argument('--residual_obj_pred', type=int, default=0)
     parser.add_argument('--ftr_in_collision_space_flag', type=int, default=0)
     parser.add_argument('--pretrain_pred_feature_model_path', type=str,  default='')
+    parser.add_argument('--add_kl_regu_flag', type=int,  default=0)
+    parser.add_argument('--kl_weight', type=float, default=1.0)
     
     args = parser.parse_args()
     return args 
