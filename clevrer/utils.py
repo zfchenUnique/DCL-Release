@@ -978,6 +978,9 @@ def predict_spatial_feature(model, feed_dict, f_sng, args):
     args.box_only_flag = 1 
     
     for p_id in range(args.pred_normal_num):
+        
+        if p_id + x_step > len(feed_dict['tube_info']['frm_list']):
+            break
 
         x = torch.cat(pred_obj_list[p_id:p_id+x_step], dim=1) 
         Ra = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
@@ -1107,7 +1110,7 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
             tmp_box_list = [spatial_gt[:, frm_id] for frm_id in frm_id_list]
             x_spatial = torch.stack(tmp_box_list, dim=1).contiguous().view(obj_num, x_step * box_dim, 1, 1)  
         else:
-            if p_id + x_step >spatial_feature.shape[1]:
+            if p_id + x_step >=spatial_feature.shape[1]:
                 break
             x_spatial = spatial_feature[:, p_id:p_id+x_step].view(n_objects_ori, -1, 1, 1) 
         x_ftr = torch.cat(pred_obj_ftr_list[p_id:p_id+x_step], dim=1) 
