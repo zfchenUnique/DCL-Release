@@ -19,6 +19,9 @@ from clevrer.models.quasi_symbolic_v2 import fuse_box_ftr, fuse_box_overlap, do_
 import pdb
 import torch.nn as nn
 import copy
+import numpy as np
+from .models import functional
+import jactorch
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 
@@ -78,6 +81,159 @@ class SceneParsingLoss(MultitaskLossBase):
         self.used_concepts = used_concepts
         self.add_supervision = add_supervision
         self.args = args
+
+    def compute_reconstruction_loss(self, pred_ftr_list, f_sng, feed_dict, monitors, decoder):
+        reconstruct_loss_gt = 0
+        reconstruct_loss_ftr = 0
+        #pdb.set_trace()
+        # reconstruction of predictive feature
+        obj_num, pred_frm_num_ori, ftr_dim = pred_ftr_list[0].shape
+        gt_frm_num = len(feed_dict['tube_info']['frm_list'])
+        pred_frm_num = min(gt_frm_num, pred_frm_num_ori)
+        pred_obj_feature = pred_ftr_list[0][:, :pred_frm_num, :].contiguous()
+        pred_obj_ftr = pred_obj_feature.view(-1, ftr_dim, 1, 1)
+        decode_obj_patch = decoder(pred_obj_ftr)
+        decode_obj_patch_view = decode_obj_patch.view(obj_num, pred_frm_num, 3, self.args.bbox_size, self.args.bbox_size)
+        # reconstruction of predictive relation feature
+        pred_rela_feature = pred_ftr_list[2][:, :, :pred_frm_num, :].contiguous() 
+        pred_rela_ftr=pred_rela_feature.view(-1, ftr_dim, 1, 1)
+        decode_rela_patch = decoder(pred_rela_ftr)
+        decode_rela_patch_view = decode_rela_patch.view(obj_num, obj_num, pred_frm_num, 3, self.args.bbox_size, self.args.bbox_size)
+
+        # reconstruction of ground-truth feature
+        obj_num, gt_frm_num, ftr_dim = f_sng[0][0].shape
+        gt_frm_num = len(feed_dict['tube_info']['frm_list'])
+        gt_obj_feature = f_sng[0][0][:, :gt_frm_num, :].contiguous()
+        gt_obj_ftr = gt_obj_feature.view(-1, ftr_dim, 1, 1)
+        decode_gt_patch = decoder(gt_obj_ftr)
+        decode_gt_patch_view = decode_gt_patch.view(obj_num, gt_frm_num, 3, self.args.bbox_size, self.args.bbox_size)
+        # reconstruction of ground-truth relation feature
+        gt_rela_feature = f_sng[0][2][:, :, :gt_frm_num, :].contiguous() 
+        gt_rela_ftr=gt_rela_feature.view(-1, ftr_dim, 1, 1)
+        decode_gt_rela_patch = decoder(gt_rela_ftr)
+        decode_gt_rela_patch_view = decode_gt_rela_patch.view(obj_num, obj_num, gt_frm_num, 3, self.args.bbox_size, self.args.bbox_size)
+
+        def get_patch_gt(feed_dict, bbox_size):
+            
+            def parse_boxes_for_frm(feed_dict, frm_idx, mode=0, tar_obj_id=-1):
+                if mode==0:
+                    boxes_list = []
+                    tube_id_list = []
+                    frm_id = feed_dict['tube_info']['frm_list'][frm_idx]
+                    for tube_id, tube_info in feed_dict['tube_info'].items():
+                        if not isinstance(tube_id, int):
+                            continue 
+                        assert len(tube_info['frm_name'])==len(tube_info['boxes'])
+                        if frm_id not in tube_info['frm_name']:
+                            continue
+                        box_idx = tube_info['frm_name'].index(frm_id)
+                        box = tube_info['boxes'][box_idx].squeeze(0)
+                        boxes_list.append(torch.tensor(box, device=feed_dict['img'].device))
+                        tube_id_list.append(tube_id)
+                    boxes_tensor = torch.stack(boxes_list, 0).cuda()
+                return boxes_tensor, tube_id_list
+           
+            obj_num =  len(feed_dict['tube_info']) - 2
+            patch_region_list = []
+            valid_region_list = []
+            patch_union_list = []
+            for idx in range(len(feed_dict['tube_info']['frm_list'])): 
+                boxes_tensor, tube_id_list = parse_boxes_for_frm(feed_dict, idx)
+
+                tmp_region_patch = torch.zeros(obj_num, 3,  bbox_size, bbox_size, dtype=boxes_tensor.dtype, device=boxes_tensor.device)
+                for idx2, t_id in enumerate(tube_id_list):
+                    tmp_box = boxes_tensor[idx2].tolist() 
+                    x1, y1, x2, y2 = int(tmp_box[0]), int(tmp_box[1]), int(tmp_box[2])+1, int(tmp_box[3])+1  
+                    tmp_patch = feed_dict['img'][idx][:, y1:y2, x1:x2].unsqueeze(0)
+                    tmp_patch_resize = torch.nn.functional.interpolate(tmp_patch, size=bbox_size)
+                    tmp_region_patch[t_id] = tmp_patch_resize[0] 
+                    ## Debug
+                    """
+                    mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+                    std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+                    patch_np = tmp_patch_resize[0].permute(1, 2, 0).cpu().numpy() * std + mean
+                    import cv2
+                    cv2.imwrite('patch.png', patch_np*255)
+                    pdb.set_trace()
+                    """
+                patch_region_list.append(tmp_region_patch)
+                valid_region_list.append(tube_id_list)
+                
+                # for union regions 
+                tmp_union_patch = torch.zeros(obj_num, obj_num, 3,  bbox_size, bbox_size, dtype=boxes_tensor.dtype, device=boxes_tensor.device)
+                sub_id, obj_id = jactorch.meshgrid(torch.arange(boxes_tensor.size(0), dtype=torch.int64, device=boxes_tensor.device), dim=0)
+                sub_id, obj_id = sub_id.contiguous().view(-1), obj_id.contiguous().view(-1)
+                sub_box, obj_box = jactorch.meshgrid(boxes_tensor, dim=0)
+                sub_box = sub_box.contiguous().view(boxes_tensor.size(0) ** 2, 4)
+                obj_box = obj_box.contiguous().view(boxes_tensor.size(0) ** 2, 4)
+                union_box = functional.generate_union_box(sub_box, obj_box)
+                tmp_box_num = boxes_tensor.shape[0]
+                for idx3, t_id1 in enumerate(tube_id_list):
+                    for idx4, t_id2 in enumerate(tube_id_list):
+                        tmp_box = union_box[idx3+idx4*tmp_box_num].tolist() 
+                        #x1, y1, x2, y2 = int(tmp_box[0]), int(tmp_box[1]), int(tmp_box[2]), int(tmp_box[3]) 
+                        x1, y1, x2, y2 = int(tmp_box[0]), int(tmp_box[1]), int(tmp_box[2])+1, int(tmp_box[3])+1  
+                        tmp_patch = feed_dict['img'][idx][:, y1:y2, x1:x2].unsqueeze(0)
+                        tmp_patch_resize = torch.nn.functional.interpolate(tmp_patch, size=bbox_size)
+                        tmp_union_patch[t_id1, t_id2] = tmp_patch_resize[0] 
+                        """
+                        mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+                        std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+                        patch_np = tmp_patch_resize[0].permute(1, 2, 0).cpu().numpy() * std + mean
+                        import cv2
+                        cv2.imwrite('union.png', patch_np*255)
+                        pdb.set_trace()
+                        """
+                patch_union_list.append(tmp_union_patch)
+
+            patch_region_label = torch.stack(patch_region_list, dim=1) 
+            patch_rela_label = torch.stack(patch_union_list, dim=2)
+            
+            #pdb.set_trace()
+            frm_num = patch_region_label.shape[1]
+            union_patch_mask = torch.ones(obj_num, obj_num, frm_num, 1, 1, 1, dtype=boxes_tensor.dtype, device=boxes_tensor.device)
+            region_patch_mask = torch.ones(obj_num, frm_num, 1, 1, 1, dtype=boxes_tensor.dtype, device=boxes_tensor.device)
+            for frm_id, valid_regions in enumerate(valid_region_list):
+                for obj_id in range(obj_num):
+                    if obj_id not in valid_region_list:
+                        region_patch_mask[obj_id, frm_id] = 0.0
+                        union_patch_mask[obj_id, :, frm_id] = 0.0
+                        union_patch_mask[:, obj_id, frm_id] = 0.0
+
+            return patch_region_label, patch_rela_label, valid_region_list, region_patch_mask, union_patch_mask 
+        
+        patch_region_label, patch_rela_label, valid_region_list, region_patch_mask, union_patch_mask \
+                = get_patch_gt(feed_dict, self.args.bbox_size)
+        
+        mse_loss = nn.MSELoss()
+        frm_num = min(decode_obj_patch_view.shape[1], region_patch_mask.shape[1])
+        if decode_obj_patch_view.shape[1]==frm_num and region_patch_mask.shape[1]!=frm_num:
+            patch_region_label = patch_region_label[:, :frm_num]
+            region_patch_mask = region_patch_mask[:, :frm_num]
+            union_patch_mask = union_patch_mask[:, :, :frm_num]
+            patch_rela_label = patch_rela_label[:, :, :frm_num]
+            decode_gt_patch_view = decode_gt_patch_view[:, :frm_num]
+            decode_gt_rela_patch_view = decode_gt_rela_patch_view[:, :, :frm_num]
+        elif decode_obj_patch_view.shape[1]!=frm_num and region_patch_mask.shape[1]==frm_num:
+            decode_obj_patch_view = decode_obj_patch_view[:, :frm_num]
+            decode_rela_patch_view = decode_rela_patch_view[:, :, :frm_num]
+
+        patch_loss_pred = mse_loss(decode_obj_patch_view*region_patch_mask, patch_region_label)
+        rela_loss_pred = mse_loss(decode_rela_patch_view*union_patch_mask, patch_rela_label)
+        
+        patch_loss_gt = mse_loss(decode_gt_patch_view*region_patch_mask, patch_region_label)
+        rela_loss_gt = mse_loss(decode_gt_rela_patch_view*union_patch_mask, patch_rela_label)
+       
+        monitors['loss/decode/obj_pred'] = patch_loss_pred
+        monitors['loss/decode/obj_gt'] = patch_loss_gt
+        monitors['loss/decode/rela_pred'] = rela_loss_pred
+        monitors['loss/decode/rela_gt'] = rela_loss_gt
+
+        monitors['loss/decode'] = monitors['loss/decode/obj_pred'] + monitors['loss/decode/obj_gt'] +\
+                monitors['loss/decode/rela_pred'] + monitors['loss/decode/rela_gt']
+        #pdb.set_trace()
+        #return reconstruct_loss_gt, reconstruct_loss_ftr 
+        return monitors 
 
     def compute_regu_loss_v2(self, pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding):
         ftr_loss = 0.0
@@ -308,11 +464,14 @@ class SceneParsingLoss(MultitaskLossBase):
         monitors['loss/regu'] = ftr_loss
         return monitors 
 
-    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None):
+    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None, decoder=None):
         outputs, monitors = dict(), dict()
 
         if pred_ftr_list is not None:
             monitors = self.compute_regu_loss_v2(pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding)
+   
+        if self.args.reconstruct_flag:
+            monitors = self.compute_reconstruction_loss(pred_ftr_list, f_sng, feed_dict, monitors, decoder)
 
         objects = [f[1] for f in f_sng]
         all_f = torch.cat(objects)

@@ -39,7 +39,7 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump 
+from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, build_constructor  
 from opts import load_param_parser 
 
 
@@ -122,6 +122,9 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         desc_spatial_pred = load_source(args.pred_spatial_model_path)
         model.build_temporal_prediction_model(args, desc_pred, desc_spatial_pred)
 
+    if args.reconstruct_flag:
+        model._decoder = build_constructor(args.rela_ftr_dim, args.nf_particle, args.bbox_size)    
+
     if args.use_gpu:
         model.cuda()
         # Disable the cudnn benchmark.
@@ -133,7 +136,12 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     else:
         from jactorch.optim import AdamW
         if args.freeze_learner_flag==1:
-            trainable_parameters = filter(lambda x: x.requires_grad, model._model_pred.parameters())
+            if args.reconstruct_flag:
+                parameters = list(model._model_pred.parameters())+list(model._decoder.parameters())
+                trainable_parameters = filter(lambda x: x.requires_grad, parameters)
+                #pdb.set_trace()
+            else:
+                trainable_parameters = filter(lambda x: x.requires_grad, model._model_pred.parameters())
         else:
             trainable_parameters = filter(lambda x: x.requires_grad, model.parameters())
         optimizer = AdamW(trainable_parameters, args.lr, weight_decay=configs.train.weight_decay)

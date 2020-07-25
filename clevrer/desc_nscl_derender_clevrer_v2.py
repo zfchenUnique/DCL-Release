@@ -147,6 +147,7 @@ class Model(ReasoningV2ModelForCLEVRER):
 
         monitors_list = [] 
         output_list = []
+        ftr_decoder = self._decoder if self.args.reconstruct_flag==1 else None
         if self.args.regu_only_flag!=1:
             for idx, buffers  in enumerate(buffers_list):
                 monitors, outputs = {}, {}
@@ -165,7 +166,8 @@ class Model(ReasoningV2ModelForCLEVRER):
                     feed_dict, f_sng,
                     self.reasoning.embedding_attribute, self.reasoning.embedding_relation,
                     self.reasoning.embedding_temporal,
-                    pred_ftr_list = output_ftr 
+                    pred_ftr_list = output_ftr,
+                    decoder = ftr_decoder 
                 ))
                 update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
                 monitors_list.append(monitors)
@@ -177,6 +179,9 @@ class Model(ReasoningV2ModelForCLEVRER):
                 feed_dict = feed_dict_list[idx]
                 f_sng = [f_sng_list[idx]]
                 self.scene_loss.compute_regu_loss_v2(output_ftr, f_sng, feed_dict, monitors, self.reasoning.embedding_relation)
+                monitors_list.append(monitors)
+                if self.args.reconstruct_flag:
+                    monitors = self.scene_loss.compute_reconstruction_loss(output_ftr, f_sng, feed_dict, monitors, decoder=ftr_decoder)
                 monitors_list.append(monitors)
 
         loss = 0
@@ -193,13 +198,17 @@ class Model(ReasoningV2ModelForCLEVRER):
                     if self.args.regu_flag:
                         loss_regu = self.args.regu_weight * monitors['loss/regu']
                         loss +=loss_regu
-                    if self.args.add_kl_regu_flag:
-                        loss_kl = self.args.kl_weight * monitors['loss/kl']
-                        loss +=loss_kl
                 elif self.args.regu_only_flag==1:
                     loss_regu = self.args.regu_weight * monitors['loss/regu']
                     loss +=loss_regu
                     outputs = {}
+                if self.args.add_kl_regu_flag:
+                    loss_kl = self.args.kl_weight * monitors['loss/kl']
+                    loss +=loss_kl
+                if self.args.reconstruct_flag:
+                    loss_decode = self.args.reconstruct_weight  * monitors['loss/decode']
+                    loss +=loss_decode 
+                #pdb.set_trace()
             if torch.isnan(loss):
                 pdb.set_trace()
             return loss, monitors, outputs

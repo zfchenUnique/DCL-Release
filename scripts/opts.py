@@ -145,6 +145,8 @@ def load_param_parser():
     parser.add_argument('--pretrain_pred_feature_model_path', type=str,  default='')
     parser.add_argument('--add_kl_regu_flag', type=int,  default=0)
     parser.add_argument('--kl_weight', type=float, default=1.0)
+    parser.add_argument('--reconstruct_flag', type=int, default=0)
+    parser.add_argument('--reconstruct_weight', type=float, default=0.01)
     
     args = parser.parse_args()
     return args 

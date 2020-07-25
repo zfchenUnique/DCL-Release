@@ -11,12 +11,46 @@ import cv2
 import pdb
 from collections import defaultdict
 from nscl.datasets.definition import gdef
+import torch.nn as nn
+
 
 COLORS = ['gray', 'red', 'blue', 'green', 'brown', 'yellow', 'cyan', 'purple']
 MATERIALS = ['metal', 'rubber']
 SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
+
+def build_constructor(input_ftr_dim, hidden_size, patch_size):
+    
+    class featureDecoder(nn.Module):
+        def __init__(self, input_size, hidden_size, output_size):
+            super(featureDecoder, self).__init__()
+            self.conv1 = nn.ConvTranspose2d(input_size, hidden_size*3, kernel_size=3, stride=1, padding=0)
+            self.conv2 = nn.ConvTranspose2d(hidden_size*3, hidden_size*2, kernel_size=4, stride=2, padding=1)
+            self.conv3 = nn.ConvTranspose2d(hidden_size*2, hidden_size, kernel_size=4, stride=2, padding=1)
+            self.conv4 = nn.ConvTranspose2d(hidden_size, 3, kernel_size=4, stride=2, padding=1)
+            self.relu = nn.LeakyReLU()
+
+        def forward(self, x):
+            '''
+            args:
+                x: [n_particles, input_size]
+            returns:
+                [n_particles, output_size]
+            '''
+            # 3 x 3
+            x_1 = self.relu(self.conv1(x))
+            # 6 x 6
+            x_2 = self.relu(self.conv2(x_1))
+            # 12 x 12
+            x_3 = self.relu(self.conv3(x_2))
+            # 24 x 24
+            x_4 = self.relu(self.conv4(x_3))
+            return x_4
+            #return x_1, x_2, x_3, x_4
+
+    decoder = featureDecoder(input_ftr_dim, hidden_size, patch_size)
+    return decoder 
 
 def prepare_data_for_testing(output_dict_list, feed_dict_list, json_output_list):
     for vid, output_answer_list in enumerate(output_dict_list['answer']):
