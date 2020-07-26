@@ -22,6 +22,8 @@ import copy
 import numpy as np
 from .models import functional
 import jactorch
+from .utils import visualize_decoder
+
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 
@@ -195,7 +197,7 @@ class SceneParsingLoss(MultitaskLossBase):
             region_patch_mask = torch.ones(obj_num, frm_num, 1, 1, 1, dtype=boxes_tensor.dtype, device=boxes_tensor.device)
             for frm_id, valid_regions in enumerate(valid_region_list):
                 for obj_id in range(obj_num):
-                    if obj_id not in valid_region_list:
+                    if obj_id not in valid_region_list[frm_id]:
                         region_patch_mask[obj_id, frm_id] = 0.0
                         union_patch_mask[obj_id, :, frm_id] = 0.0
                         union_patch_mask[:, obj_id, frm_id] = 0.0
@@ -223,6 +225,13 @@ class SceneParsingLoss(MultitaskLossBase):
         
         patch_loss_gt = mse_loss(decode_gt_patch_view*region_patch_mask, patch_region_label)
         rela_loss_gt = mse_loss(decode_gt_rela_patch_view*union_patch_mask, patch_rela_label)
+    
+        #pdb.set_trace()
+
+        if self.args.visualize_flag:
+            #visualize_decoder(decode_output=decode_obj_patch_view, feed_dict=feed_dict, args=self.args, store_img=True)
+            visualize_decoder(decode_output=decode_gt_patch_view, feed_dict=feed_dict, args=self.args, store_img=True)
+            #visualize_decoder(decode_output=patch_region_label, feed_dict=feed_dict, args=self.args, store_img=True)
        
         monitors['loss/decode/obj_pred'] = patch_loss_pred
         monitors['loss/decode/obj_gt'] = patch_loss_gt

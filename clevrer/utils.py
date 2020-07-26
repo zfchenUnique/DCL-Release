@@ -12,13 +12,218 @@ import pdb
 from collections import defaultdict
 from nscl.datasets.definition import gdef
 import torch.nn as nn
-
+from PIL import Image
 
 COLORS = ['gray', 'red', 'blue', 'green', 'brown', 'yellow', 'cyan', 'purple']
 MATERIALS = ['metal', 'rubber']
 SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
+
+def visualize_decoder(decode_output, feed_dict, args, store_img=False):
+    #pdb.set_trace()
+    whatif_id = 'decode'
+    base_folder = os.path.basename(args.load).split('.')[0]
+    filename = str(feed_dict['meta_ann']['scene_index'])
+    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + whatif_id +'.avi'
+    #videoname = filename + '.mp4'
+    if store_img:
+        img_folder = 'dumps/'+base_folder +'/'+filename 
+        os.system('mkdir -p ' + img_folder)
+
+    background_fn = '../temporal_reasoning-master/background.png'
+    if not os.path.isfile(background_fn):
+        background_fn = '../temporal_reasoningv2/background.png'
+    bg = cv2.imread(background_fn)
+    H, W, C = bg.shape
+    bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
+    fps = 6
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    out = cv2.VideoWriter(videoname, fourcc, fps, (W, H))
+    
+    scene_idx = feed_dict['meta_ann']['scene_index']
+    sub_idx = int(scene_idx/1000)
+    sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+    img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
+
+    n_frame = min(decode_output.shape[1], len(feed_dict['tube_info']['frm_list']))
+    padding_patch_list = []
+    for i in range(n_frame):
+        frm_id = feed_dict['tube_info']['frm_list'][i]
+        img = copy.deepcopy(bg)
+        img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+        img_ori = np.array(Image.open(img_full_path).convert('RGB'))
+        for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+            tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+            x = float(tmp_box[0] - tmp_box[2]*0.5)
+            y = float(tmp_box[1] - tmp_box[3]*0.5)
+            w = float(tmp_box[2])
+            h = float(tmp_box[3])
+
+            # filter invalid boxes
+            if w <=0 or h<=0:
+                continue 
+
+            x1, y1, x2, y2 = int(x*W), int(y*H), int(x*W) +int(w*W), int(h*H)+int(y*H)
+            w_1, h_1 = int(w*W), int(h*H)
+            mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+            std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+            img_patch = decode_output[tube_id, i].permute([1,  2, 0]).data.cpu().numpy()*std + mean 
+            patch_resize = cv2.resize(img_patch*255, (w_1, h_1))
+            img[y1:y2, x1:x2] = patch_resize
+            img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+            cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+       
+            img_ori = cv2.rectangle(img_ori, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+            cv2.putText(img_ori, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+
+        img_out = np.concatenate([img, img_ori], axis=0)[:, :, ::-1]
+        if store_img:
+            cv2.imwrite(os.path.join( img_folder, '%s_%d.png' % (filename, i)), img_out.astype(np.uint8))
+        out.write(img_out)
+    pdb.set_trace()
+
+
+def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
+
+    # print('states', states.shape)
+    # print('actions', actions.shape)
+    # print(filename)
+
+    # print(actions[:, 0, :])
+    # print(states[:20, 0, :])
+    base_folder = os.path.basename(args.load).split('.')[0]
+    filename = str(feed_dict['meta_ann']['scene_index'])
+    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
+    #videoname = filename + '.mp4'
+    if store_img:
+        img_folder = 'dumps/'+base_folder +'/'+filename 
+        os.system('mkdir -p ' + img_folder)
+
+    background_fn = '../temporal_reasoning-master/background.png'
+    if not os.path.isfile(background_fn):
+        background_fn = '../temporal_reasoningv2/background.png'
+    bg = cv2.imread(background_fn)
+    H, W, C = bg.shape
+    bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
+
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    out = cv2.VideoWriter(videoname, fourcc, 3, (W, H))
+    
+    scene_idx = feed_dict['meta_ann']['scene_index']
+    sub_idx = int(scene_idx/1000)
+    sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+    img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
+
+    if whatif_id == -1:
+        n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1]
+    else:
+        n_frame = min(box_ftr.shape[1], len(feed_dict['tube_info']['frm_list']))
+    padding_patch_list = []
+    for i in range(n_frame):
+        if whatif_id==-1:
+            if i < len(feed_dict['tube_info']['frm_list']):
+                frm_id = feed_dict['tube_info']['frm_list'][i]
+                img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+                img = cv2.imread(img_full_path)
+                for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+                    tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                    if i==len(feed_dict['tube_info']['frm_list'])-1:
+                        padding_patch = img[int(h*H):int(y*H+h*H),int(x*W):int(W*x+w*W)]
+                        hh, ww, c = padding_patch.shape
+                        if hh*ww*c==0:
+                            padding_patch  = np.zeros((24, 24, 3), dtype=np.float32)
+                        padding_patch_list.append(padding_patch)
+            else:
+                pred_offset =  i - len(feed_dict['tube_info']['frm_list'])
+                frm_id = feed_dict['tube_info'] ['frm_list'][-1] + (args.frame_offset*pred_offset+1)  
+                img = copy.deepcopy(bg)
+                for tube_id in range(box_ftr.shape[0]):
+                    tmp_box = box_ftr[tube_id][pred_offset]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    y2 = y +h
+                    x2 = x +w
+                    if w<=0 or h<=0:
+                        continue
+                    if x>1:
+                        continue
+                    if y>1:
+                        continue
+                    if x2 <=0:
+                        continue
+                    if y2 <=0:
+                        continue 
+                    if x<0:
+                        x=0
+                    if y<0:
+                        y=0
+                    if x2>1:
+                        x2=1
+                    if y2>1:
+                        y2=1
+                    patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
+                    img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+        
+            if store_img:
+                cv2.imwrite(os.path.join( img_folder, '%s_%d.png' % (filename, i)), img.astype(np.uint8))
+        else:
+            frm_id = feed_dict['tube_info']['frm_list'][i]
+            img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+            img_rgb = cv2.imread(img_full_path)
+            #for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+            img = copy.deepcopy(bg)
+            for tube_id in range(box_ftr.shape[0]):
+                tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                img_patch = img_rgb[int(y*H):int(y*H + h*H) , int(x*W): int(x*W + w*W)]
+                hh, ww, c = img_patch.shape
+                if hh*ww*c==0:
+                    img_patch  = np.zeros((24, 24, 3), dtype=np.float32)
+
+                tmp_box = box_ftr[tube_id][i]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                y2 = y +h
+                x2 = x +w
+                if w<=0 or h<=0:
+                    continue
+                if x>1:
+                    continue
+                if y>1:
+                    continue
+                if x2 <=0:
+                    continue
+                if y2 <=0:
+                    continue 
+                if x<0:
+                    x=0
+                if y<0:
+                    y=0
+                if x2>1:
+                    x2=1
+                if y2>1:
+                    y2=1
+                patch_resize = cv2.resize(img_patch, (max(int(x2*W) - int(x*W), 1), max(int(y2*H) - int(y*H), 1)))
+                img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+            if store_img:
+                cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
+
 
 def build_constructor(input_ftr_dim, hidden_size, patch_size):
     
@@ -1264,7 +1469,7 @@ def compare_l2_distance(f_sng, feed_dict, obj_ftr, rel_ftr_exp, valid_object_id_
 
         l2_dist = torch.dist(tmp_ftr, tmp_gt)
         print(l2_dist)
-        pdb.set_trace()
+        #pdb.set_trace()
 
 
 def predict_future_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
@@ -2009,12 +2214,6 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
 
 def visualize_prediction_v2(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 
-    # print('states', states.shape)
-    # print('actions', actions.shape)
-    # print(filename)
-
-    # print(actions[:, 0, :])
-    # print(states[:20, 0, :])
     base_folder = os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
     videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
