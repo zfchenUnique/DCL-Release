@@ -307,6 +307,8 @@ class SceneParsingLoss(MultitaskLossBase):
                             for obj_id2 in range(obj_num):
                                 if not invalid_mask[obj_id2, frm_id]:
                                     valid_kl_gt_list.append(tmp_gt[obj_id, obj_id2, frm_id])
+                                    if frm_id < self.args.n_his +1:
+                                        valid_kl_ftr_list.append(tmp_gt[obj_id, obj_id2, frm_id]) # to avoid zero loss
 
                 # tmp_ftr: (obj_num, obj_num, frm_num , ftr_dim)
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
@@ -368,7 +370,7 @@ class SceneParsingLoss(MultitaskLossBase):
                     gt_ftr_var, gt_ftr_mean = torch.var_mean(valid_gt.view(-1, ftr_dim).contiguous(), dim=0)
                     monitors['loss/kl/gt_ftr'] = compute_kl_regu_loss(gt_ftr_mean, gt_ftr_var) / (ftr_dim*t_frame)
                 elif ftr_id==2:
-                    valid_ftr = torch.stack(valid_kl_ftr_list, dim=0)
+                    valid_ftr = torch.stack(valid_kl_ftr_list, dim=-1)
                     valid_gt = torch.stack(valid_kl_gt_list, dim=0)
                     t_frame = tmp_ftr.shape[2]
                     ftr_dim = valid_gt.shape[-1] 
