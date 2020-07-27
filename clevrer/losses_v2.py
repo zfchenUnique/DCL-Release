@@ -278,7 +278,7 @@ class SceneParsingLoss(MultitaskLossBase):
                         else:
                             valid_kl_gt_list.append(tmp_gt[obj_id, frm_id])
                             if frm_id < self.args.n_his +1:
-                                valid_kl_ftr_list.append(tmp_gt[obj, frm_id]) # to avoid zero loss
+                                valid_kl_ftr_list.append(tmp_gt[obj_id, frm_id]) # to avoid zero loss
 
                 for frm_idx, valid_obj_list in enumerate(valid_object_id_stack):
                     frm_id = self.args.n_his + 1 + frm_idx
