@@ -43,6 +43,7 @@ More comprehensive features for temporal concepts
 - [ ] Models with learnt programs
 - [ ] Threshold for collision performance
 - [ ] More supervision info from QA
+- [ ] Masking output that are out of the boxes
 
 ### Details for learning dynamic modeles in the latent space
 Step1, extract visual features for each target object and their collision features
