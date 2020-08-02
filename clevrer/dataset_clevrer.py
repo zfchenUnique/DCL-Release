@@ -14,7 +14,7 @@ from nscl.datasets.common.vocab import Vocab
 import operator
 import math
 import random
-#import cv2
+import cv2
 #torch.multiprocessing.set_sharing_strategy('file_system')
 #set_debugger()
 #_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
@@ -30,6 +30,16 @@ def merge_img_patch(img_0, img_1):
     idx = img_1[:, :, 0] > 0
     idx = np.logical_or(idx, img_1[:, :, 1] > 0)
     idx = np.logical_or(idx, img_1[:, :, 2] > 0)
+    ret[idx] = img_1[idx]
+
+    return ret
+
+def merge_img_patch_v2(img_0, img_1):
+
+    ret = img_0.copy()
+    idx = img_1[:, :, 0] != 132
+    idx = np.logical_or(idx, img_1[:, :, 1] != 133)
+    idx = np.logical_or(idx, img_1[:, :, 2] != 132)
     ret[idx] = img_1[idx]
 
     return ret
@@ -147,7 +157,6 @@ class clevrerDataset(Dataset):
         dataset_len = len(vid_list)
         if phase == 'train' and self.args.data_train_length!=-1:
             dataset_len = min(dataset_len, self.args.data_train_length)
-        #pdb.set_trace()
         #for idx, vid_id in enumerate(vid_list):
         for idx in range(dataset_len):
             vid_id = vid_list[idx]
@@ -202,8 +211,8 @@ class clevrerDataset(Dataset):
 
             if y + h_ < 0 or y >= H or x + w_ < 0 or x >= W:
                 continue
-
-            img_patch[y:y+h_, x:x+w_] = merge_img_patch(
+            #img_patch[y:y+h_, x:x+w_] = merge_img_patch(
+            img_patch[y:y+h_, x:x+w_] = merge_img_patch_v2(
                 img_patch[y:y+h_, x:x+w_], img[y_:y_+h_, x_:x_+w_])
         img_patch = Image.fromarray(img_patch)
         return img_patch
@@ -241,7 +250,7 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
-                #cv2.imwrite('img_%d.png'%(frame_index) , syn_img)
+                #cv2.imwrite('dumps/visualization/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
                     
@@ -355,7 +364,6 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
-                #cv2.imwrite('img_%d.png'%(frame_index) , syn_img)
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
                     
@@ -449,7 +457,6 @@ class clevrerDataset(Dataset):
             for frm_id in range(len(mask_gt['frames'])):
                 frm_ann.append([index, frm_id])
         self.frm_ann = frm_ann 
-        #pdb.set_trace()
 
     def __get_video_frame__(self, frm_index):
         data = {}
@@ -554,13 +561,11 @@ class clevrerDataset(Dataset):
             #if op.startswith('query'):
             #    continue
             tar_list.append(op)
-        pdb.set_trace()
 
     def _filter_program_types(self):
         new_question_ann = []
         ori_ques_num = 0
         filt_ques_num = 0
-        #pdb.set_trace()
         for idx, meta_ann in enumerate(self.question_ann):
             meta_new = copy.deepcopy(meta_ann)
             meta_new['questions'] = []
@@ -675,7 +680,6 @@ class clevrerDataset(Dataset):
                 continue 
             del meta_ann['questions'][q_id]
         data['meta_ann'] = meta_ann 
-        #pdb.set_trace()
         # loadding unseen events
         if load_predict_flag  and self.args.version=='v2':
             scene_index = meta_ann['scene_index']
@@ -724,7 +728,6 @@ class clevrerDataset(Dataset):
                 tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
                 # TODO: this may raise bug since it hack the data property for gt
                 prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
-                #pdb.set_trace()
                 for attri_group, attribute in gdef.all_concepts_clevrer.items():
                     if attri_group=='attribute':
                         for attr, concept_group in attribute.items(): 
@@ -770,7 +773,6 @@ class clevrerDataset(Dataset):
                                         end_id = min(t_id + min_frm, time_step-1)
                                         if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
                                             attr_frm_id_st.append(t_id)
-                                            #pdb.set_trace()
                                             break 
                                         if t_id == time_step - 1:
                                             attr_frm_id_st.append(0)
@@ -787,12 +789,10 @@ class clevrerDataset(Dataset):
                                 data[attr_key] = torch.tensor(attr_frm_id_st)
                                 attr_key = attri_group + '_out'
                                 data[attr_key] = torch.tensor(attr_frm_id_ed)
-                            #pdb.set_trace()
         return data 
 
 
     def __getitem__model(self, index):
-        #pdb.set_trace()
         data = {}
         meta_ann = self.question_ann[index]
         scene_idx = meta_ann['scene_index']
@@ -864,7 +864,6 @@ class clevrerDataset(Dataset):
             tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
             # TODO: this may raise bug since it hack the data property for gt
             prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
-            #pdb.set_trace()
             for attri_group, attribute in gdef.all_concepts_clevrer.items():
                 if attri_group=='attribute':
                     for attr, concept_group in attribute.items(): 
@@ -910,7 +909,6 @@ class clevrerDataset(Dataset):
                                     end_id = min(t_id + min_frm, time_step-1)
                                     if np.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id):
                                         attr_frm_id_st.append(t_id)
-                                        #pdb.set_trace()
                                         break 
                                     if t_id == time_step - 1:
                                         attr_frm_id_st.append(0)
@@ -927,7 +925,6 @@ class clevrerDataset(Dataset):
                             data[attr_key] = torch.tensor(attr_frm_id_st)
                             attr_key = attri_group + '_out'
                             data[attr_key] = torch.tensor(attr_frm_id_ed)
-                            #pdb.set_trace()
         return data 
 
     def sample_frames(self, tube_info, img_num):
@@ -1119,7 +1116,8 @@ class clevrerDataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            return 50
+            #return 50
+            return 200
         else:
             if self.args.extract_region_attr_flag:
                 return len(self.frm_ann)

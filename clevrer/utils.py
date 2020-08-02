@@ -20,6 +20,358 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
+
+def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
+    base_folder = os.path.basename(args.load).split('.')[0]
+    filename = str(feed_dict['meta_ann']['scene_index'])
+    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'_scene.avi'
+    #videoname = filename + '.mp4'
+    if store_img:
+        img_folder = 'dumps/'+base_folder +'/'+filename 
+        os.system('mkdir -p ' + img_folder)
+
+    background_fn = '../temporal_reasoning-master/background.png'
+    if not os.path.isfile(background_fn):
+        background_fn = '../temporal_reasoningv2/background.png'
+    bg = cv2.imread(background_fn)
+    H, W, C = bg.shape
+    bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
+    fps = 6
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    #fourcc = cv2.VideoWriter_fourcc('F','M','P','4')
+    out = cv2.VideoWriter(videoname, fourcc, fps, (W, H))
+    
+    scene_idx = feed_dict['meta_ann']['scene_index']
+    sub_idx = int(scene_idx/1000)
+    sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+    img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
+
+    if whatif_id==-1 and ctx._future_features is not None:
+        box_dim, obj_num = 4, ctx._future_features[3].shape[0]
+        box_ftr = ctx._future_features[3].view(obj_num, -1, box_dim)
+        n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1] - args.n_his -1
+    elif whatif_id>=0 and ctx._counter_events_colli_set is not None:
+        box_dim, obj_num = 4, ctx._counterfact_features[3].shape[0]
+        box_ftr = ctx._counterfact_features[3].view(obj_num, -1, box_dim)
+        n_frame = min(len(feed_dict['tube_info']['frm_list']), box_ftr.shape[1])
+    else:
+        raise NotImplemented 
+    padding_patch_list = []
+    frm_box_list = []
+    for i in range(n_frame):
+        box_list = []
+        if whatif_id==-1:
+            if i < len(feed_dict['tube_info']['frm_list']):
+                frm_id = feed_dict['tube_info']['frm_list'][i]
+                img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+                img_ori = cv2.imread(img_full_path)
+                img = copy.deepcopy(img_ori)
+                for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+                    tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    
+                    x1, y1, x2, y2 = x*W, y*H, (x+w)*W, (y+h)*H
+                    box_list.append([x1, y1, x2, y2])
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                    if i==len(feed_dict['tube_info']['frm_list'])-1:
+                        padding_patch = img_ori[int(y*H):int(y*H+h*H),int(x*W):int(W*x+w*W)]
+                        hh, ww, c = padding_patch.shape
+                        if hh*ww*c==0:
+                            padding_patch  = np.zeros((24, 24, 3), dtype=np.float32)
+                        padding_patch_list.append(padding_patch)
+            else:
+                pred_offset =  i - len(feed_dict['tube_info']['frm_list']) + args.n_his + 1 
+                frm_id = feed_dict['tube_info'] ['frm_list'][-1] + (args.frame_offset*pred_offset+1)  
+                img = copy.deepcopy(bg)
+                for tube_id in range(box_ftr.shape[0]):
+                    tmp_box = box_ftr[tube_id][pred_offset]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    
+                    box_list.append([x*W, y*H, (x+w)*W, (y+h)*H])
+                    y2 = y +h
+                    x2 = x +w
+                    if w<=0 or h<=0:
+                        continue
+                    if x>1:
+                        continue
+                    if y>1:
+                        continue
+                    if x2 <=0:
+                        continue
+                    if y2 <=0:
+                        continue 
+                    if x<0:
+                        x=0
+                    if y<0:
+                        y=0
+                    if x2>1:
+                        x2=1
+                    if y2>1:
+                        y2=1
+                    patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
+                    img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                    #img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    #cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (0,0,0), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 2)
+        
+        else:
+            frm_id = feed_dict['tube_info']['frm_list'][i]
+            img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+            img_rgb = cv2.imread(img_full_path)
+            #for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+            #img = copy.deepcopy(bg)
+            img = copy.deepcopy(img_rgb)
+            for tube_id in range(box_ftr.shape[0]):
+                tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                x2 = x + w
+                y2 = y + h
+
+                box_list.append([x*W, y*H, (x+w)*W, (y+h)*H])
+
+                if w<=0 or h<=0:
+                    continue
+                if x>1:
+                    continue
+                if y>1:
+                    continue
+                if x2 <=0:
+                    continue
+                if y2 <=0:
+                    continue 
+                if x<0:
+                    x=0
+                if y<0:
+                    y=0
+                if x2>1:
+                    x2=1
+                if y2>1:
+                    y2=1
+
+                img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+
+                tmp_box = box_ftr[tube_id, i]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                y2 = y +h
+                x2 = x +w
+                if w<=0 or h<=0:
+                    continue
+                if x>1:
+                    continue
+                if y>1:
+                    continue
+                if x2 <=0:
+                    continue
+                if y2 <=0:
+                    continue 
+                if x<0:
+                    x=0
+                if y<0:
+                    y=0
+                if x2>1:
+                    x2=1
+                if y2>1:
+                    y2=1
+                #patch_resize = cv2.resize(img_patch, (max(int(x2*W) - int(x*W), 1), max(int(y2*H) - int(y*H), 1)))
+                #img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (0,0,0), 1)
+                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 2)
+        
+        # draw collision events
+        obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
+        print('%d/%d' %(i, box_ftr.shape[1]))
+        for t_id1 in range(obj_num):
+            for t_id2 in range(obj_num):
+                if i >=ctx._events_buffer[0][0].shape[2]:
+                    pred_id = i - len(feed_dict['tube_info']['frm_list']) + args.n_his +1
+                    if ctx._event_colli_set[t_id1, t_id2, pred_id]>args.colli_threshold:
+                    #pred_score = ctx._unseen_event_buffer[0][t_id1, t_id2]
+                    #pred_id = ctx._unseen_event_buffer[1][t_id1, t_id2]
+                    #if i==pred_id+len(feed_dict['tube_info']['frm_list']) - args.n_his -1 and \
+                        #pred_score >args.colli_threshold:
+                        box1 = box_list[t_id1]
+                        box2 = box_list[t_id2]
+                        x1_min = min(box1[0], box2[0])
+                        y1_min = min(box1[1], box2[1])
+                        x2_max = max(box1[2], box2[2])
+                        y2_max = max(box1[3], box2[3])
+                        img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
+                        cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+                elif (whatif_id==-1 and ctx._events_buffer[0][0][t_id1, t_id2, i]>args.colli_threshold) or \
+                        (whatif_id>=0 and ctx._counter_events_colli_set[t_id1, t_id2, i]>args.colli_threshold):
+                    print('collision@%d frames'%(i))
+                    box1 = box_list[t_id1]
+                    box2 = box_list[t_id2]
+                    x1_min = min(box1[0], box2[0])
+                    y1_min = min(box1[1], box2[1])
+                    x2_max = max(box1[2], box2[2])
+                    y2_max = max(box1[3], box2[3])
+                    
+                    img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
+                    
+                    cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+
+        if store_img:
+            cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
+        out.write(img)
+    pdb.set_trace()
+
+def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
+
+    # print('states', states.shape)
+    # print('actions', actions.shape)
+    # print(filename)
+
+    # print(actions[:, 0, :])
+    # print(states[:20, 0, :])
+    base_folder = os.path.basename(args.load).split('.')[0]
+    filename = str(feed_dict['meta_ann']['scene_index'])
+    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
+    #videoname = filename + '.mp4'
+    if store_img:
+        img_folder = 'dumps/'+base_folder +'/'+filename 
+        os.system('mkdir -p ' + img_folder)
+
+    background_fn = '../temporal_reasoning-master/background.png'
+    if not os.path.isfile(background_fn):
+        background_fn = '../temporal_reasoningv2/background.png'
+    bg = cv2.imread(background_fn)
+    H, W, C = bg.shape
+    bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
+
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    out = cv2.VideoWriter(videoname, fourcc, 3, (W, H))
+    
+    scene_idx = feed_dict['meta_ann']['scene_index']
+    sub_idx = int(scene_idx/1000)
+    sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
+    img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
+
+    if whatif_id == -1:
+        n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1]
+    else:
+        n_frame = min(box_ftr.shape[1], len(feed_dict['tube_info']['frm_list']))
+    padding_patch_list = []
+    for i in range(n_frame):
+        if whatif_id==-1:
+            if i < len(feed_dict['tube_info']['frm_list']):
+                frm_id = feed_dict['tube_info']['frm_list'][i]
+                img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+                img = cv2.imread(img_full_path)
+                for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+                    tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                    if i==len(feed_dict['tube_info']['frm_list'])-1:
+                        padding_patch = img[int(h*H):int(y*H+h*H),int(x*W):int(W*x+w*W)]
+                        hh, ww, c = padding_patch.shape
+                        if hh*ww*c==0:
+                            padding_patch  = np.zeros((24, 24, 3), dtype=np.float32)
+                        padding_patch_list.append(padding_patch)
+            else:
+                pred_offset =  i - len(feed_dict['tube_info']['frm_list'])
+                frm_id = feed_dict['tube_info'] ['frm_list'][-1] + (args.frame_offset*pred_offset+1)  
+                img = copy.deepcopy(bg)
+                for tube_id in range(box_ftr.shape[0]):
+                    tmp_box = box_ftr[tube_id][pred_offset]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    y2 = y +h
+                    x2 = x +w
+                    if w<=0 or h<=0:
+                        continue
+                    if x>1:
+                        continue
+                    if y>1:
+                        continue
+                    if x2 <=0:
+                        continue
+                    if y2 <=0:
+                        continue 
+                    if x<0:
+                        x=0
+                    if y<0:
+                        y=0
+                    if x2>1:
+                        x2=1
+                    if y2>1:
+                        y2=1
+                    patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
+                    img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+        
+            if store_img:
+                cv2.imwrite(os.path.join( img_folder, '%s_%d.png' % (filename, i)), img.astype(np.uint8))
+        else:
+            frm_id = feed_dict['tube_info']['frm_list'][i]
+            img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+            img_rgb = cv2.imread(img_full_path)
+            #for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
+            img = copy.deepcopy(bg)
+            for tube_id in range(box_ftr.shape[0]):
+                tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                img_patch = img_rgb[int(y*H):int(y*H + h*H) , int(x*W): int(x*W + w*W)]
+                hh, ww, c = img_patch.shape
+                if hh*ww*c==0:
+                    img_patch  = np.zeros((24, 24, 3), dtype=np.float32)
+
+                tmp_box = box_ftr[tube_id][i]
+                x = float(tmp_box[0] - tmp_box[2]*0.5)
+                y = float(tmp_box[1] - tmp_box[3]*0.5)
+                w = float(tmp_box[2])
+                h = float(tmp_box[3])
+                y2 = y +h
+                x2 = x +w
+                if w<=0 or h<=0:
+                    continue
+                if x>1:
+                    continue
+                if y>1:
+                    continue
+                if x2 <=0:
+                    continue
+                if y2 <=0:
+                    continue 
+                if x<0:
+                    x=0
+                if y<0:
+                    y=0
+                if x2>1:
+                    x2=1
+                if y2>1:
+                    y2=1
+                patch_resize = cv2.resize(img_patch, (max(int(x2*W) - int(x*W), 1), max(int(y2*H) - int(y*H), 1)))
+                img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
+                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+            if store_img:
+                cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
+        out.write(img)
+
 def visualize_decoder(decode_output, feed_dict, args, store_img=False):
     #pdb.set_trace()
     whatif_id = 'decode'
@@ -1827,7 +2179,7 @@ def predict_counterfact_spatial_feature(model, feed_dict, f_sng, args, counter_f
     pred_frm_num = len(pred_obj_list) 
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().mean(4).mean(3).view(n_objects_ori, pred_frm_num, box_dim) 
     spatial_feature = box_ftr*0.5 +0.5 
-    if args.visualize_flag:
+    if args.visualize_flag and 0:
         visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
         pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 

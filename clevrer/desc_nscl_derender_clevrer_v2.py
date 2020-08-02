@@ -67,6 +67,8 @@ class Model(ReasoningV2ModelForCLEVRER):
         if isinstance(feed_dict_list, dict):
             feed_dict_list = [feed_dict_list]
 
+        #pdb.set_trace()
+
         video_num = len(feed_dict_list)
         f_sng_list = []
         f_sng_future_list = []

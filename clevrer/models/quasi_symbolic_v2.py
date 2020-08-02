@@ -32,7 +32,7 @@ import torch.nn.functional as F
 import copy
 from scipy import signal 
 import numpy as np
-from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5  
+from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5, visualize_scene_parser
 
 logger = get_logger(__file__)
 
@@ -363,7 +363,7 @@ class ProgramExecutorContext(nn.Module):
             return self.init_counterfactual_events_v4(selected, feed_dict)
 
 
-    def init_counterfactual_events_v4(self, selected, feed_dict):
+    def init_counterfactual_events_v4(self, selected, feed_dict, visualize_flag=False):
         what_if_obj_id = selected.argmax()
         self._counterfact_features = predict_counterfact_features_v5(self._nscl_model, feed_dict, self.features, self.args, what_if_obj_id)
         
@@ -406,6 +406,8 @@ class ProgramExecutorContext(nn.Module):
         event_colli_set = torch.stack(masks, dim=0)
         event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
+        if self.args.visualize_flag:
+            self._counter_events_colli_set = event_colli_set[0] 
         return event_colli_score 
 
     def init_counterfactual_events_v3(self, selected, feed_dict):
@@ -501,7 +503,7 @@ class ProgramExecutorContext(nn.Module):
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
         return event_colli_score 
 
-    def init_unseen_events(self):
+    def init_unseen_events(self, visualize_flag=False):
         if self._unseen_event_buffer is None:
             obj_num, obj_num2, pred_frm_num, ftr_dim = self._future_features[2].shape
             box_dim = self._future_features[3].shape[1]//pred_frm_num
@@ -541,6 +543,8 @@ class ProgramExecutorContext(nn.Module):
             event_colli_set = torch.stack(masks, dim=0)
             event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
             self._unseen_event_buffer = [event_colli_score , frm_idx]
+            if visualize_flag:
+                self._event_colli_set = event_colli_set[0] 
             return event_colli_score 
         else:
             return self._unseen_event_buffer[0] 
@@ -1406,6 +1410,7 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
+        
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
@@ -1415,7 +1420,6 @@ class DifferentiableReasoning(nn.Module):
             buffers = []
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
-
 
             ctx_features = []
             for f_id in range(4): 
@@ -1432,12 +1436,13 @@ class DifferentiableReasoning(nn.Module):
                     parameter_resolution=self.parameter_resolution, \
                     training=self.training, args=self.args, future_features=future_features,\
                     seg_frm_num = self._seg_frm_num)
-            
+
             if 'valid_seq_mask' in feed_dict.keys():
                 ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
                 valid_len = feed_dict['valid_seq_mask'].shape[1]
                 ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
 
+            
             valid_num = 0
             for i,  prog in enumerate(progs):
                 if feed_dict['meta_ann']['questions'][i]['question_type']!='explanatory' and \
@@ -1611,7 +1616,10 @@ class DifferentiableReasoning(nn.Module):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
             feed_dict = fd[vid_id]
-            future_features = future_feature_list[vid_id]
+            if len(future_feature_list) >0:
+                future_features = future_feature_list[vid_id]
+            else:
+                future_features = None
             programs = []
             buffers = []
             result = []
@@ -1637,6 +1645,18 @@ class DifferentiableReasoning(nn.Module):
                 ctx.valid_seq_mask = torch.zeros(obj_num, 128, 1).to(features[3].device)
                 valid_len = feed_dict['valid_seq_mask'].shape[1]
                 ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
+          
+            if self.args.visualize_flag:
+                ctx.init_events()
+                if self.args.version=='v4':
+                    ctx.init_unseen_events(self.args.visualize_flag)
+                visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
+                for obj_id in range(obj_num):
+                    selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
+                    selected[obj_id] = 10
+                    ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                    visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
+
             counter_fact_num = 0 
             valid_num = 0
             for i,  prog in enumerate(progs):

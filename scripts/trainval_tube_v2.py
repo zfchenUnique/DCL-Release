@@ -80,6 +80,7 @@ def main():
     args.dump_dir +=  '_' + args.version + '_' + args.prefix
 
 
+    #if args.debug:
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
         args.meta_dir = ensure_path(osp.join(args.dump_dir, 'meta'))
@@ -140,7 +141,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
                 parameters = list(model._model_pred.parameters())+list(model._decoder.parameters())
                 trainable_parameters = filter(lambda x: x.requires_grad, parameters)
                 #pdb.set_trace()
-            else:
+            elif args.version=='v4':
                 trainable_parameters = filter(lambda x: x.requires_grad, model._model_pred.parameters())
         else:
             trainable_parameters = filter(lambda x: x.requires_grad, model.parameters())
@@ -205,7 +206,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     if args.debug:
         shuffle_flag=False
-        args.data_workers = 0
+        args.data_workers = 2
     else:
         shuffle_flag=True
 
@@ -217,6 +218,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     if args.evaluate:
         meters.reset()
         model.eval()
+        #validate_epoch(0, trainer, validation_dataset, meters)
         validate_epoch(0, trainer, validation_dataloader, meters)
         if extra_dataset is not None:
             validate_epoch(0, trainer, extra_dataloader, meters, meter_prefix='validation_extra')
@@ -250,6 +252,8 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         ))
 
         if epoch % args.save_interval == 0 and not args.debug:
+        #if epoch % args.save_interval == 0:
+            print('Debug!')
             fname = osp.join(args.ckpt_dir, 'epoch_{}.pth'.format(epoch))
             trainer.save_checkpoint(fname, dict(epoch=epoch, meta_file=args.meta_file))
 
@@ -327,8 +331,10 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
         json_output_list = []
     
     end = time.time()
-    with tqdm_pbar(total=len(val_dataloader)*val_dataloader.batch_size) as pbar:
+    with tqdm_pbar(total=len(val_dataloader)*args.batch_size) as pbar:
         for feed_dict in val_dataloader:
+        #for i in range(len(val_dataloader)):
+            #feed_dict = val_dataloader.__getitem__(i+358)
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
