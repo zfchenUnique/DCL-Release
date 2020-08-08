@@ -57,10 +57,12 @@ def make_debug_ctx(fd, buffer, i):
 
 
 def embed(self, i, buffer, result, fd, valid_num=None):
-    #DEBUG='ALL'
-    DEBUG='OFF'
+
+    #DEBUG = 'ALL' if self.args.debug and self.args.visualize_flag==1 else 'OFF'
+    DEBUG = 'ALL' if self.args.debug else 'OFF'
     result_idx = valid_num if valid_num is not None else i
-    if not self.training and DEBUG != 'OFF':
+    #if not self.training and DEBUG != 'OFF':
+    if  DEBUG != 'OFF':
     #if True:
         p, l = result[result_idx][1], fd['answer'][i]
         if isinstance(p, tuple):
@@ -83,24 +85,23 @@ def embed(self, i, buffer, result, fd, valid_num=None):
             new_p = p
             new_l = l
 
+        if fd['meta_ann']['questions'][i]['question_type']!='counterfactual' and fd['meta_ann']['questions'][i]['question_type']!='predictive': 
+            return  
         gogogo = False
-        if p == l:
-            print('Correct:', p)
+        if new_p == new_l:
+            print('Correct:', new_p)
             if DEBUG in ('ALL', 'CORRECT'):
-                print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 gogogo = True
-                #pdb.set_trace()
+                if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or fd['meta_ann']['questions'][i]['question_type']=='predictive': 
+                    print('%s'%(fd['meta_ann']['questions'][i]['question']))
+                    #pdb.set_trace()
         else:
-            print('Wrong: ', p, l)
+            print('Wrong: ', new_p, new_l)
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
-                print('%s'%(fd['meta_ann']['questions'][i]['question']))
+                if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
+                        fd['meta_ann']['questions'][i]['question_type']=='predictive': 
+                    print('%s'%(fd['meta_ann']['questions'][i]['question']))
                 #print('%s'%(fd['meta_ann']['questions'][i]['program']))
-                pdb.set_trace()
+                #pdb.set_trace()
 
-        if gogogo and 0:
-            print('Starting the tracker.')
-            ctx = make_debug_ctx(fd, buffer, i)
-            from IPython import embed; embed()
-            if ctx.stop:
-                import sys; sys.exit()

@@ -81,7 +81,8 @@ class Model(ReasoningV2ModelForCLEVRER):
                 f_scene_future = self.resnet(feed_dict['img_future']) 
                 f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
                 f_sng_future_list.append(f_sng_future)
-            elif self.args.version=='v3' and feed_dict['load_predict_flag'] and self.args.regu_only_flag!=1:
+            #elif self.args.version=='v3' and feed_dict['load_predict_flag'] and self.args.regu_only_flag!=1:
+            elif self.args.version=='v3' and self.args.regu_only_flag!=1:
                 f_sng_future = predict_future_feature_v2(self, feed_dict, f_sng, self.args)
                 f_sng_future_list.append(f_sng_future)
             #elif self.args.regu_only_flag==1 and not self.training and self.args.visualize_flag:

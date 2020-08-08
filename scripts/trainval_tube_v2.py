@@ -206,7 +206,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     if args.debug:
         shuffle_flag=False
-        args.data_workers = 2
+        args.data_workers = 0
     else:
         shuffle_flag=True
 
@@ -253,7 +253,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
         if epoch % args.save_interval == 0 and not args.debug:
         #if epoch % args.save_interval == 0:
-            print('Debug!')
             fname = osp.join(args.ckpt_dir, 'epoch_{}.pth'.format(epoch))
             trainer.save_checkpoint(fname, dict(epoch=epoch, meta_file=args.meta_file))
 
@@ -287,7 +286,6 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
-
             data_time = time.time() - end; end = time.time()
             #if feed_dict[0]['meta_ann']['scene_index']!=7398:
             #    continue 
@@ -338,7 +336,7 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
-
+            #pdb.set_trace()
             data_time = time.time() - end; end = time.time()
             output_dict_list, extra_info = trainer.evaluate(feed_dict, cast_tensor=False)
             if args.testing_flag:

@@ -201,13 +201,17 @@ class clevrerDataset(Dataset):
 
             img = np.array(patch)
             # print(x, y, H, W)
-            h, w = img.shape[0], img.shape[1]
-            x_ = max(-x, 0)
-            y_ = max(-y, 0)
+            #h, w = img.shape[0], img.shape[1]
+            h, w = int(obj['h'] * H), int(obj['w'] * W)
+            h = min(h, img.shape[0])
+            w = min(w, img.shape[1])
             x = max(x, 0)
             y = max(y, 0)
-            h_ = min(h - y_, H - y)
-            w_ = min(w - x_, W - x)
+            
+            x_ = max(int(0.5*(img.shape[1]-w)), 0)
+            y_ = max(int(0.5*(img.shape[0]-h)), 0)
+            h_ = min(h, img.shape[1] - y_, H - y)
+            w_ = min(w, img.shape[0] - x_, W - x)
 
             if y + h_ < 0 or y >= H or x + w_ < 0 or x >= W:
                 continue
@@ -236,11 +240,13 @@ class clevrerDataset(Dataset):
         tube_box_dict_list = [ copy.deepcopy(tube_box_dict) for obj_id in range(obj_num)] 
         frm_list_unique_list = [ copy.deepcopy(frm_list_unique) for obj_id in range(obj_num)] 
         future_frm_list_list = [ copy.deepcopy(future_frm_list) for obj_id in range(obj_num)] 
-
         for pred_id, pred_info in enumerate(pred_ann['predictions']):
             what_if_flag = pred_info['what_if']
             if what_if_flag ==-1:
                 continue
+            #sub_path = 'dumps/visualization/video_%d_counterId_%d' %(scene_index, pred_info['what_if'])
+            #if not os.path.exists(sub_path):
+            #    os.makedirs(sub_path) 
             for traj_id, traj_info in enumerate(pred_info['trajectory']):
                 frame_index = traj_info['frame_index']
                 # TODO may have bug if events happens in the prediction frame
@@ -250,7 +256,8 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
-                #cv2.imwrite('dumps/visualization/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
+                #cv2.imwrite(sub_path+'/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
+                #print('Debug')
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
                     
@@ -356,6 +363,9 @@ class clevrerDataset(Dataset):
             what_if_flag = pred_info['what_if']
             if what_if_flag !=-1:
                 continue 
+            #sub_path = 'dumps/visualization/video_%d_counterId_%d' %(scene_index, pred_info['what_if'])
+            #if not os.path.exists(sub_path):
+            #    os.makedirs(sub_path) 
             for traj_id, traj_info in enumerate(pred_info['trajectory']):
                 frame_index = traj_info['frame_index']
                 if self.args.n_seen_frames > frame_index:
@@ -364,6 +374,7 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
+                #cv2.imwrite(sub_path+'/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
                     

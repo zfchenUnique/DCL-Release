@@ -24,10 +24,10 @@ ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER
 def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
     base_folder = os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'_scene.avi'
+    videoname = 'dumps/'+ base_folder + '/' + filename + '/' + str(int(whatif_id)) +'_scene.avi'
     #videoname = filename + '.mp4'
     if store_img:
-        img_folder = 'dumps/'+base_folder +'/'+filename 
+        img_folder = 'dumps/'+base_folder +'/'+filename +'/img' 
         os.system('mkdir -p ' + img_folder)
 
     background_fn = '../temporal_reasoning-master/background.png'
@@ -138,26 +138,25 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                 x2 = x + w
                 y2 = y + h
 
-                box_list.append([x*W, y*H, (x+w)*W, (y+h)*H])
 
-                if w<=0 or h<=0:
-                    continue
-                if x>1:
-                    continue
-                if y>1:
-                    continue
-                if x2 <=0:
-                    continue
-                if y2 <=0:
-                    continue 
-                if x<0:
-                    x=0
-                if y<0:
-                    y=0
-                if x2>1:
-                    x2=1
-                if y2>1:
-                    y2=1
+                #if w<=0 or h<=0:
+                #    continue
+                #if x>1:
+                #    continue
+                #if y>1:
+                #    continue
+                #if x2 <=0:
+                #    continue
+                #if y2 <=0:
+                #    continue 
+                #if x<0:
+                #    x=0
+                #if y<0:
+                #    y=0
+                #if x2>1:
+                #    x2=1
+                #if y2>1:
+                #    y2=1
 
                 img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
                 cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
@@ -167,6 +166,9 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                 y = float(tmp_box[1] - tmp_box[3]*0.5)
                 w = float(tmp_box[2])
                 h = float(tmp_box[3])
+                
+                box_list.append([x*W, y*H, (x+w)*W, (y+h)*H])
+                
                 y2 = y +h
                 x2 = x +w
                 if w<=0 or h<=0:
@@ -194,7 +196,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         
         # draw collision events
         obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
-        print('%d/%d' %(i, box_ftr.shape[1]))
+        #print('%d/%d' %(i, box_ftr.shape[1]))
         for t_id1 in range(obj_num):
             for t_id2 in range(obj_num):
                 if i >=ctx._events_buffer[0][0].shape[2]:
@@ -229,7 +231,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         if store_img:
             cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
         out.write(img)
-    pdb.set_trace()
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 
@@ -996,7 +997,7 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim)
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
-        pdb.set_trace()
+        #pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 

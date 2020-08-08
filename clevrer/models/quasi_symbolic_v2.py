@@ -410,7 +410,7 @@ class ProgramExecutorContext(nn.Module):
             self._counter_events_colli_set = event_colli_set[0] 
         return event_colli_score 
 
-    def init_counterfactual_events_v3(self, selected, feed_dict):
+    def init_counterfactual_events_v3(self, selected, feed_dict, visualize_flag=False):
         what_if_obj_id = selected.argmax()
         self._counterfact_features = predict_counterfact_features_v2(self._nscl_model, feed_dict, self.features, self.args, what_if_obj_id)
         
@@ -451,11 +451,13 @@ class ProgramExecutorContext(nn.Module):
             mask = do_apply_self_mask_3d(mask)
             masks.append(mask)
         event_colli_set = torch.stack(masks, dim=0)
+        if self.args.visualize_flag:
+            self._counter_events_colli_set = event_colli_set[0] 
         event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
         return event_colli_score 
 
-    def init_counterfactual_events_v2(self, selected, feed_dict):
+    def init_counterfactual_events_v2(self, selected, feed_dict, visualize_flag=False):
         what_if_obj_id = selected.argmax()
         f_scene = self._nscl_model.resnet(feed_dict['img_counterfacts'][what_if_obj_id])
         f_sng_counterfact = self._nscl_model.scene_graph(f_scene, feed_dict, \
@@ -499,6 +501,8 @@ class ProgramExecutorContext(nn.Module):
             mask = do_apply_self_mask_3d(mask)
             masks.append(mask)
         event_colli_set = torch.stack(masks, dim=0)
+        if self.args.visualize_flag:
+            self._counter_events_colli_set = event_colli_set[0] 
         event_colli_score, frm_idx = event_colli_set[0].max(dim=2)
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
         return event_colli_score 
@@ -1647,15 +1651,22 @@ class DifferentiableReasoning(nn.Module):
                 ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
           
             if self.args.visualize_flag:
+            #if self.args.visualize_flag and feed_dict['meta_ann']['scene_index']==5:
                 ctx.init_events()
-                if self.args.version=='v4':
+                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2':
                     ctx.init_unseen_events(self.args.visualize_flag)
-                visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
+                    visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
                 for obj_id in range(obj_num):
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
-                    ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                    if self.args.version=='v4':
+                        ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                    if self.args.version=='v3':
+                        ctx.init_counterfactual_events_v3(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                    if self.args.version=='v2':
+                        ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
                     visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
+                #pdb.set_trace()
 
             counter_fact_num = 0 
             valid_num = 0
