@@ -58,6 +58,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         raise NotImplemented 
     padding_patch_list = []
     frm_box_list = []
+    #pdb.set_trace()
     for i in range(n_frame):
         box_list = []
         if whatif_id==-1:
@@ -84,9 +85,21 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                             padding_patch  = np.zeros((24, 24, 3), dtype=np.float32)
                         padding_patch_list.append(padding_patch)
             else:
-                pred_offset =  i - len(feed_dict['tube_info']['frm_list']) + args.n_his + 1 
+                if args.version=='v2' or args.version=='v2_1':
+                    pred_offset =  i - len(feed_dict['tube_info']['frm_list']) 
+                else:
+                    pred_offset =  i - len(feed_dict['tube_info']['frm_list']) + args.n_his + 1 
                 frm_id = feed_dict['tube_info'] ['frm_list'][-1] + (args.frame_offset*pred_offset+1)  
-                img = copy.deepcopy(bg)
+                if args.version!='v2' and args.version!='v2_1':
+                    img = copy.deepcopy(bg)
+                else:
+                    img_tensor = feed_dict['img_future'][pred_offset]
+                    mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+                    std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+                    img = img_tensor.permute(1, 2, 0).cpu().numpy() * std + mean
+                    img = cv2.resize( img*255, (W, H))
+                    img = img.astype(np.uint8)
+                
                 for tube_id in range(box_ftr.shape[0]):
                     tmp_box = box_ftr[tube_id][pred_offset]
                     x = float(tmp_box[0] - tmp_box[2]*0.5)
@@ -115,51 +128,37 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                         x2=1
                     if y2>1:
                         y2=1
-                    patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
-                    img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
-                    #img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
-                    #cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                    if args.version!='v2' and args.version!='v2_1':
+                        patch_resize = cv2.resize(padding_patch_list[tube_id], (max(1, int(x2*W) - int(x*W)), max(1, int(y2*H) - int(y*H))) )
+                        img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
                     img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (0,0,0), 1)
                     cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 2)
         
         else:
-            frm_id = feed_dict['tube_info']['frm_list'][i]
-            img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
-            img_rgb = cv2.imread(img_full_path)
-            #for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
-            #img = copy.deepcopy(bg)
-            img = copy.deepcopy(img_rgb)
+            if args.version!='v2' and args.version!='v2_1':
+                frm_id = feed_dict['tube_info']['frm_list'][i]
+                img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
+                img_rgb = cv2.imread(img_full_path)
+                img = copy.deepcopy(img_rgb)
+            else:
+                img_tensor = feed_dict['img_counterfacts'][whatif_id][i]
+                mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
+                std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
+                img = img_tensor.permute(1, 2, 0).cpu().numpy() * std + mean
+                img = cv2.resize( img * 255, (W, H))
+                img = img.astype(np.uint8)
+
             for tube_id in range(box_ftr.shape[0]):
-                tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
-                x = float(tmp_box[0] - tmp_box[2]*0.5)
-                y = float(tmp_box[1] - tmp_box[3]*0.5)
-                w = float(tmp_box[2])
-                h = float(tmp_box[3])
-                x2 = x + w
-                y2 = y + h
-
-
-                #if w<=0 or h<=0:
-                #    continue
-                #if x>1:
-                #    continue
-                #if y>1:
-                #    continue
-                #if x2 <=0:
-                #    continue
-                #if y2 <=0:
-                #    continue 
-                #if x<0:
-                #    x=0
-                #if y<0:
-                #    y=0
-                #if x2>1:
-                #    x2=1
-                #if y2>1:
-                #    y2=1
-
-                img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
-                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
+                if args.version!='v2' and args.version!='v2_1':
+                    tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
+                    x = float(tmp_box[0] - tmp_box[2]*0.5)
+                    y = float(tmp_box[1] - tmp_box[3]*0.5)
+                    w = float(tmp_box[2])
+                    h = float(tmp_box[3])
+                    x2 = x + w
+                    y2 = y + h
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
 
                 tmp_box = box_ftr[tube_id, i]
                 x = float(tmp_box[0] - tmp_box[2]*0.5)

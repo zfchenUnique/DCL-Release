@@ -605,7 +605,7 @@ class clevrerDataset(Dataset):
         if self.args.extract_region_attr_flag:
             return self.__get_video_frame__(index)
         else:
-            if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4':
+            if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
                 return self.__getitem__model_v2(index)
             else:
                 return self.__getitem__model(index)
@@ -692,7 +692,7 @@ class clevrerDataset(Dataset):
             del meta_ann['questions'][q_id]
         data['meta_ann'] = meta_ann 
         # loadding unseen events
-        if load_predict_flag  and self.args.version=='v2':
+        if load_predict_flag  and (self.args.version=='v2' or self.args.version=='v2_1'):
             scene_index = meta_ann['scene_index']
             data['predictions'], data['img_future'] = self.load_predict_info(scene_index, frm_dict, padding_img= data['img'][-1])
             _, c, tarH, tarW = img_tensor.shape
@@ -714,7 +714,7 @@ class clevrerDataset(Dataset):
 
 
         # loadding counterfact events
-        if load_counter_fact_flag and self.args.version=='v2':
+        if load_counter_fact_flag and (self.args.version=='v2' or self.args.version=='v2_1'):
             scene_index = meta_ann['scene_index']
             data['counterfacts'], data['img_counterfacts'] = self.load_counterfacts_info(scene_index, frm_dict, padding_img=data['img'][0])
         else:

@@ -21,6 +21,7 @@ configs.train.scene_add_supervision = False
 configs.train.qa_add_supervision = True
 import pdb
 import torch
+import copy
 
 class Model(ReasoningV2ModelForCLEVRER):
     def __init__(self, args):
@@ -29,6 +30,17 @@ class Model(ReasoningV2ModelForCLEVRER):
         configs.train.scene_add_supervision = args.scene_add_supervision 
         self.args = args
         super().__init__(configs, args)
+
+    def make_relation_embedding_for_unseen_events(self, args): 
+        if args.version=='v2_1':
+            # deep copy collision event embedding for counterafact and future embedding this version 
+            tax = self.reasoning.embedding_relation  
+            embedding_relation_counterfact = copy.deepcopy(tax)
+            embedding_relation_future = copy.deepcopy(tax)
+            setattr(self.reasoning, 'embedding_relation_counterfact', embedding_relation_counterfact)
+            setattr(self.reasoning, 'embedding_relation_future', embedding_relation_future)
+        #pdb.set_trace()
+
 
     def build_temporal_prediction_model(self, args, desc_pred, desc_spatial_pred=None):
         if args.version=='v3':
@@ -77,7 +89,7 @@ class Model(ReasoningV2ModelForCLEVRER):
             f_sng = self.scene_graph(f_scene, feed_dict)
             f_sng_list.append(f_sng)
     
-            if len(feed_dict['predictions']) >0 and self.args.version=='v2':
+            if len(feed_dict['predictions']) >0 and (self.args.version=='v2' or self.args.version=='v2_1'):
                 f_scene_future = self.resnet(feed_dict['img_future']) 
                 f_sng_future = self.scene_graph(f_scene_future, feed_dict, mode=1)
                 f_sng_future_list.append(f_sng_future)

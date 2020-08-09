@@ -123,6 +123,9 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         desc_spatial_pred = load_source(args.pred_spatial_model_path)
         model.build_temporal_prediction_model(args, desc_pred, desc_spatial_pred)
 
+    elif args.version=='v2_1':
+        model.make_relation_embedding_for_unseen_events(args) 
+
     if args.reconstruct_flag:
         model._decoder = build_constructor(args.rela_ftr_dim, args.nf_particle, args.bbox_size)    
 
@@ -178,7 +181,11 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
             if args.pretrain_pred_model_path:
                 model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
                 logger.critical('Loaded weights from pretrained temporal model: "{}".'.format(args.pretrain_pred_model_path))
-    #pdb.set_trace()
+        elif args.version =='v2_1':
+            model.reasoning.embedding_relation_future.load_state_dict(model.reasoning.embedding_relation.state_dict())
+            model.reasoning.embedding_relation_counterfact.load_state_dict(model.reasoning.embedding_relation.state_dict())
+            logger.critical('Copy original relation weights into counterfact and future relation.')
+            #pdb.set_trace()
     if args.use_tb and not args.debug:
         from jactorch.train.tb import TBLogger, TBGroupMeters
         tb_logger = TBLogger(args.tb_dir)
@@ -283,6 +290,7 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
             feed_dict = next(train_iter)
+            pdb.set_trace()
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)

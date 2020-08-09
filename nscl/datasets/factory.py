@@ -50,7 +50,7 @@ def initialize_dataset(dataset, version='v1'):
     if dataset=='clevrer' and version =='v1':
         from  clevrer.definition_clevrer import CLEVRERDefinition
         def_class = CLEVRERDefinition
-    elif dataset=='clevrer' and (version =='v2' or version == 'v3' or version =='v4'):
+    elif dataset=='clevrer' and (version =='v2' or version == 'v3' or version =='v4' or version=='v2_1'):
         from  clevrer.definition_clevrer_v2 import CLEVRERDefinitionV2
         def_class = CLEVRERDefinitionV2
     else:

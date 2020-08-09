@@ -354,9 +354,11 @@ class ProgramExecutorContext(nn.Module):
                     explored_list.append(obj_id2)
                     self._search_causes(new_obj_weight, target_frm_id, all_causes, explored_list)
 
-    def init_counterfactual_events(self, selected, feed_dict):
+    def init_counterfactual_events(self, selected, feed_dict, embedding_relation_counterfact=None):
         if self.args.version=='v2':
             return self.init_counterfactual_events_v2(selected, feed_dict)
+        elif  self.args.version=='v2_1':
+            return self.init_counterfactual_events_v2(selected, feed_dict, embedding_relation_counterfact = embedding_relation_counterfact)
         elif self.args.version == 'v3':
             return self.init_counterfactual_events_v3(selected, feed_dict)
         elif self.args.version == 'v4':
@@ -457,7 +459,7 @@ class ProgramExecutorContext(nn.Module):
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
         return event_colli_score 
 
-    def init_counterfactual_events_v2(self, selected, feed_dict, visualize_flag=False):
+    def init_counterfactual_events_v2(self, selected, feed_dict, visualize_flag=False, embedding_relation_counterfact=None):
         what_if_obj_id = selected.argmax()
         f_scene = self._nscl_model.resnet(feed_dict['img_counterfacts'][what_if_obj_id])
         f_sng_counterfact = self._nscl_model.scene_graph(f_scene, feed_dict, \
@@ -494,7 +496,10 @@ class ProgramExecutorContext(nn.Module):
                 cg = [cg]
             mask = None
             for c in cg:
-                new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
+                if self.args.version=='v2_1':
+                    new_mask = embedding_relation_counterfact.similarity_collision(rel_ftr_norm, c)
+                else:
+                    new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
                 mask = torch.min(mask, new_mask) if mask is not None else new_mask
                 if _symmetric_collision_flag:
                     mask = 0.5*(mask + mask.transpose(1, 0))
@@ -507,7 +512,7 @@ class ProgramExecutorContext(nn.Module):
         self._counterfact_event_buffer = [event_colli_score , frm_idx]
         return event_colli_score 
 
-    def init_unseen_events(self, visualize_flag=False):
+    def init_unseen_events(self, visualize_flag=False, embedding_relation_future=None):
         if self._unseen_event_buffer is None:
             obj_num, obj_num2, pred_frm_num, ftr_dim = self._future_features[2].shape
             box_dim = self._future_features[3].shape[1]//pred_frm_num
@@ -538,7 +543,10 @@ class ProgramExecutorContext(nn.Module):
                     cg = [cg]
                 mask = None
                 for c in cg:
-                    new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
+                    if self.args.version=='v2_1':
+                        new_mask = embedding_relation_future.similarity_collision(rel_ftr_norm, c)
+                    else:
+                        new_mask = self.taxnomy[2].similarity_collision(rel_ftr_norm, c)
                     mask = torch.min(mask, new_mask) if mask is not None else new_mask
                     if _symmetric_collision_flag:
                         mask = 0.5*(mask + mask.transpose(1, 0))
@@ -1265,6 +1273,7 @@ class DifferentiableReasoning(nn.Module):
                 # TODO more complicated filter_in and out function
                 tax.filter_in = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
                 tax.filter_out = jacnn.LinearLayer(self.input_dims[1+i], 128, activation=None)
+            
 
     def forward(self, batch_features, progs_list, fd=None, future_features_list=None, nscl_model=None, ignore_list=None):
         # To do divide programs into oe set and mc set
@@ -1286,7 +1295,8 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
-        
+       
+
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
@@ -1616,6 +1626,11 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
+       
+        # for v2_1 relation
+        embedding_future = self.embedding_relation_future if self.args.version=='v2_1' else None 
+        embedding_counterfact = self.embedding_relation_counterfact if self.args.version=='v2_1' else None
+
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
             progs = progs_list[vid_id] 
@@ -1653,9 +1668,13 @@ class DifferentiableReasoning(nn.Module):
             if self.args.visualize_flag:
             #if self.args.visualize_flag and feed_dict['meta_ann']['scene_index']==5:
                 ctx.init_events()
-                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2':
-                    ctx.init_unseen_events(self.args.visualize_flag)
-                    visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
+                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
+                    if len(feed_dict['predictions'])>0:
+                        if self.args.version=='v2_1':
+                            ctx.init_unseen_events(self.args.visualize_flag, embedding_relation_future=self.embedding_relation_future)
+                        else:
+                            ctx.init_unseen_events(self.args.visualize_flag)
+                        visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
                 for obj_id in range(obj_num):
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
@@ -1663,8 +1682,11 @@ class DifferentiableReasoning(nn.Module):
                         ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
                     if self.args.version=='v3':
                         ctx.init_counterfactual_events_v3(selected, feed_dict, visualize_flag=self.args.visualize_flag)
-                    if self.args.version=='v2':
-                        ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                    if self.args.version=='v2' or self.args.version=='v2_1':
+                        if self.args.version=='v2_1':
+                            ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag, embedding_relation_counterfact = self.embedding_relation_counterfact)
+                        else:
+                            ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
                     visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
                 #pdb.set_trace()
 
@@ -1708,7 +1730,7 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.init_events())
                         continue
                     elif op == 'unseen_events':
-                        buffer.append(ctx.init_unseen_events())
+                        buffer.append(ctx.init_unseen_events(embedding_relation_future=embedding_future))
                         continue
 
                     inputs = []
@@ -1747,7 +1769,7 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'filter_ancestor':
                         buffer.append(ctx.filter_ancestor(inputs))
                     elif op == 'get_counterfact':
-                        buffer.append(ctx.init_counterfactual_events(*inputs, feed_dict))
+                        buffer.append(ctx.init_counterfactual_events(*inputs, feed_dict, embedding_relation_counterfact=embedding_counterfact))
                     else:
                         pdb.set_trace()
                         raise NotImplementedError('Unsupported operation: {}.'.format(op))
