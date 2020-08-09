@@ -16,32 +16,50 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
     --tube_prp_path ../clevrer/tubeProposalsAttrV3/1.0_1.0_0.4_0.7 \
-    --pred_model_path ../temporal_reasoningv2/models_latent.py \
+    --scene_add_supervision 0 \
+    --pred_model_path ../temporal_reasoning-master/models_latent.py \
     --dataset_stage -1 \
+    --scene_add_supervision 0 \
     --ftr_in_collision_space_flag 0 \
-    --pred_spatial_model_path ../temporal_reasoningv2/models.py \
+    --pred_spatial_model_path ../temporal_reasoning-master/models.py \
+    --pred_model_path ../temporal_reasoning-master/models_latent.py \
     --rela_spatial_dim 3 \
     --relation_dim 259 \
     --state_dim 256 \
     --rela_spatial_only 1 \
     --residual_obj_pred 1 \
-    --freeze_learner_flag 1 \
-    --pred_normal_num 28 \
     --pred_frm_num 12 \
-    --regu_flag 1 \
-    --version v4 \
     --tube_mode 1 \
-    --scene_add_supervision 0 \
+    --reconstruct_flag 0 \
+    --pred_normal_num 28 \
+    --pretrain_pred_spatial_model ../temporal_reasoning-master/dumps/box_only_tubeProposalAttrV3_CLEVR_noAttr_noEdgeSuperv_pn_pstep_2/net_best.pth \
+    --ftr_in_collision_space_flag 0 \
     --regu_only_flag 0 \
-    --pretrain_pred_spatial_model ../temporal_reasoningv2/dumps/box_only_tubeProposal_CLEVR_noAttr_noEdgeSuperv_pn_pstep_2/net_best.pth \
-    --prefix prp_regu_joint_from_epoch_8_v5 \
-    --ftr_in_collision_space_flag 1 \
-    --load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v4_gt_regu_only_v5_colli_space/checkpoints/epoch_8.pth \
-    #--evaluate \
-    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    --regu_flag 0 \
+    --version v2 \
+    --freeze_learner_flag 0 \
+    --prefix rgb_separate_propNet \
+    --unseen_events_path /home/zfchen/code/nsclClevrer/temporal_reasoning-master/dumps/annos/tubeNetAttrV3_offset4_separate_realOffset5_noAttr_noEdgeSuperv \
+    --evaluate \
+    --load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_rgb_separate_propNet/checkpoints/epoch_2.pth \
     #--visualize_flag 1 \
+    #--debug \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
+    #--load dumps/remote_models/regu_colli_10.pth \
+    #--unseen_events_path /home/zfchen/code/nsclClevrer/temporal_reasoning-master/dumps/attrV3_offset4_noAttr_noEdgeSuperv \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v2_attrV3/checkpoints/epoch_2.pth \
+    #--load dumps/remote_models/regu_colli_10.pth \
+    #--unseen_events_path /home/zfchen/code/nsclClevrer/temporal_reasoning-master/dumps/ori_offset4_noAttr_noEdgeSuperv \
+    #--unseen_events_path /home/zfchen/code/nsclClevrer/temporal_reasoning-master/dumps/attrV3_offset4_noAttr_noEdgeSuperv \
+    #--load dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v4_prp_regu_only_12/checkpoints/epoch_5.pth \
+    #--visualize_flag 0 \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/remote_models/refine_epoch_10.pth \
     #--pretrain_pred_spatial_model ../temporal_reasoning-master/dumps/box_only_tubeGt_v2_CLEVR_noAttr_noEdgeSuperv_pn_pstep_2/tube_net_epoch_1_iter_250000.pth \
-    #--pretrain_pred_spatial_model ../temporal_reasoning-master/dumps/box_only_tubeGt_v2_CLEVR_noAttr_noEdgeSuperv_pn_pstep_2/tube_net_epoch_1_iter_250000.pth \
+    #--debug \
+    #--load /home/zfchen/code/nsclClevrer/dynamicNSCL/dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v4_prp_regu_only_decode_v5_debug/checkpoints/epoch_15.pth \
+    #--visualize_flag 1 \
+    #--visualize_flag 1 \
+    #--evaluate \
     #--pretrain_pred_spatial_model ../temporal_reasoning-master/dumps/box_only_CLEVR_noAttr_noEdgeSuperv_pn_pstep_2_abs/net_best.pth \
 
     #--resume dumps/clevrer/desc_nscl_derender_clevrer_v2/v2_norm_box_even_smp31_col_box_ftr_v3_prp_all_pretrain_epoch_3_iter_30k_joint_train_fix/checkpoints/epoch_5.pth \
