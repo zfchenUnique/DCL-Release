@@ -290,7 +290,7 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
             feed_dict = next(train_iter)
-            pdb.set_trace()
+            #pdb.set_trace()
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
