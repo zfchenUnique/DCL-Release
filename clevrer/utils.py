@@ -22,7 +22,7 @@ ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER
 
 
 def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
-    base_folder = os.path.basename(args.load).split('.')[0]
+    base_folder = 'visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
     videoname = 'dumps/'+ base_folder + '/' + filename + '/' + str(int(whatif_id)) +'_scene.avi'
     #videoname = filename + '.mp4'
@@ -198,12 +198,15 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         #print('%d/%d' %(i, box_ftr.shape[1]))
         for t_id1 in range(obj_num):
             for t_id2 in range(obj_num):
+                if t_id1==whatif_id or t_id2==whatif_id:
+                    continue 
                 if i >=ctx._events_buffer[0][0].shape[2]:
                     pred_id = i - len(feed_dict['tube_info']['frm_list']) + args.n_his +1
                     if ctx._event_colli_set[t_id1, t_id2, pred_id]>args.colli_threshold:
                     #pred_score = ctx._unseen_event_buffer[0][t_id1, t_id2]
                     #pred_id = ctx._unseen_event_buffer[1][t_id1, t_id2]
                     #if i==pred_id+len(feed_dict['tube_info']['frm_list']) - args.n_his -1 and \
+                        #pdb.set_trace()
                         #pred_score >args.colli_threshold:
                         box1 = box_list[t_id1]
                         box2 = box_list[t_id2]
@@ -222,7 +225,15 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                     y1_min = min(box1[1], box2[1])
                     x2_max = max(box1[2], box2[2])
                     y2_max = max(box1[3], box2[3])
-                    
+
+                    valid_box_flag1 = check_valid_box(box1, W, H)
+                    valid_box_flag2 = check_valid_box(box2, W, H)
+
+                    if not (valid_box_flag1  and valid_box_flag2):
+                        continue 
+
+                    #if whatif_id!=-1: 
+                    #    pdb.set_trace()
                     img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
                     
                     cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
@@ -230,6 +241,23 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         if store_img:
             cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
         out.write(img)
+
+def check_valid_box(box, W, H):
+    x1, y1, x2, y2 = box
+    w = x2 - x1
+    h = y2 - y1
+    valid_flag = True
+    if w<=0 or h<=0:
+        valid_flag = False
+    if x1>W:
+        valid_flag = False
+    if y1>H:
+        valid_flag = False
+    if x2 <=0:
+        valid_flag = False
+    if y2 <=0:
+        valid_flag = False
+    return valid_flag
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 

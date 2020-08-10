@@ -696,15 +696,22 @@ class ProgramExecutorContext(nn.Module):
             choice_type = choice_output[0]
             choice_mask = choice_output[1]
             if choice_type == 'collision':
-                choice_result = torch.min(choice_mask, cause_event_list[0]).max()  
+                if isinstance(cause_event_list, (list, tuple)):
+                    choice_result = torch.min(choice_mask, cause_event_list[0]).max()  
+                else:
+                    choice_result = torch.min(choice_mask, cause_event_list).max()  
                 choice_result_list.append(choice_result)
             elif choice_type == 'in':
+                pdb.set_trace()
+                assert isinstance(cause_event_list, (list, tuple))
                 choice_result = torch.min(choice_mask, cause_event_list[1]).max()  
                 choice_result_list.append(choice_result)
             elif choice_type == 'out':
+                assert isinstance(cause_event_list, (list, tuple))
                 choice_result = torch.min(choice_mask, cause_event_list[2]).max()  
                 choice_result_list.append(choice_result)
             elif choice_type == 'object':
+                assert isinstance(cause_event_list, (list, tuple))
                 choice_result1 = torch.min(choice_mask, cause_event_list[1]).max()  
                 choice_result2 = torch.min(choice_mask, cause_event_list[2]).max()  
                 choice_result3 = torch.min(choice_mask.unsqueeze(-1), cause_event_list[0]).max() 
