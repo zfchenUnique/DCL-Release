@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import math
 import pickle
+from scipy.optimize import linear_sum_assignment
 
 COLORS = ['gray', 'red', 'blue', 'green', 'brown', 'yellow', 'cyan', 'purple']
 MATERIALS = ['metal', 'rubber']
@@ -1248,10 +1249,242 @@ def compute_batch_IoU(bbox1_xyxy, bbox2_xyxy):
     ovr = inter / (bbox1_area + bbox2_area - inter+EPS)
     return ovr
 
+def extract_tube_v2(opt):
+    sample_folder_path= '../clevrer/proposals'
+    file_list = get_sub_file_list(sample_folder_path, '.json')
+    file_list.sort()
+    #out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_v1')
+    out_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w'])+'_'+str(opt['attr_w'])+'_'+str(opt['match_thre']))
+    if not os.path.isdir(out_path):
+        os.makedirs(out_path)
+    for file_idx, sample_file in enumerate(file_list):
+
+        out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
+
+        #if file_idx<10010:
+        #    continue
+
+        if os.path.isfile(out_fn_path):
+            continue
+
+        fh = open(sample_file, 'r')
+        f_dict = json.load(fh)
+        max_obj_num = 0
+        for frm_idx, frm_info in enumerate(f_dict['frames']):
+            tmp_obj_num = len(frm_info['objects']) 
+            if max_obj_num<tmp_obj_num:
+                max_obj_num = tmp_obj_num 
+        
+        if opt['use_attr_flag']:
+            attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
+            if not os.path.isfile(attr_dict_path):
+                continue 
+            attr_dict_list = jsonload(attr_dict_path) 
+        else:
+            attr_dict_list = None
+        tube_list, score_list, bbx_sc_list = extract_tube_per_video_attribute_v2(f_dict, opt, attr_dict_list) 
+        tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
+        out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
+        pickledump(out_fn_path, out_dict)
+        if file_idx%1000==0 or file_idx==10100:
+            print('finish processing %d/%d videos' %(file_idx, len(file_list)))
+        #visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
+        #pdb.set_trace()
+
+
+def extract_tube_per_video_attribute_v2(f_dict, opt, attr_dict_list=None):
+    connect_w = opt['connect_w']
+    score_w = opt['score_w']
+    bbx_sc_list = []
+
+    if attr_dict_list is not None:
+        assert len(f_dict['frames'])==len(attr_dict_list)
+
+    # get object number of a video
+    max_obj_num = 0
+    for frm_idx, frm_info in enumerate(f_dict['frames']):
+        tmp_obj_num = len(frm_info['objects']) 
+        if max_obj_num<tmp_obj_num:
+            max_obj_num = tmp_obj_num 
+
+    for frm_idx, frm_info in enumerate(f_dict['frames']):
+        bbx_mat = []
+        sc_mat = []
+        color_list = []
+        material_list = []
+        shape_list = []
+        attr_list = []
+        tmp_obj_num = len(frm_info['objects']) 
+
+        if opt['use_attr_flag']:
+            attr_frm_dict = attr_dict_list[frm_idx]
+            assert len(frm_info['objects']) ==  len(attr_frm_dict['color'])
+        for obj_idx, obj_info in enumerate(frm_info['objects']):
+            bbx_xywh = mask.toBbox(obj_info['mask'])
+            bbx_xyxy = copy.deepcopy(bbx_xywh)
+            bbx_xyxy[2] =  bbx_xyxy[2] + bbx_xyxy[0]
+            bbx_xyxy[3] =  bbx_xyxy[3] + bbx_xyxy[1]
+            bbx_mat.append(bbx_xyxy)
+            sc_mat.append(obj_info['score']*score_w)
+            
+            if opt['use_attr_flag']:
+                tmp_color = COLORS[attr_frm_dict['color'][obj_idx]]
+                tmp_material = MATERIALS[attr_frm_dict['material'][obj_idx]]
+                tmp_shape = SHAPES[attr_frm_dict['shape'][obj_idx]]
+                attr_list.append([tmp_color, tmp_material, tmp_shape])
+            #pdb.set_trace()
+
+        frm_size = frm_info['objects'][0]['mask']['size']
+        for tmp_idx in range(tmp_obj_num, max_obj_num):
+            tmp_box = np.array([0, 0, 1, 1])
+            bbx_mat.append(tmp_box)
+            sc_mat.append(0)
+            
+            if opt['use_attr_flag']:
+                attr_list.append(['', '', ''])
+
+        bbx_mat = np.stack(bbx_mat, axis=0)
+        sc_mat = np.array(sc_mat)
+        sc_mat = np.expand_dims(sc_mat, axis=1 )
+
+        #pdb.set_trace()
+
+        if not opt['use_attr_flag']:
+            bbx_sc_list.append([sc_mat, bbx_mat])
+
+        else:
+            bbx_sc_list.append([sc_mat, bbx_mat, attr_list])
+
+    tube_list, score_list = get_tubes_v2(bbx_sc_list, connect_w, opt['use_attr_flag'], opt['attr_w'])
+    return tube_list, score_list, bbx_sc_list  
+
+def get_tubes_v2(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
+    """
+    det_list_org: [score_list, bbx_list]
+    alpha: connection weight
+    """
+    det_list = copy.deepcopy(det_list_org)
+    tubes = []
+    continue_flg = True
+    tube_scores = []
+
+    while continue_flg:
+        timestep = 0
+        obj_num = det_list[timestep][0].shape[0]
+        
+        if use_attr_flag:
+            acc_time_list = []
+            acc_attr_list = []
+            for obj_id in range(obj_num):
+                tmp_obj_dict = {}
+                for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                    attr_upper = attr_concept.upper()
+                    tmp_obj_num = 0
+                    concept_dict = {}
+                    for concept in globals()[attr_upper]:
+                        concept_dict[concept] = 0.0
+                    obj_concept = det_list[timestep][2][obj_id][attr_id]
+                    concept_dict[obj_concept] = 1.0
+                    tmp_obj_dict[attr_upper] = concept_dict 
+                acc_attr_list.append(tmp_obj_dict) 
+                acc_time_list.append(acc_attr_list)
+
+            for t_id in range(1, len(det_list)):
+                acc_time_list.append([])
+                for obj_id in range(obj_num):
+                    acc_time_list[t_id].append({})
+
+        score_list = []
+        score_list.append(np.zeros(det_list[timestep][0].shape[0]))
+        prevind_list = []
+        prevind_list.append([-1] * det_list[timestep][0].shape[0])
+        timestep += 1
+
+        while timestep < len(det_list):
+            n_curbox = det_list[timestep][0].shape[0]
+            n_prevbox = score_list[-1].shape[0]
+            cur_scores = np.zeros(n_curbox) - np.inf
+            prev_inds = [-1] * n_curbox
+            
+            tmp_enery_score_mat = np.zeros((n_curbox, n_curbox)) - np.inf
+
+            for i_prevbox in range(n_prevbox):
+                prevbox_coods = det_list[timestep-1][1][i_prevbox, :]
+                prevbox_score = det_list[timestep-1][0][i_prevbox, 0]
+
+                for i_curbox in range(n_curbox):
+                    curbox_coods = det_list[timestep][1][i_curbox, :]
+                    curbox_score = det_list[timestep][0][i_curbox, 0]
+                    #try:
+                    if True:
+                        e_score = compute_IoU(prevbox_coods.tolist(), curbox_coods.tolist())
+                        link_score = prevbox_score + curbox_score + alpha * (e_score)
+                        
+                        if use_attr_flag:
+                            #prevbox_attr = det_list[timestep-1][2][i_prevbox]
+                            det_list
+                            prevbox_attr = acc_time_list[timestep-1][i_prevbox]
+                            curbox_attr = det_list[timestep][2][i_curbox]
+                            #attr_score = compare_attr_score(prevbox_attr, curbox_attr)
+                            attr_score = 0.0
+                            for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                                attr_upper = attr_concept.upper()
+                                concept = curbox_attr[attr_id] 
+                                if concept!='':
+                                    attr_score += prevbox_attr[attr_upper][concept] 
+                            attr_score  /= timestep 
+                            link_score +=  attr_score * attr_w
+                        if e_score<=0:
+                            link_score = 0.0
+                    
+                    cur_score = score_list[-1][i_prevbox] + link_score
+                    tmp_enery_score_mat[i_prevbox, i_curbox] = cur_score 
+            
+            row_ind, col_ind = linear_sum_assignment(tmp_enery_score_mat, maximize=True)
+            for i_curbox in range(n_curbox):
+                cur_box_idx = col_ind[i_curbox]
+                pred_box_idx = row_ind[i_curbox]
+                # update assign boxes        
+                cur_scores[cur_box_idx] = tmp_enery_score_mat[pred_box_idx, cur_box_idx]
+                prev_inds[cur_box_idx] = pred_box_idx 
+                if use_attr_flag:
+                    acc_time_list[timestep][cur_box_idx] = copy.deepcopy(acc_time_list[timestep-1][pred_box_idx])
+                    curbox_attr = det_list[timestep][2][cur_box_idx]
+                    for attr_id, attr_concept in enumerate(['colors', 'materials', 'shapes']):
+                        attr_upper = attr_concept.upper()
+                        concept = curbox_attr[attr_id] 
+                        if concept!='':
+                            acc_time_list[timestep][cur_box_idx][attr_upper][concept] +=1  
+
+            score_list.append(cur_scores)
+            prevind_list.append(prev_inds)
+            timestep += 1
+
+        # get path and remove used boxes
+        cur_tube = [None] * len(det_list)
+        tube_score = np.max(score_list[-1]) / len(det_list)
+        prev_ind = np.argmax(score_list[-1])
+        timestep = len(det_list) - 1
+        while timestep >= 0:
+            cur_tube[timestep] = det_list[timestep][1][prev_ind, :].tolist()
+            det_list[timestep][0] = np.delete(det_list[timestep][0], prev_ind, axis=0)
+            det_list[timestep][1] = np.delete(det_list[timestep][1], prev_ind, axis=0)
+            if use_attr_flag:
+                det_list[timestep][2].pop(prev_ind)
+            prev_ind = prevind_list[timestep][prev_ind]
+            if det_list[timestep][1].shape[0] == 0:
+                continue_flg = False
+            timestep -= 1
+        assert prev_ind < 0
+        tubes.append(cur_tube)
+        tube_scores.append(tube_score)
+    return tubes, tube_scores
+
 
 if __name__=='__main__':
     parms, opt = parse_opt()
     #extract_tube_v0(opt)
     #extract_tube_v1(opt)
+    extract_tube_v2(opt)
     compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)
