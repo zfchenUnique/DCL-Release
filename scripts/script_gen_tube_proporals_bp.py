@@ -690,7 +690,7 @@ def compute_recall_and_precision(opt):
 
     pk_fn_list = get_sub_file_list(out_gt_path, 'pk')
     pk_fn_list.sort()
-
+    pdb.set_trace()
     for f_id, pk_fn in enumerate(pk_fn_list):
         gt_tube_dict = pickleload(pk_fn)
         id_str = pk_fn.split('_')[-1].split('.')[0]
@@ -801,6 +801,13 @@ def extract_tube_v1(opt):
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
 
+        #if file_idx<15000:
+        if file_idx>=15000:
+            continue
+
+        if os.path.isfile(out_fn_path):
+            continue
+
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
         max_obj_num = 0
@@ -808,11 +815,7 @@ def extract_tube_v1(opt):
             tmp_obj_num = len(frm_info['objects']) 
             if max_obj_num<tmp_obj_num:
                 max_obj_num = tmp_obj_num 
-        if file_idx>=100:
-            continue 
-        if os.path.isfile(out_fn_path):
-            continue
-
+        
         if opt['use_attr_flag']:
             attr_dict_path = os.path.join(opt['extract_att_path'], 'attribute_' + str(file_idx).zfill(5) +'.json')
             if not os.path.isfile(attr_dict_path):
@@ -824,7 +827,7 @@ def extract_tube_v1(opt):
         tube_list, score_list =  refine_tube_list(tube_list, score_list, bbx_sc_list, opt)
         out_dict = {'tubes': tube_list, 'scores': score_list, 'bbx_list': bbx_sc_list }
         pickledump(out_fn_path, out_dict)
-        if file_idx%100==0:
+        if file_idx%1000==0 or file_idx==100:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
 
 def extract_tube_per_video_attribute_v1(f_dict, opt, attr_dict_list=None):
@@ -1249,7 +1252,7 @@ def compute_batch_IoU(bbox1_xyxy, bbox2_xyxy):
 
 if __name__=='__main__':
     parms, opt = parse_opt()
-    #extract_tube_v0(opt)
+    extract_tube_v0(opt)
     extract_tube_v1(opt)
     compute_recall_and_precision(opt)
     #evaluate_tube_performance(opt)

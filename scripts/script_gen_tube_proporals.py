@@ -691,12 +691,14 @@ def compute_recall_and_precision(opt):
 
     pk_fn_list = get_sub_file_list(out_gt_path, 'pk')
     pk_fn_list.sort()
-    pdb.set_trace()
+    #pdb.set_trace()
     for f_id, pk_fn in enumerate(pk_fn_list):
         gt_tube_dict = pickleload(pk_fn)
         id_str = pk_fn.split('_')[-1].split('.')[0]
         tube_prp_pk_fn = os.path.join(tube_prp_path, 'proposal_'+id_str+'.pk')
         if not os.path.isfile(tube_prp_pk_fn):
+            continue
+        if f_id <10000:
             continue 
         prp_tube_dict = pickleload(tube_prp_pk_fn)
 
@@ -716,11 +718,16 @@ def compute_recall_and_precision(opt):
         gt_num +=len(gt_tube_dict['tubes'])
 
         #if f_id % 500==0 or f_id==(len(pk_fn_list)-1) or f_id==99:
-        if  f_id==(len(pk_fn_list)-1) or f_id==99:
+        if  f_id==(len(pk_fn_list)-1):
+            #or f_id==99:
             print('processing %d/%d videos.\n' %(f_id, len(pk_fn_list)))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
+                if thre_idx!=len(iou_thre_list)-1:
+                    continue 
                 print('precision@%3f is %3f\n' %(iou_thre, precision_list[thre_idx]*1.0/prp_num))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
+                if thre_idx!=len(iou_thre_list)-1:
+                    continue 
                 print('recall@%3f is %3f\n' %(iou_thre, recall_list[thre_idx]*1.0/gt_num))
             print('\n')
 
@@ -1261,8 +1268,8 @@ def extract_tube_v2(opt):
 
         out_fn_path = os.path.join(out_path, os.path.basename(sample_file.replace('json', 'pk')))
 
-        #if file_idx<10010:
-        #    continue
+        if file_idx<7500:
+            continue
 
         if os.path.isfile(out_fn_path):
             continue
