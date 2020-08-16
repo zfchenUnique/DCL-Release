@@ -732,7 +732,7 @@ def compute_recall_and_precision(opt):
         gt_num +=len(gt_tube_dict['tubes'])
 
         #if f_id % 500==0 or f_id==(len(pk_fn_list)-1) or f_id==99:
-        if  f_id==(len(pk_fn_list)-1):
+        if  f_id==(len(pk_fn_list)-1) or f_id==opt['end_index']-1:
             #or f_id==99:
             print('processing %d/%d videos.\n' %(f_id, len(pk_fn_list)))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
@@ -1298,7 +1298,6 @@ def extract_tube_v2(opt):
 
         if os.path.isfile(out_fn_path):
             continue
-
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
         max_obj_num = 0
