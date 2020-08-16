@@ -702,7 +702,7 @@ def compute_recall_and_precision(opt):
         prp_tube_dict = pickleload(tube_prp_pk_fn)
 
         #iou_mat = np.zeros([len(prp_tube_dict['tubes']), len(gt_tube_dict['tubes'])])
-
+        tmp_correct_num = 0
         for prp_idx, prp in enumerate(prp_tube_dict['tubes']):
             for gt_idx, gt in enumerate(gt_tube_dict['tubes']):
                 iou = compute_LS(prp, gt)
@@ -712,6 +712,21 @@ def compute_recall_and_precision(opt):
                     if iou>=iou_thre:
                         precision_list[thre_idx]+=1
                         recall_list[thre_idx]+=1
+
+                if iou>=iou_thre_list[-1]:
+                    tmp_correct_num +=1
+        tmp_prp_num = len(prp_tube_dict['tubes'])
+        tmp_gt_num = len(gt_tube_dict['tubes'])
+
+        tmp_recall =  tmp_correct_num *1.0 / tmp_gt_num 
+        tmp_precision =  tmp_correct_num *1.0 / tmp_prp_num 
+        if (tmp_recall <1 or tmp_precision <1) and opt['visualize_flag']==1:
+            sample_folder_path= '../clevrer/proposals'
+            sample_file = os.path.join(sample_folder_path, 'proposal_'+str(f_id)+'.json')
+            fh = open(sample_file, 'r')
+            f_dict = json.load(fh)
+            visual_tube_proposals([prp_tube_dict['tubes'], prp_tube_dict['scores']], f_dict, tmp_prp_num, opt)
+            pdb.set_trace()
 
         prp_num +=len(prp_tube_dict['tubes'])
         gt_num +=len(gt_tube_dict['tubes'])
@@ -1306,8 +1321,9 @@ def extract_tube_v2(opt):
         pickledump(out_fn_path, out_dict)
         if file_idx%1000==0 or file_idx==10100:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
-        #visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
-        #pdb.set_trace()
+        if opt['visualize_flag']==1:
+            visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
+            pdb.set_trace()
 
 
 def extract_tube_per_video_attribute_v2(f_dict, opt, attr_dict_list=None):
