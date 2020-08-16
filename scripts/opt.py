@@ -27,6 +27,7 @@ def parse_opt():
     parser.add_argument('--start_index', type=int, default=0, help='')
     parser.add_argument('--end_index', type=int, default=15000, help='')
     parser.add_argument('--refine_tube_flag', type=int, default=1, help='')
+    parser.add_argument('--visualize_flag', type=int, default=0, help='')
 
     # parse 
     args = parser.parse_args()
