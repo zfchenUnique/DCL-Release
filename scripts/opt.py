@@ -23,6 +23,10 @@ def parse_opt():
     parser.add_argument('--attr_w', type=float, default=1, help='')
     parser.add_argument('--valid_frm_thre_hold', type=int, default=10, help='')
     parser.add_argument('--match_thre', type=float, default=1, help='')
+    parser.add_argument('--version', type=int, default=2, help='')
+    parser.add_argument('--start_index', type=int, default=0, help='')
+    parser.add_argument('--end_index', type=int, default=15000, help='')
+    parser.add_argument('--refine_tube_flag', type=int, default=1, help='')
 
     # parse 
     args = parser.parse_args()
