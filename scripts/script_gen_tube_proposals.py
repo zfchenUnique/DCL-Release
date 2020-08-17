@@ -683,7 +683,7 @@ def compute_recall_and_precision(opt):
     prp_num = 0
     gt_num = 0
 
-    if opt['use_attr_flag'] or opt['version']==2:
+    if opt['use_attr_flag'] or opt['version']==2 or opt['version']==1:
         #tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w']))
         tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w'])+ '_'+str(opt['match_thre']))
     else:
@@ -1004,8 +1004,8 @@ def get_tubes_v1(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
                                     attr_score += prevbox_attr[attr_upper][concept] 
                             attr_score  /= timestep 
                             link_score +=  attr_score * attr_w
-                        if e_score<=0:
-                            link_score = 0.0
+                        #if e_score<=0:
+                        #    link_score = 0.0
                     
                     cur_score = score_list[-1][i_prevbox] + link_score
                     if cur_score > cur_scores[i_curbox]:
@@ -1333,8 +1333,22 @@ def extract_tube_v2(opt):
         pickledump(out_fn_path, out_dict)
         if file_idx%1000==0 or file_idx==10100:
             print('finish processing %d/%d videos' %(file_idx, len(file_list)))
+        
         if opt['visualize_flag']==1:
             visual_tube_proposals([tube_list, score_list], f_dict, max_obj_num, opt)
+            out_gt_path = os.path.join(opt['tube_folder_new_path'], 'annotation_'+str(file_idx)+'.pk')
+            gt_tube_dict = pickleload(out_gt_path)
+            iou_thre = 0.9
+            tmp_correct_num = 0
+            for prp_idx, prp in enumerate(out_dict['tubes']):
+                tmp_max_iou = 0
+                for gt_idx, gt in enumerate(gt_tube_dict['tubes']):
+                    iou = compute_LS(prp, gt)
+                    if iou>=iou_thre:
+                        tmp_correct_num +=1
+            tmp_recall = tmp_correct_num * 1.0 / len(gt_tube_dict['tubes'])
+            tmp_precision = tmp_correct_num * 1.0 / len(out_dict['tubes'])
+            print('precision: %f, recall: %f\n' %(tmp_precision, tmp_recall))
             pdb.set_trace()
 
 
