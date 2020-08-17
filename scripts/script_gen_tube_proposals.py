@@ -167,7 +167,8 @@ def visual_tube_proposals(results, f_dict, prp_num, opt):
     for fId, imPath  in enumerate(frmImNameList):
         img = cv2.imread(imPath)
         frmImList.append(img)
-    vis_frame_num = 24
+    #vis_frame_num = len(frmImList)
+    vis_frame_num = 32
     visIner = int(len(frmImList) /vis_frame_num)
     for ii in range(len(results[0])):
         print('visualizing tube %d\n'%(ii))
@@ -703,7 +704,10 @@ def compute_recall_and_precision(opt):
 
         #iou_mat = np.zeros([len(prp_tube_dict['tubes']), len(gt_tube_dict['tubes'])])
         tmp_correct_num = 0
+        tmp_iou_list = []
+        
         for prp_idx, prp in enumerate(prp_tube_dict['tubes']):
+            tmp_max_iou = 0
             for gt_idx, gt in enumerate(gt_tube_dict['tubes']):
                 iou = compute_LS(prp, gt)
                 #iou_mat[prp_idx, gt_idx] = iou
@@ -715,6 +719,10 @@ def compute_recall_and_precision(opt):
 
                 if iou>=iou_thre_list[-1]:
                     tmp_correct_num +=1
+                if iou>tmp_max_iou:
+                    tmp_max_iou = iou
+            tmp_iou_list.append(tmp_max_iou)
+
         tmp_prp_num = len(prp_tube_dict['tubes'])
         tmp_gt_num = len(gt_tube_dict['tubes'])
 
@@ -726,6 +734,10 @@ def compute_recall_and_precision(opt):
             fh = open(sample_file, 'r')
             f_dict = json.load(fh)
             visual_tube_proposals([prp_tube_dict['tubes'], prp_tube_dict['scores']], f_dict, tmp_prp_num, opt)
+            print(tmp_iou_list)
+            print(tmp_recall)
+            print(tmp_precision)
+            print(f_id)
             pdb.set_trace()
 
         prp_num +=len(prp_tube_dict['tubes'])
@@ -1298,6 +1310,7 @@ def extract_tube_v2(opt):
 
         if os.path.isfile(out_fn_path):
             continue
+        #pdb.set_trace()
         fh = open(sample_file, 'r')
         f_dict = json.load(fh)
         max_obj_num = 0
@@ -1466,8 +1479,8 @@ def get_tubes_v2(det_list_org, alpha, use_attr_flag=False, attr_w=1.0):
                                     attr_score += prevbox_attr[attr_upper][concept] 
                             attr_score  /= timestep 
                             link_score +=  attr_score * attr_w
-                        if e_score<=0:
-                            link_score = 0.0
+                        #if e_score<=0:
+                        #    link_score = 0.0
                     
                     cur_score = score_list[-1][i_prevbox] + link_score
                     tmp_enery_score_mat[i_prevbox, i_curbox] = cur_score 
