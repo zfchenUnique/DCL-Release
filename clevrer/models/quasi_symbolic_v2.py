@@ -702,7 +702,6 @@ class ProgramExecutorContext(nn.Module):
                     choice_result = torch.min(choice_mask, cause_event_list).max()  
                 choice_result_list.append(choice_result)
             elif choice_type == 'in':
-                pdb.set_trace()
                 assert isinstance(cause_event_list, (list, tuple))
                 choice_result = torch.min(choice_mask, cause_event_list[1]).max()  
                 choice_result_list.append(choice_result)
@@ -1676,12 +1675,13 @@ class DifferentiableReasoning(nn.Module):
             #if self.args.visualize_flag and feed_dict['meta_ann']['scene_index']==5:
                 ctx.init_events()
                 if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
-                    if len(feed_dict['predictions'])>0:
+                    if len(feed_dict['predictions'])>0 or (self.args.version!='v2' and self.args.version!='v2_1'):
                         if self.args.version=='v2_1':
                             ctx.init_unseen_events(self.args.visualize_flag, embedding_relation_future=self.embedding_relation_future)
                         else:
                             ctx.init_unseen_events(self.args.visualize_flag)
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
+                        pdb.set_trace()
                 for obj_id in range(obj_num):
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10

@@ -190,8 +190,10 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                     y2=1
                 #patch_resize = cv2.resize(img_patch, (max(int(x2*W) - int(x*W), 1), max(int(y2*H) - int(y*H), 1)))
                 #img[int(y*H):int(y2*H), int(x*W):int(x2*W)] = patch_resize
-                img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (0,0,0), 1)
-                cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 2)
+                x_step = args.n_his + 1
+                if i >=x_step: 
+                    img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (0,0,0), 1)
+                    cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,0,0), 2)
         
         # draw collision events
         obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
@@ -2085,7 +2087,7 @@ def predict_future_spatial_feature(model, feed_dict, f_sng, args):
     spatial_feature = box_ftr*0.5 +0.5 
     if args.visualize_flag:
         visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=-1, store_img=True, args=args)
-        pdb.set_trace()
+        #pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 
     return spatial_feature
 
@@ -2122,7 +2124,7 @@ def predict_counterfact_spatial_feature(model, feed_dict, f_sng, args, counter_f
     relation_dim = rela_spa_dim 
     state_dim = box_dim  
     
-    object_appear_id_list = []
+    object_appear_id_list = [counter_fact_id]
     pred_rel_spatial_gt_list = []
     
     box_only_flag_bp = args.box_only_flag 
@@ -2246,7 +2248,7 @@ def predict_counterfact_semantic_feature(model, feed_dict, f_sng, args, spatial_
     relation_dim = args.relation_dim
     state_dim = args.state_dim 
 
-    object_appear_id_list = []
+    object_appear_id_list = [counter_fact_id]
 
     obj_num, ftr_t_dim = f_sng[3].shape
     ftr_dim = f_sng[1].shape[-1]
