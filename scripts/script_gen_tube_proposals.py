@@ -748,12 +748,12 @@ def compute_recall_and_precision(opt):
             #or f_id==99:
             print('processing %d/%d videos.\n' %(f_id, len(pk_fn_list)))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
-                if thre_idx!=len(iou_thre_list)-1:
-                    continue 
+                #if thre_idx!=len(iou_thre_list)-1:
+                #    continue 
                 print('precision@%3f is %3f\n' %(iou_thre, precision_list[thre_idx]*1.0/prp_num))
             for thre_idx, iou_thre in enumerate(iou_thre_list):
-                if thre_idx!=len(iou_thre_list)-1:
-                    continue 
+                #if thre_idx!=len(iou_thre_list)-1:
+                #    continue 
                 print('recall@%3f is %3f\n' %(iou_thre, recall_list[thre_idx]*1.0/gt_num))
             print('\n')
 
