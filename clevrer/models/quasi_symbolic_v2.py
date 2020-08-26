@@ -326,6 +326,8 @@ class ProgramExecutorContext(nn.Module):
             # masking out events after time
             obj_num = len(in_mask)
             for obj_id in range(obj_num):
+                #print('debug!')
+                continue 
                 in_frm = self._events_buffer[1][1][obj_id]
                 out_frm = self._events_buffer[2][1][obj_id]
                 if in_frm>target_frm_id:
@@ -571,6 +573,7 @@ class ProgramExecutorContext(nn.Module):
             self._events_buffer[0] = [event_collision_prp, frm_list_colli]
             self._events_buffer[1] = [event_in_objset_pro, frm_list_in]
             self._events_buffer[2] = [event_out_objset_pro, frm_list_out]
+            #pdb.set_trace()
         return self._events_buffer 
 
     def init_collision(self, smp_coll_frm_num):
@@ -1681,7 +1684,7 @@ class DifferentiableReasoning(nn.Module):
                         else:
                             ctx.init_unseen_events(self.args.visualize_flag)
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
-                        pdb.set_trace()
+                        #pdb.set_trace()
                 for obj_id in range(obj_num):
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
