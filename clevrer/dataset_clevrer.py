@@ -598,8 +598,8 @@ class clevrerDataset(Dataset):
                 new_question_ann.append(meta_new)
             filt_ques_num  +=len(meta_new['questions'])
             ori_ques_num +=len(meta_ann['questions'])
-        print('Videos: oriinal: %d, target: %d\n'%(len(self.question_ann), len(new_question_ann)))
-        print('Questions: oriinal: %d, target: %d\n'%(ori_ques_num, filt_ques_num))
+        print('Videos: original: %d, target: %d\n'%(len(self.question_ann), len(new_question_ann)))
+        print('Questions: original: %d, target: %d\n'%(ori_ques_num, filt_ques_num))
         self.question_ann = new_question_ann 
 
     def __getitem__(self, index):
