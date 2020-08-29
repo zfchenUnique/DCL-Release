@@ -346,7 +346,7 @@ class ProgramExecutorContext(nn.Module):
                 obj_id2 = obj_idx_mat[idx, 1]
                 target_id = colli_t_idx[obj_id1, obj_id2]
                 target_frm_id = self._events_buffer[0][1][target_id]
-                print('To debug!')
+                #print('To debug!')
                 if obj_id1 not in explored_list:
                     new_obj_weight =  torch.zeros(objset_weight.shape, device=objset_weight.device)-10
                     new_obj_weight[obj_id1] = 10
