@@ -147,6 +147,11 @@ def load_param_parser():
     parser.add_argument('--kl_weight', type=float, default=1.0)
     parser.add_argument('--reconstruct_flag', type=int, default=0)
     parser.add_argument('--reconstruct_weight', type=float, default=0.01)
+    # for expression
+    parser.add_argument('--expression_mode', type=int, default=-1)
+    parser.add_argument('--expression_path', type=str, default='')
+    parser.add_argument('--tube_gt_path', default='../clevrer/tubeProposalsGt') 
+    parser.add_argument('--exp_ground_thre', type=float, default=0.5)
     
     args = parser.parse_args()
     return args 

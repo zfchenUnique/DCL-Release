@@ -21,6 +21,38 @@ ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
 
 
+def compute_union_box(bbox1, bbox2):
+    EPS = 1e-10
+    union_box = [0, 0, 0, 0]
+    union_box[0] = min(bbox1[0], bbox2[0])
+    union_box[1] = min(bbox1[1], bbox2[1])
+    union_box[2] = max(bbox1[2], bbox2[2])
+    union_box[3] = max(bbox1[3], bbox2[3])
+    return union_box
+
+def compute_IoU_v2(bbox1, bbox2):
+    EPS = 1e-10
+    bbox1_area = float((bbox1[2] - bbox1[0] + EPS) * (bbox1[3] - bbox1[1] + EPS))
+    bbox2_area = float((bbox2[2] - bbox2[0] + EPS) * (bbox2[3] - bbox2[1] + EPS))
+    w = max(0.0, min(bbox1[2], bbox2[2]) - max(bbox1[0], bbox2[0]) + EPS)
+    h = max(0.0, min(bbox1[3], bbox2[3]) - max(bbox1[1], bbox2[1]) + EPS)
+    inter = float(w * h)
+    ovr = inter / (bbox1_area + bbox2_area - inter)
+    return ovr
+
+def compute_LS(traj, gt_traj):
+    # see http://jvgemert.github.io/pub/jain-tubelets-cvpr2014.pdf
+    IoU_list = []
+    frm_num = 0
+    for frame_ind, gt_box in enumerate(gt_traj):
+        box = traj[frame_ind]
+        if not (box==[0, 0, 1, 1] and gt_box==[0, 0, 1, 1]):
+            frm_num +=1
+        if box==[0, 0, 1, 1] or gt_box==[0, 0, 1, 1]:
+            continue
+        IoU_list.append(compute_IoU_v2(box, gt_box))
+    return sum(IoU_list) / frm_num
+
 def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
     base_folder = 'visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
@@ -58,7 +90,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         raise NotImplemented 
     padding_patch_list = []
     frm_box_list = []
-    #pdb.set_trace()
     for i in range(n_frame):
         box_list = []
         if whatif_id==-1:
@@ -403,7 +434,6 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
         out.write(img)
 
 def visualize_decoder(decode_output, feed_dict, args, store_img=False):
-    #pdb.set_trace()
     whatif_id = 'decode'
     base_folder = os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
@@ -2335,7 +2365,6 @@ def predict_counterfact_semantic_feature(model, feed_dict, f_sng, args, spatial_
         pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_ftr_list) 
-    #pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_ftr_list[-pred_frm_num:], dim=1).contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag and 0:

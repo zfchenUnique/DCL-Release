@@ -12,7 +12,7 @@ def main():
         #match_thre = float(match_thre)
         #match_thre = 0.7
         #pdb.set_trace()
-        cmd_text= 'python scripts/script_gen_tube_proporals.py --tube_folder_path ../clevrer/tubeProposalsAttrMatch --extract_att_path dumps/clevrer/tmpProposalsAttr --attr_w %f  --match_thre %f' % (attr_w, match_thre)
+        cmd_text= 'python scripts/script_gen_tube_proposals.py --tube_folder_path ../clevrer/tubeProposalsAttrMatch --extract_att_path dumps/clevrer/tmpProposalsAttr --attr_w %f  --match_thre %f' % (attr_w, match_thre)
         os.system(cmd_text)
 
 if __name__=='__main__':

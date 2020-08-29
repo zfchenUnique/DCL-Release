@@ -344,7 +344,9 @@ class ProgramExecutorContext(nn.Module):
                 #pdb.set_trace() 
                 obj_id1 = obj_idx_mat[idx, 0]
                 obj_id2 = obj_idx_mat[idx, 1]
-                target_frm_id = colli_t_idx[obj_id1, obj_id2]
+                target_id = colli_t_idx[obj_id1, obj_id2]
+                target_frm_id = self._events_buffer[0][1][target_id]
+                print('To debug!')
                 if obj_id1 not in explored_list:
                     new_obj_weight =  torch.zeros(objset_weight.shape, device=objset_weight.device)-10
                     new_obj_weight[obj_id1] = 10
@@ -640,7 +642,8 @@ class ProgramExecutorContext(nn.Module):
         for frm_id in range(smp_coll_frm_num):
             centre_frm = frm_id * seg_frm_num + half_seg_frm_num  
             frm_list.append(centre_frm)
-
+        #Todo: use input frm id
+        #frm_list = feed_dict['tube_info']['frm_list']
         return event_colli_set[0], frm_list 
 
     def init_in_out_rule(self, selected, concept):
@@ -764,9 +767,10 @@ class ProgramExecutorContext(nn.Module):
         else:
             time_weight = None
 
-        if ques_type=='descriptive' or ques_type=='explanatory':
+        if ques_type=='descriptive' or ques_type=='explanatory' or ques_type=='expression':
             colli_frm_list = self._events_buffer[0][1]
             if time_weight is not None:
+                #pdb.set_trace()
                 frm_mask_list = [] 
                 for smp_id, frm_id in enumerate(colli_frm_list): 
                     if time_weight[frm_id]>0:
@@ -774,7 +778,7 @@ class ProgramExecutorContext(nn.Module):
                     else:
                         frm_mask_list.append(0)
                 frm_weight = torch.tensor(frm_mask_list, dtype= time_weight.dtype, device = time_weight.device)
-                frm_weight_2 = -10 * (1 - frm_weight)
+                frm_weight_2 = 10 * (1 - frm_weight)
                 #colli_3d_mask = self._events_buffer[0][0]*frm_weight.unsqueeze(0).unsqueeze(0)
                 colli_3d_mask = self._events_buffer[0][0] - frm_weight_2.unsqueeze(0).unsqueeze(0)
             else:
@@ -794,7 +798,10 @@ class ProgramExecutorContext(nn.Module):
             colli_mask2 = torch.min(colli_mask, selected_mask)
         else:
             colli_mask2 = colli_mask 
-        return colli_mask2, colli_t_idx 
+        if ques_type == 'expression': 
+            return colli_mask2, colli_t_idx, self._events_buffer[0][1]
+        else:
+            return colli_mask2, colli_t_idx 
 
     def get_col_partner(self, selected, mask):
         if isinstance(mask, tuple) :
@@ -928,29 +935,39 @@ class ProgramExecutorContext(nn.Module):
             masks = torch.stack(masks, dim=0)
 
         elif len(selected.shape)==2:
-            _, sorted_idx = torch.sort(selected_idx, dim=-1)
-
+            max_frm = torch.max(selected_idx)
+            # filtering collision event
+            selected_idx_filter = selected_idx + max_frm * (selected<self.args.colli_threshold) 
+            assert  torch.abs(torch.sum(selected_idx_filter - selected_idx_filter.transpose(1, 0)))<0.00001
+            _, sorted_idx = torch.sort(selected_idx_filter.view(-1))
+            #_, sorted_idx = torch.sort(selected_idx_filter, dim=-1)
             masks = list()
+            obj_num = selected.shape[0]
             for cg in concept_groups:
                 if isinstance(cg, six.string_types):
                     cg = [cg]
                 mask = None
+                new_mask = -10 + torch.zeros(selected.shape, device=selected.device)
                 for c in cg:
                     if c=='first':
-                        new_mask_idx = sorted_idx[:, 0]
+                        idx1 = int(sorted_idx[0]) // obj_num 
+                        idx2 = int(sorted_idx[0]) % obj_num 
                     elif c=='second':
-                        new_mask_idx = sorted_idx[:, 1]
+                        idx1 = int(sorted_idx[2]) // obj_num 
+                        idx2 = int(sorted_idx[2]) % obj_num 
                     elif c=='last':
-                        new_mask_idx = sorted_idx[:, -1]
-                    new_mask = -10 + torch.zeros(selected.shape, device=selected.device)
-                    for obj_id, rank_idx in enumerate(new_mask_idx): 
-                        new_mask[obj_id, rank_idx] = 10 
+                        for tmp_idx in range(obj_num*obj_num-1, -1, -1):
+                            idx1 = int(sorted_idx[tmp_idx]) // obj_num 
+                            idx2 = int(sorted_idx[tmp_idx]) % obj_num
+                            if selected[idx1, idx2]>0:
+                                break 
+                    new_mask[idx1, idx2] = 10    
+                    new_mask[idx2, idx1] = 10    
                     mask = torch.min(mask, new_mask) if mask is not None else new_mask
                 if _apply_self_mask['relate']:
                     mask = do_apply_self_mask(mask)
                 masks.append(mask)
             masks = torch.stack(masks, dim=0)
-
         mask = torch.min(selected.unsqueeze(0), masks)
         return mask[group]
 
@@ -1339,7 +1356,8 @@ class DifferentiableReasoning(nn.Module):
 
             for i,  prog in enumerate(progs):
 
-                if feed_dict['meta_ann']['questions'][i]['question_type']!='descriptive':
+                tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
+                if tmp_q_type!='descriptive' and tmp_q_type!='expression':
                     continue
                 if ignore_list is not None and i in ignore_list[vid_id]:
                     programs.append(None)
@@ -1392,9 +1410,10 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'filter_collision':
-                        buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values']))
+                        buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type=tmp_q_type))
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
+                        #pdb.set_trace()
                     elif op == 'exist':
                         buffer.append(ctx.exist(*inputs))
                     else:
@@ -1417,10 +1436,16 @@ class DifferentiableReasoning(nn.Module):
                                 for out_id, out_value in enumerate(buffer[-1]):
                                     buffer[-1][out_id] = -10 + 20 * (buffer[-1][out_id] > 0).float()
                                 buffer[-1] = tuple(buffer[-1])
+                
+                #if prog[-1]['op']=='get_col_partner':
+                #    tmp_gt = feed_dict['meta_ann']['questions'][i]['answer'] 
+                #    tmp_an = int(torch.argmax(buffer[-1]))
+                #    if tmp_gt!=tmp_an:
+                #        pdb.set_trace()
 
                 result.append((op, buffer[-1]))
-
-                quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
+                if tmp_q_type!='expression': 
+                    quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
             
             programs_list.append(programs)
             buffers_list.append(buffers)
@@ -1686,6 +1711,8 @@ class DifferentiableReasoning(nn.Module):
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
                         #pdb.set_trace()
                 for obj_id in range(obj_num):
+                    if self.args.expression_mode!=-1:
+                        continue 
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
                     if self.args.version=='v4':
@@ -1705,7 +1732,7 @@ class DifferentiableReasoning(nn.Module):
             for i,  prog in enumerate(progs):
                 ques_type = feed_dict['meta_ann']['questions'][i]['question_type']
                 #if ques_type!='explanatory' and ques_type!='predictive':
-                if ques_type=='descriptive':
+                if ques_type=='descriptive' or ques_type=='expression':
                     continue 
                 if ignore_list is not None and i in ignore_list[vid_id]:
                     programs.append(None)

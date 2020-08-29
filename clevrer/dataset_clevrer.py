@@ -24,6 +24,7 @@ import cv2
 #_ignore_list = ['get_counterfact']
 #_used_list = ['filter_order']
 
+
 def merge_img_patch(img_0, img_1):
 
     ret = img_0.copy()
@@ -602,13 +603,33 @@ class clevrerDataset(Dataset):
         self.question_ann = new_question_ann 
 
     def __getitem__(self, index):
-        if self.args.extract_region_attr_flag:
+        if self.args.expression_mode !=-1:
+            if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
+                return self.__getitem__model_v2(index)
+
+        elif self.args.extract_region_attr_flag:
             return self.__get_video_frame__(index)
         else:
             if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
                 return self.__getitem__model_v2(index)
             else:
                 return self.__getitem__model(index)
+
+    def load_expression_info_v0(self, scene_index):
+        expression_full_path = os.path.join(self.args.expression_path, \
+                'raw_exp_'+str(scene_index).zfill(5)+'.json')
+        exp_info = jsonload(expression_full_path)
+        gt_tube_full_path = os.path.join(self.args.tube_gt_path, 'annotation_'+str(scene_index).zfill(5)+'.pk')
+        tube_gt_info = pickleload(gt_tube_full_path)
+        
+        query_info_list = []
+        for exp_type, exp_list in exp_info.items():
+            query_info_list +=exp_list
+        for q_id, q_info in enumerate(query_info_list):
+            query_info_list[q_id]['question_id'] = q_id
+            query_info_list[q_id]['question_type'] = 'expression'
+            query_info_list[q_id]['question_subtype'] = query_info_list[q_id]['expression_family'] 
+        return query_info_list, tube_gt_info['tubes']  
 
     def __getitem__model_v2(self, index):
         data = {}
@@ -618,9 +639,12 @@ class clevrerDataset(Dataset):
         sub_idx = int(scene_idx/1000)
         sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
         img_full_folder = os.path.join(self.args.frm_img_path, sub_img_folder) 
-       
-       # getting image frames 
+        # getting image frames 
         tube_info = self.sample_tube_frames(scene_idx)
+        
+        if self.args.expression_mode==0:
+            meta_ann['questions'], meta_ann['tubeGt'] = self.load_expression_info_v0(scene_idx)
+            meta_ann['tubePrp'] = copy.deepcopy(tube_info['tubes'])
         if self.args.even_smp_flag:
             frm_dict, valid_flag_dict = self.sample_frames_v2(tube_info, self.args.frm_img_num)   
         else:
@@ -653,6 +677,7 @@ class clevrerDataset(Dataset):
         load_counter_fact_flag = False
         counterfact_list = [q_id for q_id, ques_info in enumerate(meta_ann['questions']) if ques_info['question_type']=='counterfactual']
         sample_counterfact_list = random.sample(counterfact_list, self.args.max_counterfact_num) if self.phase=='train' and len(counterfact_list)>=self.args.max_counterfact_num else  counterfact_list 
+        
         # getting programs
         for q_id, ques_info in enumerate(meta_ann['questions']):
             valid_flag = True

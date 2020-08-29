@@ -22,7 +22,7 @@ import copy
 import numpy as np
 from .models import functional
 import jactorch
-from .utils import visualize_decoder
+from .utils import visualize_decoder, compute_LS, compute_IoU_v2, compute_union_box  
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
@@ -653,7 +653,7 @@ class QALoss(MultitaskLossBase):
         super().__init__()
         self.add_supervision = add_supervision
 
-    def forward(self, feed_dict, answers, question_index=None, loss_weights=None, accuracy_weights=None):
+    def forward(self, feed_dict, answers, question_index=None, loss_weights=None, accuracy_weights=None, ground_thre=0.5):
         """
         Args:
             feed_dict (dict): input feed dict.
@@ -661,13 +661,14 @@ class QALoss(MultitaskLossBase):
             question_index (list[int]): question index of the i-th answer.
             loss_weights (list[float]):
             accuracy_weights (list[float]):
+            ground_thre (float): threshold for video grounding 
 
         """
 
         monitors = {}
         outputs = {'answer': []}
             
-        question_type_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive']
+        question_type_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive', 'expression']
         question_type_per_question_list = ['descriptive', 'explanatory', 'counterfactual', 'predictive']
         for query_type in question_type_list:
             monitors.setdefault('acc/qa/' + query_type, [])
@@ -692,6 +693,8 @@ class QALoss(MultitaskLossBase):
 
             question_type = feed_dict['question_type'][j]
             response_question_type = gdef.qtype2atype_dict[question_type]
+            question_type_new = feed_dict['question_type_new'][j]
+            question_sub_type = feed_dict['meta_ann']['questions'][j]['question_subtype']
 
             if response_question_type != response_query_type:
                 key = 'acc/qa/' + query_type
@@ -733,14 +736,58 @@ class QALoss(MultitaskLossBase):
                 outputs['answer'].append(argmax)
                 gt = int(gt)
                 loss = self._mse_loss
+
+            elif question_type_new=='expression' and question_sub_type.startswith('object'):
+                if isinstance(a, tuple):
+                    a = a[0]
+                prp_idx = torch.argmax(a) 
+                prp_tube = feed_dict['meta_ann']['tubePrp'][prp_idx]
+                gt_tube = feed_dict['meta_ann']['tubeGt'][gt]
+                overlap = compute_LS(prp_tube, gt_tube)
+            
+            elif question_type_new=='expression' and \
+                    (question_sub_type.startswith('event_in') or question_sub_type.startswith('event_out')):
+                prp_idx = int(torch.argmax(a[0]))
+                prp_frm_id = int(a[2][prp_idx])
+                prp_frm_len = len(feed_dict['meta_ann']['tubePrp'][prp_idx])
+                if prp_frm_id>=prp_frm_len:
+                    prp_frm_id = prp_frm_len - 1
+                prp_box = feed_dict['meta_ann']['tubePrp'][prp_idx][prp_frm_id]
+                gt_idx = gt['object']
+                gt_frm_id = gt['frame']
+                gt_frm_len = len(feed_dict['meta_ann']['tubeGt'][gt_idx])
+                if gt_frm_id>=gt_frm_len:
+                    gt_frm_id = gt_frm_len - 1
+                gt_box = feed_dict['meta_ann']['tubeGt'][gt_idx][gt_frm_id]
+                overlap = compute_IoU_v2(prp_box, gt_box)
+                frm_dist = abs(gt_frm_id-prp_frm_id)
+            
+            elif question_type_new=='expression' and question_sub_type.startswith('event_collision'):
+                #pdb.set_trace()
+                flatten_idx = torch.argmax(a[0])
+                obj_num = int(a[0].shape[0])
+                obj_idx1, obj_idx2 = flatten_idx //obj_num, flatten_idx%obj_num 
+                prp_frm_id = a[1][obj_idx1, obj_idx2]
+                test_frm_list = a[2]
+                img_frm_idx = test_frm_list[prp_frm_id]
+                prp_box1 = feed_dict['meta_ann']['tubePrp'][obj_idx1][img_frm_idx]
+                prp_box2 = feed_dict['meta_ann']['tubePrp'][obj_idx2][img_frm_idx]
+                prp_union_box = compute_union_box(prp_box1, prp_box2) 
+
+                gt_idx1, gt_idx2 = gt['object']
+                gt_frm_id = gt['frame']
+                gt_box1 = feed_dict['meta_ann']['tubeGt'][gt_idx1][gt_frm_id]
+                gt_box2 = feed_dict['meta_ann']['tubeGt'][gt_idx2][gt_frm_id]
+                gt_union_box = compute_union_box(gt_box1, gt_box2) 
+                
+                overlap = compute_IoU_v2(prp_union_box, gt_union_box)
+                frm_dist = abs(gt_frm_id-img_frm_idx)
+
             else:
                 raise ValueError('Unknown query type: {}.'.format(response_query_type))
 
-
             key = 'acc/qa/' + query_type
-            question_type_new = feed_dict['question_type_new'][j]
             new_key = 'acc/qa/' + question_type_new            
-           
 
             if isinstance(gt, list):
                 for idx in range(len(gt)):
@@ -748,11 +795,24 @@ class QALoss(MultitaskLossBase):
                     monitors.setdefault('acc/qa', []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault(new_key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                 monitors.setdefault(new_key+'_per_ques', []).append((int(gt == tmp_answer_list), acc_w))
-                #pdb.set_trace()
-            else:
+            elif question_type_new=='descriptive' or question_type_new=='explanatory':
                 monitors.setdefault(key, []).append((int(gt == argmax), acc_w))
                 monitors.setdefault('acc/qa', []).append((int(gt == argmax), acc_w))
                 monitors.setdefault(new_key, []).append((int(gt == argmax), acc_w))
+            
+            elif question_type_new=='expression' and question_sub_type.startswith('object'):
+                new_key_v2 = 'acc/mIoU/' + question_sub_type             
+                new_key_v3 = 'acc/mIoU/' + question_type_new             
+                monitors.setdefault(key, []).append((int(overlap>=ground_thre), acc_w))
+                monitors.setdefault('acc/qa', []).append((int(overlap>=ground_thre), acc_w))
+                monitors.setdefault(new_key, []).append((int(overlap>=ground_thre), acc_w))
+                monitors.setdefault(new_key_v2, []).append((overlap, acc_w))
+                monitors.setdefault(new_key_v3, []).append((overlap, acc_w))
+            elif question_type_new=='expression' and question_sub_type.startswith('event'):
+                new_key_v2 = 'acc/mIoU/' + question_sub_type           
+                new_key_v3 = 'acc/frmDist/' + question_sub_type            
+                monitors.setdefault(new_key_v2, []).append((overlap, acc_w))
+                monitors.setdefault(new_key_v3, []).append((frm_dist, acc_w))
 
 
             if self.training and self.add_supervision:
