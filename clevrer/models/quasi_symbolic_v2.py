@@ -767,7 +767,7 @@ class ProgramExecutorContext(nn.Module):
         else:
             time_weight = None
 
-        if ques_type=='descriptive' or ques_type=='explanatory' or ques_type=='expression':
+        if ques_type=='descriptive' or ques_type=='explanatory' or ques_type=='expression' or ques_type=='retrieval':
             colli_frm_list = self._events_buffer[0][1]
             if time_weight is not None:
                 #pdb.set_trace()
@@ -798,7 +798,7 @@ class ProgramExecutorContext(nn.Module):
             colli_mask2 = torch.min(colli_mask, selected_mask)
         else:
             colli_mask2 = colli_mask 
-        if ques_type == 'expression': 
+        if ques_type == 'expression' or ques_type == 'retrieval': 
             return colli_mask2, colli_t_idx, self._events_buffer[0][1]
         else:
             return colli_mask2, colli_t_idx 
@@ -1357,7 +1357,7 @@ class DifferentiableReasoning(nn.Module):
             for i,  prog in enumerate(progs):
 
                 tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
-                if tmp_q_type!='descriptive' and tmp_q_type!='expression':
+                if tmp_q_type!='descriptive' and tmp_q_type!='expression' and tmp_q_type !='retrieval':
                     continue
                 if ignore_list is not None and i in ignore_list[vid_id]:
                     programs.append(None)
@@ -1444,7 +1444,7 @@ class DifferentiableReasoning(nn.Module):
                 #        pdb.set_trace()
 
                 result.append((op, buffer[-1]))
-                if tmp_q_type!='expression': 
+                if tmp_q_type!='expression' and tmp_q_type!='retrieval': 
                     quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
             
             programs_list.append(programs)
@@ -1732,7 +1732,7 @@ class DifferentiableReasoning(nn.Module):
             for i,  prog in enumerate(progs):
                 ques_type = feed_dict['meta_ann']['questions'][i]['question_type']
                 #if ques_type!='explanatory' and ques_type!='predictive':
-                if ques_type=='descriptive' or ques_type=='expression':
+                if ques_type=='descriptive' or ques_type=='expression' or ques_type=='retrieval':
                     continue 
                 if ignore_list is not None and i in ignore_list[vid_id]:
                     programs.append(None)

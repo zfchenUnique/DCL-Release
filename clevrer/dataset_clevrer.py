@@ -132,6 +132,18 @@ class clevrerDataset(Dataset):
         if self.args.extract_region_attr_flag:
             self.__intialize_frm_ann()
         self.background = None
+        if self.args.retrieval_mode==0:
+            self.__init_for_retrieval_mode()
+
+    def __init_for_retrieval_mode(self):
+        self.retrieval_info = jsonload(self.args.expression_path)
+        for exp_id, exp_info in enumerate(self.retrieval_info['expressions']):
+            program_cl = transform_conpcet_forms_for_nscl_v2(exp_info['program'])
+            exp_info['program_cl'] = program_cl
+            exp_info['question_id'] = exp_id
+            exp_info['question_type'] = 'retrieval'
+            exp_info['question_subtype'] = exp_info['expression_family']
+        #pdb.set_trace()
 
     def _set_dataset_mode(self):
         if self.args.dataset_stage ==0:
@@ -603,17 +615,31 @@ class clevrerDataset(Dataset):
         self.question_ann = new_question_ann 
 
     def __getitem__(self, index):
-        if self.args.expression_mode !=-1:
+        if self.args.retrieval_mode !=-1:
+            if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
+                return self.__getitem__model_v2(index)
+
+        elif self.args.expression_mode !=-1:
             if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
                 return self.__getitem__model_v2(index)
 
         elif self.args.extract_region_attr_flag:
             return self.__get_video_frame__(index)
+        
         else:
             if self.args.version == 'v2' or self.args.version == 'v3' or self.args.version == 'v4' or self.args.version == 'v2_1':
                 return self.__getitem__model_v2(index)
             else:
                 return self.__getitem__model(index)
+
+    def load_retrieval_info_v0(self, scene_index):
+        scene_index_str = str(scene_index)
+        pos_id_list = self.retrieval_info['vid2exp'][scene_index_str]
+        gt_tube_full_path = os.path.join(self.args.tube_gt_path, 'annotation_'+str(scene_index).zfill(5)+'.pk')
+        tube_gt_info = pickleload(gt_tube_full_path)
+        query_info_list = self.retrieval_info['expressions']
+        
+        return query_info_list, tube_gt_info['tubes'], pos_id_list  
 
     def load_expression_info_v0(self, scene_index):
         expression_full_path = os.path.join(self.args.expression_path, \
@@ -641,10 +667,14 @@ class clevrerDataset(Dataset):
         img_full_folder = os.path.join(self.args.frm_img_path, sub_img_folder) 
         # getting image frames 
         tube_info = self.sample_tube_frames(scene_idx)
-        
-        if self.args.expression_mode==0:
+       
+        if self.args.retrieval_mode==0:
+            meta_ann['questions'], meta_ann['tubeGt'], meta_ann['pos_id_list'] = self.load_retrieval_info_v0(scene_idx)
+            meta_ann['tubePrp'] = copy.deepcopy(tube_info['tubes'])
+        elif self.args.expression_mode==0:
             meta_ann['questions'], meta_ann['tubeGt'] = self.load_expression_info_v0(scene_idx)
             meta_ann['tubePrp'] = copy.deepcopy(tube_info['tubes'])
+        
         if self.args.even_smp_flag:
             frm_dict, valid_flag_dict = self.sample_frames_v2(tube_info, self.args.frm_img_num)   
         else:
@@ -1152,8 +1182,8 @@ class clevrerDataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            #return 50
-            return 200
+            return 50
+            #return 200
         else:
             if self.args.extract_region_attr_flag:
                 return len(self.frm_ann)
