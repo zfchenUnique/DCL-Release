@@ -795,12 +795,13 @@ class ProgramExecutorContext(nn.Module):
         obj_set_weight = None
         if len(future_progs)>0:
             future_op_list = [tmp_pg['op'] for tmp_pg in future_progs]
-            if 'get_col_partner' in future_op_list or ques_type == 'counterfactual' or ques_type=='predictive' or ques_type=='explanatory':
-                filter_obj_flag = True 
+            if 'get_col_partner' in future_op_list:
+                filter_obj_flag = True
             else:
-                filter_obj_flag = False 
+                filter_obj_flag = False
+        elif ques_type == 'counterfactual' or ques_type=='predictive' or ques_type=='explanatory':
+            filter_obj_flag = True 
         else:
-            future_op_list = []
             filter_obj_flag = False
         if selected is not None and (not isinstance(selected, (tuple, list))) and filter_obj_flag: 
         #if selected is not None and (not isinstance(selected, (tuple, list))):
