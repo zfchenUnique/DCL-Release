@@ -795,9 +795,14 @@ class ProgramExecutorContext(nn.Module):
         obj_set_weight = None
         if len(future_progs)>0:
             future_op_list = [tmp_pg['op'] for tmp_pg in future_progs]
+            if 'get_col_partner' in future_op_list or ques_type == 'counterfactual' or ques_type=='predictive' or ques_type=='explanatory':
+                filter_obj_flag = True 
+            else:
+                filter_obj_flag = False 
         else:
             future_op_list = []
-        if selected is not None and (not isinstance(selected, (tuple, list))) and (len(future_op_list)>0 and 'get_col_partner' in future_op_list):
+            filter_obj_flag = False
+        if selected is not None and (not isinstance(selected, (tuple, list))) and filter_obj_flag: 
         #if selected is not None and (not isinstance(selected, (tuple, list))):
             #print('Debug.')
             #pdb.set_trace()
@@ -1905,7 +1910,7 @@ class DifferentiableReasoning(nn.Module):
                         elif op == 'filter_temporal':
                             choice_buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                         elif op == 'filter_collision':
-                            choice_buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type))
+                            choice_buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type, choice_prog[block_id+1:]))
                             choice_type = block['relational_concept_values'][block['relational_concept_idx']][0]
                             tmp_event_buffer.append(choice_buffer[block_id][0])
                         elif op == 'get_col_partner':
