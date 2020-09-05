@@ -1,12 +1,5 @@
 #! /usr/bin/env python3
 ## -*- coding: utf-8 -*-
-# File   : trainval.py
-# Author : Jiayuan Mao
-# Email  : maojiayuan@gmail.com
-# Date   : 10/05/2018
-#
-# This file is part of NSCL-PyTorch.
-# Distributed under terms of the MIT license.
 
 """
 Training and evaulating the Neuro-Symbolic Concept Learner.

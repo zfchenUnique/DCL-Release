@@ -58,10 +58,27 @@ def make_debug_ctx(fd, buffer, i):
 
 def embed(self, i, buffer, result, fd, valid_num=None):
 
-    #DEBUG = 'ALL' if self.args.debug and self.args.visualize_flag==1 else 'OFF'
-    DEBUG = 'ALL' if self.args.debug else 'OFF'
+    DEBUG = 'ALL' if self.args.debug and self.args.visualize_flag==1 else 'OFF'
+    #DEBUG = 'ALL' if self.args.debug else 'OFF'
     result_idx = valid_num if valid_num is not None else i
     #if not self.training and DEBUG != 'OFF':
+
+    #if prog[-1]['op']=='get_col_partner':
+    #if prog[-1]['op']=='filter_in' and 0:
+    #if 0 and prog[-1]['op']=='filter_collision' and buffer[-1]!='error':
+    #if 0 and prog[-1]['op']=='get_col_partner' and buffer[-1]!='error':
+    if 0 and prog[-2]['op']=='filter_temporal' and buffer[-1]!='error':
+        #tmp_gt = feed_dict['meta_ann']['questions'][i]['answer'] 
+        #tmp_an = int(torch.argmax(buffer[-1][0]))
+        #tmp_an = torch.max(buffer[-1][0])
+        tmp_an = torch.max(buffer[-1])
+        if i in feed_dict['meta_ann']['pos_id_list'] and tmp_an<0:
+            pdb.set_trace()
+
+
+
+
+
     if  DEBUG != 'OFF':
     #if True:
         p, l = result[result_idx][1], fd['answer'][i]
@@ -98,8 +115,8 @@ def embed(self, i, buffer, result, fd, valid_num=None):
         else:
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
-                #if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
-                if fd['meta_ann']['questions'][i]['question_type']=='predictive': 
+                if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
+                     fd['meta_ann']['questions'][i]['question_type']=='predictive': 
                     print('Wrong: ', new_p, new_l)
                     print('%s'%(fd['meta_ann']['questions'][i]['question']))
                     for choice_info in fd['meta_ann']['questions'][i]['choices']:

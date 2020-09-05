@@ -696,7 +696,7 @@ class QALoss(MultitaskLossBase):
             question_type_new = feed_dict['question_type_new'][j]
             question_sub_type = feed_dict['meta_ann']['questions'][j]['question_subtype']
 
-            if response_question_type != response_query_type:
+            if response_question_type != response_query_type and (question_type_new!='retrieval' or a!='error'):
                 key = 'acc/qa/' + query_type
                 monitors.setdefault(key, []).append((0, acc_w))
                 monitors.setdefault('acc/qa', []).append((0, acc_w))
@@ -746,29 +746,47 @@ class QALoss(MultitaskLossBase):
                 overlap = compute_LS(prp_tube, gt_tube)
            
             elif question_type_new=='retrieval' and question_sub_type.startswith('object'):
-                prp_score = torch.max(a)
+                if isinstance(a, str) and a=='error':
+                    prp_score = -1
+                else:
+                    prp_score = torch.max(a)
                 correct_flag = 0
                 if i in feed_dict['meta_ann']['pos_id_list'] and prp_score>0:
                     correct_flag =1
                 elif i not in feed_dict['meta_ann']['pos_id_list'] and prp_score<0:
                     correct_flag =1
+                pos_sample = 0
+                if i in feed_dict['meta_ann']['pos_id_list']:
+                    pos_sample =1
 
             elif question_type_new=='retrieval' and \
                     (question_sub_type.startswith('event_in') or question_sub_type.startswith('event_out')):
-                prp_score = torch.max(a[0])
+                if isinstance(a, str) and a=='error':
+                    prp_score = -1
+                else:
+                    prp_score = torch.max(a[0])
                 correct_flag = 0
                 if i in feed_dict['meta_ann']['pos_id_list'] and prp_score>0:
                     correct_flag =1
                 elif i not in feed_dict['meta_ann']['pos_id_list'] and prp_score<0:
                     correct_flag =1
+                pos_sample = 0
+                if i in feed_dict['meta_ann']['pos_id_list']:
+                    pos_sample =1
             elif question_type_new=='retrieval' and \
                     question_sub_type.startswith('event_collision'):
-                prp_score = torch.max(a[0])
+                if isinstance(a, str) and a=='error':
+                    prp_score = -1
+                else:
+                    prp_score = torch.max(a[0])
                 correct_flag = 0
                 if i in feed_dict['meta_ann']['pos_id_list'] and prp_score>0:
                     correct_flag =1
                 elif i not in feed_dict['meta_ann']['pos_id_list'] and prp_score<0:
                     correct_flag =1
+                pos_sample = 0
+                if i in feed_dict['meta_ann']['pos_id_list']:
+                    pos_sample =1
 
             elif question_type_new=='expression' and \
                     (question_sub_type.startswith('event_in') or question_sub_type.startswith('event_out')):
@@ -849,6 +867,14 @@ class QALoss(MultitaskLossBase):
                 monitors.setdefault(new_key3, []).append((correct_flag, acc_w))
                 monitors.setdefault(new_key4, []).append((correct_flag, acc_w))
                 monitors.setdefault(key, []).append((correct_flag, acc_w))
+
+                if pos_sample==1:
+                    monitors.setdefault(new_key1+'/pos', []).append((correct_flag, acc_w))
+                    monitors.setdefault(new_key2+'/pos', []).append((correct_flag, acc_w))
+                else:
+                    monitors.setdefault(new_key1+'/neg', []).append((correct_flag, acc_w))
+                    monitors.setdefault(new_key2+'/neg', []).append((correct_flag, acc_w))
+
             elif question_type_new=='retrieval' and question_sub_type.startswith('event'):
                 new_key1 = 'acc/video'            
                 new_key2 = 'acc/text'           
@@ -859,6 +885,14 @@ class QALoss(MultitaskLossBase):
                 monitors.setdefault(new_key3, []).append((correct_flag, acc_w))
                 monitors.setdefault(new_key4, []).append((correct_flag, acc_w))
                 monitors.setdefault(key, []).append((correct_flag, acc_w))
+
+                if pos_sample==1:
+                    monitors.setdefault(new_key1+'/pos', []).append((correct_flag, acc_w))
+                    monitors.setdefault(new_key2+'/pos', []).append((correct_flag, acc_w))
+                else:
+                    monitors.setdefault(new_key1+'/neg', []).append((correct_flag, acc_w))
+                    monitors.setdefault(new_key2+'/neg', []).append((correct_flag, acc_w))
+
 
             if self.training and self.add_supervision:
                 if isinstance(gt, list):

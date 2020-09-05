@@ -143,7 +143,9 @@ class clevrerDataset(Dataset):
             exp_info['question_id'] = exp_id
             exp_info['question_type'] = 'retrieval'
             exp_info['question_subtype'] = exp_info['expression_family']
-        #pdb.set_trace()
+        if self.args.visualize_retrieval_id >=0:
+            #pdb.set_trace()
+            self.retrieval_info['expressions'] = [self.retrieval_info['expressions'][self.args.visualize_retrieval_id]]
 
     def _set_dataset_mode(self):
         if self.args.dataset_stage ==0:
@@ -658,10 +660,26 @@ class clevrerDataset(Dataset):
         return query_info_list, tube_gt_info['tubes']  
 
     def __getitem__model_v2(self, index):
+        
+        if self.args.visualize_retrieval_id>=0:
+            
+            index_id = index % len(self.retrieval_info['expressions'][0]['answer'])
+            vid = self.retrieval_info['expressions'][0]['answer'][index_id][0]
+            index = vid - 10000
+
+        if self.args.visualize_ground_vid>=0:
+            index = self.args.visualize_ground_vid  - 10000
+
         data = {}
 
         meta_ann = copy.deepcopy(self.question_ann[index])
         scene_idx = meta_ann['scene_index']
+
+        if self.args.visualize_retrieval_id>=0:
+            assert vid == scene_idx  
+        if self.args.visualize_ground_vid>=0:
+            assert scene_idx  == self.args.visualize_ground_vid   
+
         sub_idx = int(scene_idx/1000)
         sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
         img_full_folder = os.path.join(self.args.frm_img_path, sub_img_folder) 
@@ -1182,11 +1200,18 @@ class clevrerDataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            return 50
+            if self.args.visualize_ground_vid>=0:
+                return 1
+            if self.args.visualize_retrieval_id>=0:
+                return len(self.retrieval_info['expressions'][0]['answer'])
+            else:
+                return 200
             #return 200
         else:
             if self.args.extract_region_attr_flag:
                 return len(self.frm_ann)
+            elif self.args.retrieval_mode==0:
+                return  1000
             else:
                 return len(self.question_ann)
 

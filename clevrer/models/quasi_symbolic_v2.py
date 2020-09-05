@@ -760,7 +760,7 @@ class ProgramExecutorContext(nn.Module):
             return (mask * group.unsqueeze(1)).sum(dim=0)
         return mask[group]
 
-    def filter_collision(self, selected, group, concept_groups, ques_type='descriptive'):
+    def filter_collision(self, selected, group, concept_groups, ques_type='descriptive', future_progs=[]):
         if isinstance(selected, tuple):
             time_weight = selected[1].squeeze()
             selected = selected[0]
@@ -793,7 +793,14 @@ class ProgramExecutorContext(nn.Module):
         else:
             raise NotImplementedError
         obj_set_weight = None
-        if selected is not None and (not isinstance(selected, (tuple, list))):
+        if len(future_progs)>0:
+            future_op_list = [tmp_pg['op'] for tmp_pg in future_progs]
+        else:
+            future_op_list = []
+        if selected is not None and (not isinstance(selected, (tuple, list))) and (len(future_op_list)>0 and 'get_col_partner' in future_op_list):
+        #if selected is not None and (not isinstance(selected, (tuple, list))):
+            #print('Debug.')
+            #pdb.set_trace()
             selected_mask  = torch.max(selected.unsqueeze(-1), selected.unsqueeze(-2))
             colli_mask2 = torch.min(colli_mask, selected_mask)
         else:
@@ -935,9 +942,9 @@ class ProgramExecutorContext(nn.Module):
             masks = torch.stack(masks, dim=0)
 
         elif len(selected.shape)==2:
-            max_frm = torch.max(selected_idx)
+            max_frm = torch.max(selected_idx)+1
             # filtering collision event
-            selected_idx_filter = selected_idx + max_frm * (selected<self.args.colli_threshold) 
+            selected_idx_filter = selected_idx + max_frm * (selected<=self.args.colli_threshold) 
             assert  torch.abs(torch.sum(selected_idx_filter - selected_idx_filter.transpose(1, 0)))<0.00001
             _, sorted_idx = torch.sort(selected_idx_filter.view(-1))
             #_, sorted_idx = torch.sort(selected_idx_filter, dim=-1)
@@ -947,7 +954,8 @@ class ProgramExecutorContext(nn.Module):
                 if isinstance(cg, six.string_types):
                     cg = [cg]
                 mask = None
-                new_mask = -10 + torch.zeros(selected.shape, device=selected.device)
+                #new_mask = -10 + torch.zeros(selected.shape, device=selected.device)
+                new_mask =  torch.zeros(selected.shape, device=selected.device)
                 for c in cg:
                     if c=='first':
                         idx1 = int(sorted_idx[0]) // obj_num 
@@ -971,7 +979,7 @@ class ProgramExecutorContext(nn.Module):
         mask = torch.min(selected.unsqueeze(0), masks)
         return mask[group]
 
-    def filter_before_after(self, time_weight, group, concept_groups):
+    def filter_before_after(self, time_weight, group, concept_groups, ques_type=None):
         if isinstance(time_weight, tuple):
             selected = time_weight[0]
             time_weight = time_weight[1]
@@ -982,6 +990,14 @@ class ProgramExecutorContext(nn.Module):
         naive_weight = True
         if naive_weight:
             max_weight = torch.argmax(time_weight)
+            
+            if ques_type=='retrieval':
+                max_index_list = [idx for idx in range(len(time_weight)) if time_weight[idx]>=0.999]
+                if concept_groups[group]==['before']:
+                    max_weight = max(max_index_list)
+                elif concept_groups[group]==['after']:
+                    max_weight = min(max_index_list)
+
             time_step = len(time_weight)
             time_mask = torch.zeros([time_step], device = time_weight.device)
             assert len(concept_groups[group])==1
@@ -1014,7 +1030,7 @@ class ProgramExecutorContext(nn.Module):
         return mask[group], time_mask 
 
 
-    def filter_in_out_rule(self, selected, group, concept_groups):
+    def filter_in_out_rule(self, selected, group, concept_groups, ques_type=None):
         if isinstance(selected, tuple):
             selected = selected[0]
         # update obejct state
@@ -1032,6 +1048,18 @@ class ProgramExecutorContext(nn.Module):
         self._time_buffer_masks = time_weight
         event_index = self._events_buffer[c_id][1]
         event_frm = torch.tensor(event_index, dtype= selected.dtype, device = selected.device)
+        if ques_type=='retrieval':
+            max_val = torch.max(mask)
+            if max_val<=self.args.colli_threshold and (not self.training):
+                return 'error'
+            else:
+                time_weight =  torch.zeros(self.time_step, dtype=mask.dtype, device=mask.device)
+                for obj_id in range(len(mask)):
+                    if mask[obj_id] > self.args.colli_threshold:
+                        frm_id = self._events_buffer[c_id][1][obj_id] 
+                        time_weight[frm_id] = 1
+                        #print('To Modify and to debug %d\n' %(obj_id))
+                self._time_buffer_masks = time_weight
         return mask, self._time_buffer_masks, event_frm 
 
     def filter_start_end(self, group, concept_groups):
@@ -1354,8 +1382,15 @@ class DifferentiableReasoning(nn.Module):
                 valid_len = feed_dict['valid_seq_mask'].shape[1]
                 ctx.valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
 
-            for i,  prog in enumerate(progs):
 
+            if self.args.visualize_flag:
+                ctx.init_events()
+                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
+                    visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
+                #pdb.set_trace()
+
+
+            for i,  prog in enumerate(progs):
                 tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
                 if tmp_q_type!='descriptive' and tmp_q_type!='expression' and tmp_q_type !='retrieval':
                     continue
@@ -1364,7 +1399,7 @@ class DifferentiableReasoning(nn.Module):
                     buffers.append(None)
                     result.append(None)
                     continue 
-            
+
                 ctx._concept_groups_masks = [None, None, None, None, None]
                 ctx._time_buffer_masks = None
                 ctx._attribute_groups_masks = None
@@ -1374,7 +1409,6 @@ class DifferentiableReasoning(nn.Module):
 
                 buffers.append(buffer)
                 programs.append(prog)
-                
 
                 for block_id, block in enumerate(prog):
                     op = block['op']
@@ -1403,14 +1437,15 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.filter_time_object(*inputs))
                     elif op == 'filter_in' or op == 'filter_out':
                         buffer.append(ctx.filter_in_out_rule(*inputs, block['time_concept_idx'],\
-                                block['time_concept_values']))
+                                block['time_concept_values'], ques_type=tmp_q_type))
                     elif op == 'filter_before' or op == 'filter_after':
                         #print(feed_dict['meta_ann']['questions'][i]['question'])
-                        buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values']))
+                        buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values'], ques_type=tmp_q_type))
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'filter_collision':
-                        buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type=tmp_q_type))
+                        tmp_output = ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type=tmp_q_type, future_progs=prog[block_id+1:])
+                        buffer.append(tmp_output)
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
                         #pdb.set_trace()
@@ -1436,13 +1471,8 @@ class DifferentiableReasoning(nn.Module):
                                 for out_id, out_value in enumerate(buffer[-1]):
                                     buffer[-1][out_id] = -10 + 20 * (buffer[-1][out_id] > 0).float()
                                 buffer[-1] = tuple(buffer[-1])
-                
-                #if prog[-1]['op']=='get_col_partner':
-                #    tmp_gt = feed_dict['meta_ann']['questions'][i]['answer'] 
-                #    tmp_an = int(torch.argmax(buffer[-1]))
-                #    if tmp_gt!=tmp_an:
-                #        pdb.set_trace()
-
+                    if buffer[-1]=='error':
+                        break 
                 result.append((op, buffer[-1]))
                 if tmp_q_type!='expression' and tmp_q_type!='retrieval': 
                     quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
@@ -1711,7 +1741,7 @@ class DifferentiableReasoning(nn.Module):
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
                         #pdb.set_trace()
                 for obj_id in range(obj_num):
-                    if self.args.expression_mode!=-1:
+                    if self.args.expression_mode!=-1 or self.args.retrieval_mode!=-1:
                         continue 
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
@@ -1796,7 +1826,9 @@ class DifferentiableReasoning(nn.Module):
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
                     elif op == 'filter_collision':
-                        buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type))
+                        #buffer.append(ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type))
+                        tmp_output = ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type, future_progs=prog[block_id+1:])
+                        buffer.append(tmp_output)
                     elif op == 'get_col_partner':
                         buffer.append(ctx.get_col_partner(*inputs))
                         

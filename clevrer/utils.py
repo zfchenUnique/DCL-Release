@@ -56,10 +56,16 @@ def compute_LS(traj, gt_traj):
 def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
     base_folder = 'visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = 'dumps/'+ base_folder + '/' + filename + '/' + str(int(whatif_id)) +'_scene.avi'
+    if args.visualize_retrieval_id>=0:
+        videoname = 'dumps/'+ base_folder + '/'+str(args.visualize_retrieval_id) +'/'+ filename+'_scene.avi'
+    else:
+        videoname = 'dumps/'+ base_folder + '/' + filename + '/' + str(int(whatif_id)) +'_scene.avi'
     #videoname = filename + '.mp4'
     if store_img:
-        img_folder = 'dumps/'+base_folder +'/'+filename +'/img' 
+        if args.visualize_retrieval_id>=0:
+            img_folder = 'dumps/'+base_folder +'/'+str(args.visualize_retrieval_id) +'/img' 
+        else:
+            img_folder = 'dumps/'+base_folder +'/'+filename +'/img' 
         os.system('mkdir -p ' + img_folder)
 
     background_fn = '../temporal_reasoning-master/background.png'
@@ -78,7 +84,43 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
     sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
     img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
 
-    if whatif_id==-1 and ctx._future_features is not None:
+    if whatif_id==-2:
+        n_frame = len(feed_dict['tube_info']['frm_list'])
+        obj_num = len(ctx._events_buffer[1][0])
+        in_list = []
+        out_list = []
+        for obj_id in range(obj_num):
+            if ctx._events_buffer[1][0][obj_id]>args.colli_threshold:
+                target_frm = ctx._events_buffer[1][1][obj_id]
+                frm_diff = [ abs(prp_frm-target_frm) for prp_frm in feed_dict['tube_info']['frm_list']]
+                min_diff = min(frm_diff)
+                min_index = frm_diff.index(min_diff)
+                if frm_diff[min_index]<0:
+                    min_index +=1
+                frm_idx = feed_dict['tube_info']['frm_list'][min_index]
+                box_prp = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_idx]
+                while box_prp[0]==-1 and box_prp[1]==-1:
+                    min_index +=1      
+                    frm_idx = feed_dict['tube_info']['frm_list'][min_index]
+                    box_prp = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_idx]
+                in_list.append((obj_id, min_index))
+                
+            if ctx._events_buffer[2][0][obj_id]>args.colli_threshold:
+                target_frm = ctx._events_buffer[2][1][obj_id]
+                frm_diff = [ abs(prp_frm-target_frm) for prp_frm in feed_dict['tube_info']['frm_list']]
+                min_diff = min(frm_diff)
+                min_index = frm_diff.index(min_diff)
+                if frm_diff[min_index]>0:
+                    min_index -=1
+                frm_idx = feed_dict['tube_info']['frm_list'][min_index]
+                box_prp = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_idx]
+                while box_prp[0]==-1 and box_prp[1]==-1:
+                    min_index -=1      
+                    frm_idx = feed_dict['tube_info']['frm_list'][min_index]
+                    box_prp = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_idx]
+                out_list.append((obj_id, min_index))
+
+    elif whatif_id==-1 and ctx._future_features is not None:
         box_dim, obj_num = 4, ctx._future_features[3].shape[0]
         box_ftr = ctx._future_features[3].view(obj_num, -1, box_dim)
         n_frame = len(feed_dict['tube_info']['frm_list']) + box_ftr.shape[1] - args.n_his -1
@@ -92,7 +134,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
     frm_box_list = []
     for i in range(n_frame):
         box_list = []
-        if whatif_id==-1:
+        if whatif_id==-1 or whatif_id==-2:
             if i < len(feed_dict['tube_info']['frm_list']):
                 frm_id = feed_dict['tube_info']['frm_list'][i]
                 img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
@@ -229,7 +271,22 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         # draw collision events
         obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
         #print('%d/%d' %(i, box_ftr.shape[1]))
+        if (whatif_id==-2):
+            for in_info in in_list:
+                if i==in_info[1]:
+                    box_id = in_info[0]
+                    box = box_list[box_id]
+                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 128, 0), 1)
+                    cv2.putText(img, 'in', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 28, 0), 2)
+            for out_info in out_list:
+                if i==out_info[1]:
+                    box_id = out_info[0]
+                    box = box_list[box_id]
+                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 153, 255), 1)
+                    cv2.putText(img, 'out', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 153, 255), 2)
+        
         for t_id1 in range(obj_num):
+            
             for t_id2 in range(obj_num):
                 if t_id1==whatif_id or t_id2==whatif_id:
                     continue 
@@ -250,7 +307,8 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                         img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
                         cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
                 elif (whatif_id==-1 and ctx._events_buffer[0][0][t_id1, t_id2, i]>args.colli_threshold) or \
-                        (whatif_id>=0 and ctx._counter_events_colli_set[t_id1, t_id2, i]>args.colli_threshold):
+                        (whatif_id>=0 and ctx._counter_events_colli_set[t_id1, t_id2, i]>args.colli_threshold) or \
+                        (whatif_id==-2 and ctx._events_buffer[0][0][t_id1, t_id2, i]>args.colli_threshold):
                     print('collision@%d frames'%(i))
                     box1 = box_list[t_id1]
                     box2 = box_list[t_id2]
@@ -271,9 +329,21 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                     
                     cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
 
+
         if store_img:
             cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
         out.write(img)
+    out.release()
+    if args.visualize_gif_flag:
+        if os.path.isfile(videoname+'.gif'):
+            cmd_str = 'rm %s' % (videoname+'.gif')
+            os.system( cmd_str)
+
+        cmd_str = 'ffmpeg -i %s -t 32 %s' % (videoname, videoname+'.gif')
+        os.system( cmd_str)
+        cmd_str = 'rm %s' % (videoname)
+        os.system( cmd_str)
+    pdb.set_trace()
 
 def check_valid_box(box, W, H):
     x1, y1, x2, y2 = box

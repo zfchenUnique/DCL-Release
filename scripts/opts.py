@@ -154,6 +154,9 @@ def load_param_parser():
     parser.add_argument('--exp_ground_thre', type=float, default=0.5)
     # for retireval expression
     parser.add_argument('--retrieval_mode', type=int, default=-1)
+    parser.add_argument('--visualize_retrieval_id', type=int, default=-1)
+    parser.add_argument('--visualize_gif_flag', type=int, default=0)
+    parser.add_argument('--visualize_ground_vid', type=int, default=-1)
     args = parser.parse_args()
     return args 
 
