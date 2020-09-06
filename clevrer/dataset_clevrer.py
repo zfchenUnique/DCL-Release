@@ -134,6 +134,8 @@ class clevrerDataset(Dataset):
         self.background = None
         if self.args.retrieval_mode==0:
             self.__init_for_retrieval_mode()
+        if self.args.expression_mode==0:
+            self.__init_for_retrieval_mode()
 
     def __init_for_retrieval_mode(self):
         self.retrieval_info = jsonload(self.args.expression_path)
@@ -146,6 +148,9 @@ class clevrerDataset(Dataset):
         if self.args.visualize_retrieval_id >=0:
             #pdb.set_trace()
             self.retrieval_info['expressions'] = [self.retrieval_info['expressions'][self.args.visualize_retrieval_id]]
+
+    def __init_for_retrieval_mode(self):
+        self.grounding_info = jsonload(self.args.expression_path)
 
     def _set_dataset_mode(self):
         if self.args.dataset_stage ==0:
@@ -644,9 +649,10 @@ class clevrerDataset(Dataset):
         return query_info_list, tube_gt_info['tubes'], pos_id_list  
 
     def load_expression_info_v0(self, scene_index):
-        expression_full_path = os.path.join(self.args.expression_path, \
-                'raw_exp_'+str(scene_index).zfill(5)+'.json')
-        exp_info = jsonload(expression_full_path)
+        #expression_full_path = os.path.join(self.args.expression_path, \
+        #        'raw_exp_'+str(scene_index).zfill(5)+'.json')
+        #exp_info = jsonload(expression_full_path)
+        exp_info = self.grounding_info[str(scene_index)]
         gt_tube_full_path = os.path.join(self.args.tube_gt_path, 'annotation_'+str(scene_index).zfill(5)+'.pk')
         tube_gt_info = pickleload(gt_tube_full_path)
         
@@ -1205,7 +1211,7 @@ class clevrerDataset(Dataset):
             if self.args.visualize_retrieval_id>=0:
                 return len(self.retrieval_info['expressions'][0]['answer'])
             else:
-                return 200
+                return 50
             #return 200
         else:
             if self.args.extract_region_attr_flag:
