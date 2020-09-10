@@ -343,7 +343,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         os.system( cmd_str)
         cmd_str = 'rm %s' % (videoname)
         os.system( cmd_str)
-    pdb.set_trace()
+    #pdb.set_trace()
 
 def check_valid_box(box, W, H):
     x1, y1, x2, y2 = box

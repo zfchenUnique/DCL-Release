@@ -135,7 +135,7 @@ class clevrerDataset(Dataset):
         if self.args.retrieval_mode==0:
             self.__init_for_retrieval_mode()
         if self.args.expression_mode==0:
-            self.__init_for_retrieval_mode()
+            self.__init_for_grounding_mode()
 
     def __init_for_retrieval_mode(self):
         self.retrieval_info = jsonload(self.args.expression_path)
@@ -145,11 +145,12 @@ class clevrerDataset(Dataset):
             exp_info['question_id'] = exp_id
             exp_info['question_type'] = 'retrieval'
             exp_info['question_subtype'] = exp_info['expression_family']
+        
         if self.args.visualize_retrieval_id >=0:
             #pdb.set_trace()
             self.retrieval_info['expressions'] = [self.retrieval_info['expressions'][self.args.visualize_retrieval_id]]
 
-    def __init_for_retrieval_mode(self):
+    def __init_for_grounding_mode(self):
         self.grounding_info = jsonload(self.args.expression_path)
 
     def _set_dataset_mode(self):
@@ -1211,7 +1212,7 @@ class clevrerDataset(Dataset):
             if self.args.visualize_retrieval_id>=0:
                 return len(self.retrieval_info['expressions'][0]['answer'])
             else:
-                return 50
+                return 30
             #return 200
         else:
             if self.args.extract_region_attr_flag:

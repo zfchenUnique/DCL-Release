@@ -19,6 +19,7 @@ import numpy as np
 
 from PIL import Image
 import pdb
+import torch
 
 DEBUG = os.getenv('REASONING_DEBUG', 'OFF').upper() 
 __all__ = ['make_debug_ctx', 'embed']
@@ -57,7 +58,7 @@ def make_debug_ctx(fd, buffer, i):
 
 
 def embed(self, i, buffer, result, fd, valid_num=None):
-
+    #pdb.set_trace()
     DEBUG = 'ALL' if self.args.debug and self.args.visualize_flag==1 else 'OFF'
     #DEBUG = 'ALL' if self.args.debug else 'OFF'
     result_idx = valid_num if valid_num is not None else i
@@ -67,19 +68,26 @@ def embed(self, i, buffer, result, fd, valid_num=None):
     #if prog[-1]['op']=='filter_in' and 0:
     #if 0 and prog[-1]['op']=='filter_collision' and buffer[-1]!='error':
     #if 0 and prog[-1]['op']=='get_col_partner' and buffer[-1]!='error':
-    if 0 and prog[-2]['op']=='filter_temporal' and buffer[-1]!='error':
+    prog = fd['meta_ann']['questions'][i]['program_cl']
+    #if 0 and prog[-2]['op']=='filter_temporal' and buffer[-1]!='error':
+    if DEBUG!='OFF' and prog[-1]['op']=='filter_collision':
         #tmp_gt = feed_dict['meta_ann']['questions'][i]['answer'] 
         #tmp_an = int(torch.argmax(buffer[-1][0]))
-        #tmp_an = torch.max(buffer[-1][0])
-        tmp_an = torch.max(buffer[-1])
-        if i in feed_dict['meta_ann']['pos_id_list'] and tmp_an<0:
+        #tmp_an = torch.max(buffer[-1])
+        if buffer[-1]=='error' and i in fd['meta_ann']['pos_id_list']:
             pdb.set_trace()
+        elif buffer[-1]!='error' and i in fd['meta_ann']['pos_id_list']:   
+            tmp_an = torch.max(buffer[-1][0])
+            if   tmp_an<0:
+                pdb.set_trace()
+        elif buffer[-1]!='error' and i not in fd['meta_ann']['pos_id_list']:
+            tmp_an = torch.max(buffer[-1][0])
+            if tmp_an>0:
+                pdb.set_trace()
 
+    ques_type = fd['meta_ann']['questions'][i]['question_type']
 
-
-
-
-    if  DEBUG != 'OFF':
+    if  DEBUG != 'OFF' and ques_type!='retrieval':
     #if True:
         p, l = result[result_idx][1], fd['answer'][i]
         if isinstance(p, tuple):

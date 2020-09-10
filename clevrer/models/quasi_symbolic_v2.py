@@ -999,10 +999,12 @@ class ProgramExecutorContext(nn.Module):
             
             if ques_type=='retrieval':
                 max_index_list = [idx for idx in range(len(time_weight)) if time_weight[idx]>=0.999]
-                if concept_groups[group]==['before']:
-                    max_weight = max(max_index_list)
-                elif concept_groups[group]==['after']:
-                    max_weight = min(max_index_list)
+                if len(max_index_list)>1:
+                    return 'error' # reture an error if fail to localize a unique object
+                #if concept_groups[group]==['before']:
+                #    max_weight = max(max_index_list)
+                #elif concept_groups[group]==['after']:
+                #    max_weight = min(max_index_list)
 
             time_step = len(time_weight)
             time_mask = torch.zeros([time_step], device = time_weight.device)
@@ -1480,7 +1482,7 @@ class DifferentiableReasoning(nn.Module):
                     if buffer[-1]=='error':
                         break 
                 result.append((op, buffer[-1]))
-                if tmp_q_type!='expression' and tmp_q_type!='retrieval': 
+                if tmp_q_type!='expression': 
                     quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
             
             programs_list.append(programs)
