@@ -139,6 +139,7 @@ class clevrerDataset(Dataset):
             self._filter_program_types()
         else:
             self._ignore_list = []
+        
         if self.args.extract_region_attr_flag:
             self.__intialize_frm_ann()
         self.background = None
@@ -153,6 +154,18 @@ class clevrerDataset(Dataset):
     def __init_for_retrieval_mode(self):
         self.retrieval_info = jsonload(self.args.expression_path)
         for exp_id, exp_info in enumerate(self.retrieval_info['expressions']):
+            parsed_pg = self.parsed_pgs[exp_id][0]
+            valid_flag = True if len(exp_info['program'])==len(parsed_pg) else False 
+            if valid_flag:
+                for pg_gt, pg_prp in zip(exp_info['program'], parsed_pg):
+                    if pg_gt!=pg_prp:
+                        valid_flag = False
+                        break
+            if not valid_flag:
+                print('finding incorrect program')
+                print(exp_info['program'])
+                print(parsed_pg)
+            exp_info['program'] = parsed_pg 
             program_cl = transform_conpcet_forms_for_nscl_v2(exp_info['program'])
             exp_info['program_cl'] = program_cl
             exp_info['question_id'] = exp_id
@@ -160,9 +173,8 @@ class clevrerDataset(Dataset):
             exp_info['question_subtype'] = exp_info['expression_family']
         
         if self.args.visualize_retrieval_id >=0:
-            #pdb.set_trace()
             self.retrieval_info['expressions'] = [self.retrieval_info['expressions'][self.args.visualize_retrieval_id]]
-
+    
     def __init_for_grounding_mode(self):
         self.grounding_info = jsonload(self.args.expression_path)
 
