@@ -206,7 +206,7 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     if args.debug:
         shuffle_flag=False
-        args.data_workers = 2
+        #args.data_workers = 0
     else:
         shuffle_flag=True
 

@@ -116,19 +116,29 @@ class clevrerDataset(Dataset):
         self.args = args
         self.phase = phase
         self.img_transform = img_transform  
-        if self.args.correct_question_flag==1:
+        # use parsed pg
+        if self.args.correct_question_flag==1 and ( self.args.expression_mode==-1
+                    and self.args.retrieval_mode==-1 ):
             self._init_correct_question(phase)
         else:
+            # use GT pg
             question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
             self.question_ann = jsonload(question_ann_full_path)
             if phase == 'train' and self.args.data_train_length!=-1:
                 dataset_len = len(self.question_ann)
                 dataset_len = min(dataset_len, self.args.data_train_length)
                 self.question_ann = self.question_ann[:dataset_len]
-        self.vocab = gen_vocab(self)
+        
+        if self.args.correct_question_flag==1 and (self.args.expression_mode!=-1 or 
+                self.args.retrieval_mode!=-1):
+            self._init_parse_expression()
+        #self.vocab = gen_vocab(self)
         self.W = 480; self.H = 320
-        self._set_dataset_mode()
-        self._filter_program_types()
+        if self.args.expression_mode==-1 and self.args.retrieval_mode==-1:
+            self._set_dataset_mode()
+            self._filter_program_types()
+        else:
+            self._ignore_list = []
         if self.args.extract_region_attr_flag:
             self.__intialize_frm_ann()
         self.background = None
@@ -136,6 +146,9 @@ class clevrerDataset(Dataset):
             self.__init_for_retrieval_mode()
         if self.args.expression_mode==0:
             self.__init_for_grounding_mode()
+
+    def _init_parse_expression(self):
+        self.parsed_pgs = jsonload(self.args.correct_question_path)
 
     def __init_for_retrieval_mode(self):
         self.retrieval_info = jsonload(self.args.expression_path)
@@ -660,10 +673,25 @@ class clevrerDataset(Dataset):
         query_info_list = []
         for exp_type, exp_list in exp_info.items():
             query_info_list +=exp_list
+        parsed_pgs = self.parsed_pgs[str(scene_index)]
+        assert len(query_info_list)==len(parsed_pgs)
         for q_id, q_info in enumerate(query_info_list):
             query_info_list[q_id]['question_id'] = q_id
             query_info_list[q_id]['question_type'] = 'expression'
             query_info_list[q_id]['question_subtype'] = query_info_list[q_id]['expression_family'] 
+            if self.args.correct_question_flag:
+                parsed_pg = parsed_pgs[str(q_id)][0]
+                valid_flag = True if len(query_info_list[q_id]['program'])==len(parsed_pg) else False 
+                if valid_flag:
+                    for pg_gt, pg_prp in zip(query_info_list[q_id]['program'], parsed_pg):
+                        if pg_gt!=pg_prp:
+                            valid_flag = False
+                            break
+                if not valid_flag:
+                    print('finding incorrect program')
+                    print(query_info_list[q_id]['program'])
+                    print(parsed_pg)
+                query_info_list[q_id]['program'] = parsed_pg 
         return query_info_list, tube_gt_info['tubes']  
 
     def __getitem__model_v2(self, index):
