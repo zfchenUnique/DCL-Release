@@ -30,6 +30,38 @@ DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 __all__ = ['SceneParsingLoss', 'QALoss', 'ParserV1Loss']
 
 
+def further_prepare_for_moving_stationary(ftr_ori, time_mask, concept):
+    obj_num, ftr_dim = ftr_ori.shape 
+    box_dim = 4
+    time_step = int(ftr_dim/box_dim)
+    if time_mask is not None and time_mask.sum()<=1:
+        max_idx = torch.argmax(time_mask)
+        st_idx = max(int(max_idx-time_win*0.5), 0)
+        ed_idx = min(int(max_idx+time_win*0.5), time_step-1)
+        time_mask[st_idx:ed_idx] = 1
+    #assert time_mask is not None
+    if time_mask is not None:
+        ftr_mask = ftr_ori.view(obj_num, time_step, box_dim) * time_mask.view(1, time_step, 1)
+    else:
+        ftr_mask = ftr_ori.view(obj_num, time_step, box_dim)
+    ftr_diff = torch.zeros(obj_num, time_step, box_dim, dtype=ftr_ori.dtype,
+            device=ftr_ori.device)
+    ftr_diff[:, :time_step-1, :] = ftr_mask[:, 0:time_step-1, :] - ftr_mask[:, 1:time_step, :]
+    st_idx = 0; ed_idx = time_step - 1
+    if time_mask is not None:
+        for idx in range(time_step):
+            if time_mask[idx]>0:
+                st_idx = idx -1 if (idx-1)>=0 else idx
+                break 
+        for idx in range(time_step-1, -1, -1):
+            if time_mask[idx]>0:
+                ed_idx = idx if idx>=0 else 0
+                break 
+    ftr_diff[:, st_idx, :] = 0
+    ftr_diff[:, ed_idx, :] = 0
+    ftr_diff = ftr_diff.view(obj_num, ftr_dim)
+    return ftr_diff 
+
 def compute_kl_regu_loss(mean, var):
     kl_loss = -0.5*torch.sum(1+torch.log(var)-mean.pow(2)-var)
     return kl_loss 
@@ -620,16 +652,26 @@ class SceneParsingLoss(MultitaskLossBase):
             
             #if attribute != 'scene':
             #    continue
+            if attribute !='event2' and attribute !='status':
+                continue 
             for v in concepts:
                 if 'temporal_' + v not in feed_dict:
                     continue
-                this_score = temporal_embedding.similarity(all_f_box, v)
 
                 if v =='in':
                     cross_labels = feed_dict['temporal_' + v]>0
+                    this_score = temporal_embedding.similarity(all_f_box, v)
                 elif v =='out':
                     cross_labels = feed_dict['temporal_' + v]<128
-
+                    this_score = temporal_embedding.similarity(all_f_box, v)
+                elif v=='moving':
+                    cross_labels = feed_dict['temporal_' + v]>0
+                    all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    this_score = temporal_embedding.similarity(all_f_box_mv, v)
+                elif v=='stationary':
+                    cross_labels = feed_dict['temporal_' + v]>0
+                    all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 acc_key = 'acc/scene/temporal/' + v
                 monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
 
@@ -646,7 +688,6 @@ class SceneParsingLoss(MultitaskLossBase):
                     for loss_key in ['loss/scene/temporal/' + v, 'loss/scene']:
                         monitors[loss_key] = monitors.get(loss_key, 0) + this_loss
         return monitors, outputs
-
 
 class QALoss(MultitaskLossBase):
     def __init__(self, add_supervision):

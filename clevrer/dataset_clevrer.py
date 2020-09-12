@@ -24,6 +24,26 @@ import cv2
 #_ignore_list = ['get_counterfact']
 #_used_list = ['filter_order']
 
+def get_motion(obj_idx, frame_idx, motion_trajectory):
+    """Returns the motion of a specified object at a specified frame."""
+    motion = motion_trajectory[frame_idx]['objects'][obj_idx]
+    return motion
+
+def is_moving(obj_idx, motion_trajectory, moving_v_th=0.02, n_vis_frames=128, frame_idx=None):
+    """Check if an object is moving in a given frame or throughout the entire video.
+    An object is considered as a moving object if in any frame it is moving.
+    This function does not handle visibility issue.
+    """
+    if frame_idx is not None:
+        obj_motion = get_motion(obj_idx, frame_idx, motion_trajectory)
+        speed = np.linalg.norm(obj_motion['velocity'][:2])
+        # speed = np.linalg.norm(obj_motion['velocity']) # this line leads to some bugs, keep until diagnosed
+        return speed > moving_v_th
+    else:
+        for f in range(n_vis_frames):
+            if is_moving(obj_idx, motion_trajectory, frame_idx= f):
+                return True
+        return False
 
 def merge_img_patch(img_0, img_1):
 
@@ -32,7 +52,6 @@ def merge_img_patch(img_0, img_1):
     idx = np.logical_or(idx, img_1[:, :, 1] > 0)
     idx = np.logical_or(idx, img_1[:, :, 2] > 0)
     ret[idx] = img_1[idx]
-
     return ret
 
 def merge_img_patch_v2(img_0, img_1):
@@ -869,6 +888,7 @@ class clevrerDataset(Dataset):
                                 attr_list.append(concept_index)
                             attr_key = attri_group + '_' + attr 
                             data[attr_key] = torch.tensor(attr_list)
+                    
                     elif attri_group=='relation':
                         for attr, concept_group in attribute.items(): 
                             if attr=='event1':
@@ -884,8 +904,10 @@ class clevrerDataset(Dataset):
                                     rela_coll[prp_id2, prp_id1] = 1
                                 attr_key = attri_group + '_' + 'collision'
                                 data[attr_key] = rela_coll
+                    
                     elif attri_group=='temporal':
                         for attr, concept_group in attribute.items(): 
+                            # filter in/out using proposals
                             if attr=='event2':
                                 obj_num = len(data['tube_info']) -2 
                                 attr_frm_id_st = []
@@ -893,11 +915,10 @@ class clevrerDataset(Dataset):
                                 min_frm = 2
                                 box_thre = 0.0001
 
-                                for t_id in range(obj_num):
-                                    box_seq = data['tube_info']['box_seq']['tubes'][t_id]
+                                for obj_idx in range(obj_num):
+                                    box_seq = data['tube_info']['box_seq']['tubes'][obj_idx]
                                     box_seq_np = np.stack(box_seq, axis=0)
                                     tar_area = box_seq_np[:, 2] * box_seq_np[:, 3]
-                                    
                                     time_step = len(tar_area)
                                     # filter_in 
                                     for t_id in range(time_step):
@@ -915,11 +936,61 @@ class clevrerDataset(Dataset):
                                             break 
                                         if t_id == 0:
                                             attr_frm_id_ed.append(time_step-1)
-
                                 attr_key = attri_group + '_in'
                                 data[attr_key] = torch.tensor(attr_frm_id_st)
                                 attr_key = attri_group + '_out'
                                 data[attr_key] = torch.tensor(attr_frm_id_ed)
+
+
+                            elif attr=='event2' and 0:
+                                n_vis_frames = 128
+                                attr_frm_id_st = []
+                                attr_frm_id_ed = []
+                                obj_num = len(data['tube_info']) - 2 
+                                motion_trajectory = scene_gt['motion_trajectory']
+                                for obj_idx_ori in range(obj_num):
+                                    o_id = prp_id_to_gt_id[obj_idx_ori]
+                                    # assuming object only  entering the scene once
+                                    for f in range(1, n_vis_frames):
+                                        if motion_trajectory[f]['objects'][o_id]['inside_camera_view'] and \
+                                           not motion_trajectory[f-1]['objects'][o_id]['inside_camera_view']:
+                                            break
+                                    if f == n_vis_frames - 1:
+                                        attr_frm_id_st.append(0)
+                                    else:
+                                        attr_frm_id_st.append(f)
+                                    
+                                    for f in range(1, n_vis_frames):
+                                        if not motion_trajectory[f]['objects'][o_id]['inside_camera_view'] and \
+                                                motion_trajectory[f-1]['objects'][o_id]['inside_camera_view']:
+                                            break  
+                                    if f == 1:
+                                        attr_frm_id_ed.append(n_vis_frames-1)
+                                    else:
+                                        attr_frm_id_ed.append(f)
+                                attr_key = attri_group + '_in'
+                                data[attr_key] = torch.tensor(attr_frm_id_st)
+                                attr_key = attri_group + '_out'
+                                data[attr_key] = torch.tensor(attr_frm_id_ed)
+
+                            elif attr=='status':
+                                obj_num = len(data['tube_info']) -2 
+                                moving_flag_list = []
+                                stationary_flag_list = []
+                                for obj_idx_ori in range(obj_num):
+                                    obj_idx = prp_id_to_gt_id[obj_idx_ori]
+                                    moving_flag = is_moving(obj_idx, scene_gt['motion_trajectory'])
+                                    if moving_flag:
+                                        moving_flag_list.append(1)
+                                        stationary_flag_list.append(0)
+                                    else:
+                                        moving_flag_list.append(0)
+                                        stationary_flag_list.append(1)
+                                attr_key = attri_group + '_moving' 
+                                data[attr_key] = torch.tensor(moving_flag_list)
+                                attr_key = attri_group + '_stationary' 
+                                data[attr_key] = torch.tensor(stationary_flag_list)
+                                #pdb.set_trace()
         return data 
 
 
