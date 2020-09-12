@@ -618,8 +618,8 @@ class SceneParsingLoss(MultitaskLossBase):
 
         for attribute, concepts in self.used_concepts['temporal'].items():
             
-            if attribute != 'scene':
-                continue
+            #if attribute != 'scene':
+            #    continue
             for v in concepts:
                 if 'temporal_' + v not in feed_dict:
                     continue
