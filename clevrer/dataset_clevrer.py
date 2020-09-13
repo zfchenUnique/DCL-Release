@@ -77,6 +77,27 @@ def gen_vocab(dataset):
 
     return vocab
 
+def mapping_detected_tubes_to_objects_new(tube_key_dict, gt_obj_list):
+    prp_id_to_gt_id = {}
+    gt_id_to_prp_id = {} 
+    score_matrix = torch.zeros((len(tube_key_dict), len(gt_obj_list)))
+    for gt_id, gt_obj in enumerate(gt_obj_list):
+        max_score = -1
+        match_obj_id = -1
+        for obj_id, obj_prp in tube_key_dict.items():
+            match_score = 0
+            for attr, concept in obj_prp.items():
+                if concept == gt_obj[attr]:
+                    match_score +=1
+            score_matrix[obj_id, gt_id] = match_score 
+    sort_mat1, rank_idx1 = torch.sort(score_matrix, dim=0, descending=True) 
+    sort_mat2, rank_idx2 = torch.sort(score_matrix, dim=1, descending=True) 
+    for gt_id in range(len(gt_obj_list)):
+        gt_id_to_prp_id[gt_id] = int(rank_idx1[0, gt_id])
+    for prp_id in range(len(tube_key_dict)):
+        prp_id_to_gt_id[prp_id] = int(rank_idx2[prp_id, 0])
+    return  prp_id_to_gt_id, gt_id_to_prp_id  
+
 def mapping_detected_tubes_to_objects(tube_key_dict, gt_obj_list):
     prp_id_to_gt_id = {}
     gt_id_to_prp_id = {} 
@@ -95,8 +116,8 @@ def mapping_detected_tubes_to_objects(tube_key_dict, gt_obj_list):
         gt_id_to_prp_id[gt_obj['object_id']] = match_obj_id 
 
     for gt_id, prp_id in gt_id_to_prp_id.items():
-        prp_id_to_gt_id[prp_id] = gt_id 
-
+        prp_id_to_gt_id[prp_id] = gt_id
+    pdb.set_trace()
     return  prp_id_to_gt_id, gt_id_to_prp_id  
 
 def parse_static_attributes_for_tubes(tube_info, mask_gt, ratio):
@@ -877,7 +898,8 @@ class clevrerDataset(Dataset):
                 mask_gt = jsonload(mask_gt_path)
                 tube_key_dict = parse_static_attributes_for_tubes(data['tube_info'], mask_gt, ratio)
                 # TODO: this may raise bug since it hack the data property for gt
-                prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+                #prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects(tube_key_dict, scene_gt['object_property'])
+                prp_id_to_gt_id, gt_id_to_prp_id = mapping_detected_tubes_to_objects_new(tube_key_dict, scene_gt['object_property'])
                 for attri_group, attribute in gdef.all_concepts_clevrer.items():
                     if attri_group=='attribute':
                         for attr, concept_group in attribute.items(): 
