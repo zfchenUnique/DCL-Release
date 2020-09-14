@@ -34,29 +34,4 @@ Pytorch implementation for the Neuro-Symbolic Concept Learner (NS-CL) on CLEVRER
 - [x] QA accuracy per question
 
 ## To do list:
-### N*N Match
-- [ ] Test the performance that adopts NN match with only IoU features
-- [ ] Test why and when it fails  
-
-### More comprehensive features for temporal concepts
-- [ ] Projecting feature into collision domain for understanding
-- [ ] Models with learnt tube proposals
-- [ ] Models with learnt programs
-- [ ] Threshold for collision performance
-- [ ] More supervision info from QA
-- [ ] Masking output that are out of the boxes
-
-### Details for learning dynamic modeles in the latent space
-Step1, extract visual features for each target object and their collision features
-Step2, using a dynamic models to learn corresponding features
-Step3, Joint optimizing both the latent features and the dynamic nscl models
-
-## Temporal reasoning
-- [ ] Design neoral operations for temporal reasoning programs
-
-## Dynamic models
-- [ ] Feature replacement RGB vs latent
-- [ ] Collision feature
-
-## Minor to do list:
-- [ ] RGB for stationary and moving
+- [ ] Scene supervision for stationary and moving
