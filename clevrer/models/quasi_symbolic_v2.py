@@ -785,15 +785,14 @@ class ProgramExecutorContext(nn.Module):
                 colli_3d_mask = self._events_buffer[0][0]
             colli_mask, colli_t_idx = torch.max(colli_3d_mask, dim=2)
         elif ques_type == 'predictive':
-            colli_mask, colli_t_idx = self._unseen_event_buffer 
+            colli_mask, colli_t_idx = self._unseen_event_buffer
         elif ques_type == 'counterfactual':
             colli_mask, colli_t_idx = self._counterfact_event_buffer  
-            #pdb.set_trace()
-            #raise NotImplementedError
         else:
             raise NotImplementedError
         obj_set_weight = None
-        if len(future_progs)>0:
+        if len(future_progs)>0 and (ques_type!='counterfactual' and ques_type!='predictive'):
+        #if len(future_progs)>0:
             future_op_list = [tmp_pg['op'] for tmp_pg in future_progs]
             if 'get_col_partner' in future_op_list:
                 filter_obj_flag = True
