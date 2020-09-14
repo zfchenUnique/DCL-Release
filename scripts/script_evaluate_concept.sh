@@ -2,6 +2,9 @@ GPU_ID=$1
 #MODEL_PATH=$2
 #MODEL_PATH='dumps/remote_models/attrMatchNoIoU_epoch_4.pth'
 MODEL_PATH='dumps/remote_models/attrMatchNoIoU_epoch_7_prp.pth'
+PREFIX='rgb_sep_prp_ep7'
+#MODEL_PATH='dumps/remote_models/attrMatchNoIoU_epoch_10_gt.pth'
+#PREFIX='rgb_sep_gt_ep10'
 jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender_clevrer_v2.py\
     --training-target v2 \
     --dataset clevrer --data-dir ../clevrer \
@@ -18,16 +21,19 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --tube_mode 1 \
     --version v2 \
     --background_path ../temporal_reasoningv2/background.png \
-    --tube_prp_path ../clevrer/tubeProposalsAttrMatchNoIoUThre/1.0_1.0_0.6_0.7 \
     --unseen_events_path ../temporal_reasoningv2/dumps/annos/tubeNetAttrV3_offset4_noIoUThre_separate_realOffset5_noAttr_noEdgeSuperv \
     --load ${MODEL_PATH} \
     --scene_add_supervision 1 \
-    --dataset_stage 3 \
     --scene_supervision_flag 1 \
     --scene_supervision_weight 0.5 \
-    --prefix rgb_sep_prp_ep7 \
+    --prefix ${PREFIX} \
     --evaluate \
-    --data-workers 1 \
+    --data-workers 2 \
+    --tube_prp_path ../clevrer/tubeProposalsAttrMatchNoIoUThre/1.0_1.0_0.6_0.7 \
+    --visualize_flag 1 \
+    --dataset_stage 3 \
+    --visualize_gif_flag 1 \
+    #--tube_prp_path ../clevrer/tubeProposalsGt \
     #--debug \
     #--test_result_path ${TEST_PATH} \
     #--testing_flag 1 \

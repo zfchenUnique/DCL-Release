@@ -22,7 +22,7 @@ import copy
 import numpy as np
 from .models import functional
 import jactorch
-from .utils import visualize_decoder, compute_LS, compute_IoU_v2, compute_union_box  
+from .utils import visualize_decoder, compute_LS, compute_IoU_v2, compute_union_box,pickledump, pickleload  
 
 DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
@@ -509,7 +509,7 @@ class SceneParsingLoss(MultitaskLossBase):
         monitors['loss/regu'] = ftr_loss
         return monitors 
 
-    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None, decoder=None):
+    def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None, decoder=None, result_save_path=''):
         outputs, monitors = dict(), dict()
 
         if pred_ftr_list is not None:
@@ -674,6 +674,10 @@ class SceneParsingLoss(MultitaskLossBase):
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 acc_key = 'acc/scene/temporal/' + v
                 monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
+                #if monitors[acc_key]<1:
+                #    print(this_score)
+                #    print(cross_labels)
+                #    pdb.set_trace()
 
                 if self.training and self.add_supervision:
             
@@ -694,7 +698,7 @@ class QALoss(MultitaskLossBase):
         super().__init__()
         self.add_supervision = add_supervision
 
-    def forward(self, feed_dict, answers, question_index=None, loss_weights=None, accuracy_weights=None, ground_thre=0.5):
+    def forward(self, feed_dict, answers, question_index=None, loss_weights=None, accuracy_weights=None, ground_thre=0.5, result_save_path=''):
         """
         Args:
             feed_dict (dict): input feed dict.
@@ -947,6 +951,17 @@ class QALoss(MultitaskLossBase):
                     monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                     monitors.setdefault('loss/qa', []).append((l, loss_w))
                     monitors.setdefault('loss/qa/' + question_type_new, []).append((l, loss_w))
+       
+        if result_save_path!='':
+            #pdb.set_trace()
+            if not os.path.isdir(result_save_path):
+                os.makedirs(result_save_path)
+            full_path = os.path.join(result_save_path, 
+                    str(feed_dict['meta_ann']['scene_index'])+'.pk')
+            out_dict = {'answer': answers,
+                    'gt': feed_dict['answer']}
+            pickledump(full_path, out_dict)
+
         return monitors, outputs
 
     def _gen_normalized_weights(self, weights, n):

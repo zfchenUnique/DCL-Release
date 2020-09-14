@@ -184,7 +184,8 @@ class Model(ReasoningV2ModelForCLEVRER):
                     pred_ftr_list = output_ftr,
                     decoder = ftr_decoder 
                 ))
-                update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers))
+                update_from_loss_module(monitors, outputs, self.qa_loss(feed_dict, answers, 
+                    result_save_path=self.args.expression_result_path))
                 monitors_list.append(monitors)
                 output_list.append(outputs)
 
