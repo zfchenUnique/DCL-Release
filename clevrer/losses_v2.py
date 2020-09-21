@@ -29,6 +29,35 @@ DEBUG_SCENE_LOSS = int(os.getenv('DEBUG_SCENE_LOSS', '0'))
 
 __all__ = ['SceneParsingLoss', 'QALoss', 'ParserV1Loss']
 
+def get_in_out_frame(all_f_box, concept):
+    event_frm = []
+    obj_num, ftr_dim = all_f_box.shape
+    box_dim = 4 
+    box_thre = 0.0001
+    min_frm = 5
+    time_step = ftr_dim // box_dim  
+    for tar_obj_id in range(obj_num):
+        c = concept 
+        tar_ftr = all_f_box[tar_obj_id].view(time_step, box_dim)
+        tar_area = tar_ftr[:, 2] * tar_ftr[:, 3]
+        if c=='in':
+            for t_id in range(time_step):
+                end_id = min(t_id + min_frm, time_step-1)
+                if torch.sum(tar_area[t_id:end_id]>box_thre)>=(end_id-t_id) and torch.sum(tar_ftr[t_id:end_id,2])>0:
+                    event_frm.append(t_id)
+                    break 
+            if t_id== time_step - 1:
+                event_frm.append(0)
+
+        elif c=='out':
+            for t_id in range(time_step-1, -1, -1):
+                st_id = max(t_id - min_frm, 0)
+                if torch.sum(tar_area[st_id:t_id]>box_thre)>=(t_id-st_id) and torch.sum(tar_ftr[st_id:t_id])>0:
+                    event_frm.append(t_id)
+                    break
+            if t_id == 0:
+                event_frm.append(time_step - 1)
+    return event_frm 
 
 def further_prepare_for_moving_stationary(ftr_ori, time_mask, concept):
     obj_num, ftr_dim = ftr_ori.shape 
@@ -574,6 +603,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 if 'relation_' + concept not in feed_dict:
                     continue
                 cross_scores = []
+                cross_indexes = []
                 for f in f_sng:
                     obj_num, ftr_dim = f[3].shape
                     box_dim = 4
@@ -624,9 +654,9 @@ class SceneParsingLoss(MultitaskLossBase):
                     coll_mat = do_apply_self_mask_3d(coll_mat)
                     coll_mat_max, coll_mat_idx =  torch.max(coll_mat, dim=2)
                     cross_scores.append(coll_mat_max.view(-1))
+                    cross_indexes.append(coll_mat_idx.view(-1))
                 cross_scores = torch.cat(cross_scores)
                 cross_labels = feed_dict['relation_' + concept].view(-1)
-
                 acc_key = 'acc/scene/relation/' + concept
                 monitors[acc_key] = ((cross_scores > 0).long() == cross_labels.long()).float().mean()
                 acc_key_pos = 'acc/scene/relation/' + concept +'_pos'
@@ -636,6 +666,22 @@ class SceneParsingLoss(MultitaskLossBase):
                 neg_acc = (acc_mat * (1- cross_labels.float())).sum() / ((1-cross_labels.float()).sum()+0.000001)
                 monitors[acc_key_pos] = pos_acc 
                 monitors[acc_key_neg] = neg_acc
+                
+                colli_label_frms = feed_dict['relation_'+concept+'_frame'].view(-1)
+                colli_pred_idx = torch.cat(cross_indexes) 
+                n_obj_2 = cross_labels.shape[0]
+                frm_diff_list = []
+                for n_idx in range(n_obj_2):
+                    if cross_scores[n_idx]>0 and cross_labels[n_idx]>0:
+                        pred_idx = colli_pred_idx[n_idx]
+                        frm_gt = colli_label_frms[n_idx] 
+                        pred_frm = feed_dict['tube_info']['frm_list'][pred_idx]
+                        frm_diff = abs(pred_frm - frm_gt)
+                        frm_diff_list.append(frm_diff)
+                acc_key = 'acc/scene/relation/frmDiff/' + concept
+                if len(frm_diff_list)>0:
+                    monitors[acc_key] = (sum(frm_diff_list) / len(frm_diff_list)).float()
+
                 if self.training and self.add_supervision:
                     label_len = cross_labels.shape[0]
                     pos_num = cross_labels.sum().float()
@@ -657,7 +703,6 @@ class SceneParsingLoss(MultitaskLossBase):
             for v in concepts:
                 if 'temporal_' + v not in feed_dict:
                     continue
-
                 if v =='in':
                     cross_labels = feed_dict['temporal_' + v]>0
                     this_score = temporal_embedding.similarity(all_f_box, v)
@@ -674,11 +719,16 @@ class SceneParsingLoss(MultitaskLossBase):
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 acc_key = 'acc/scene/temporal/' + v
                 monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
-                #if monitors[acc_key]<1:
-                #    print(this_score)
-                #    print(cross_labels)
-                #    pdb.set_trace()
-
+                if v=='in' or v=='out':
+                    tar_frm_list = get_in_out_frame(all_f_box, v)
+                    frm_diff_list = []
+                    for obj_id in range(all_f_box.shape[0]):
+                        if this_score[obj_id]>0 and cross_labels[obj_id]>0:
+                            frm_diff = abs(tar_frm_list[obj_id] - feed_dict['temporal_'+v][obj_id])
+                            frm_diff_list.append(frm_diff)
+                    acc_key = 'acc/scene/temporal/frmDiff/' + v
+                    if len(frm_diff_list)>0:
+                        monitors[acc_key] =  (sum(frm_diff_list) / len(frm_diff_list)).float()
                 if self.training and self.add_supervision:
             
                     label_len = cross_labels.shape[0]

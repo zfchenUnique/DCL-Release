@@ -914,7 +914,8 @@ class clevrerDataset(Dataset):
                             if attr=='event1':
                                 obj_num = len(data['tube_info']) -2 
                                 rela_coll = torch.zeros(obj_num, obj_num)
-
+                                rela_coll_frm = torch.zeros(obj_num, obj_num) -1
+                                #pdb.set_trace()
                                 for event_id, event in enumerate(scene_gt['collision']):
                                     obj_id_pair = event['object_ids']
                                     gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
@@ -922,8 +923,14 @@ class clevrerDataset(Dataset):
                                     prp_id2 = gt_id_to_prp_id[gt_id2]
                                     rela_coll[prp_id1, prp_id2] = 1
                                     rela_coll[prp_id2, prp_id1] = 1
+                                    frm_id = event['frame_id']
+                                    rela_coll_frm[prp_id1, prp_id2] = frm_id 
+                                    rela_coll_frm[prp_id2, prp_id1] = frm_id
+
                                 attr_key = attri_group + '_' + 'collision'
                                 data[attr_key] = rela_coll
+                                attr_key = attri_group + '_' + 'collision_frame'
+                                data[attr_key] = rela_coll_frm 
                     
                     elif attri_group=='temporal':
                         for attr, concept_group in attribute.items(): 
