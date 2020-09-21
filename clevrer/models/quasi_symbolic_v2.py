@@ -1748,7 +1748,7 @@ class DifferentiableReasoning(nn.Module):
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
                         #pdb.set_trace()
                 for obj_id in range(obj_num):
-                    if self.args.expression_mode!=-1 or self.args.retrieval_mode!=-1:
+                    if self.args.expression_mode!=-1 or self.args.retrieval_mode!=-1 or self.args.dataset_stage!=-1:
                         continue 
                     selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
                     selected[obj_id] = 10
