@@ -928,7 +928,7 @@ class clevrerDataset(Dataset):
                     elif attri_group=='temporal':
                         for attr, concept_group in attribute.items(): 
                             # filter in/out using proposals
-                            if attr=='event2':
+                            if attr=='event2' and 0:
                                 obj_num = len(data['tube_info']) -2 
                                 attr_frm_id_st = []
                                 attr_frm_id_ed = []
@@ -962,7 +962,7 @@ class clevrerDataset(Dataset):
                                 data[attr_key] = torch.tensor(attr_frm_id_ed)
 
 
-                            elif attr=='event2' and 0:
+                            elif attr=='event2':
                                 n_vis_frames = 128
                                 attr_frm_id_st = []
                                 attr_frm_id_ed = []
