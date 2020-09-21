@@ -194,18 +194,19 @@ class clevrerDataset(Dataset):
     def __init_for_retrieval_mode(self):
         self.retrieval_info = jsonload(self.args.expression_path)
         for exp_id, exp_info in enumerate(self.retrieval_info['expressions']):
-            parsed_pg = self.parsed_pgs[exp_id][0]
-            valid_flag = True if len(exp_info['program'])==len(parsed_pg) else False 
-            if valid_flag:
-                for pg_gt, pg_prp in zip(exp_info['program'], parsed_pg):
-                    if pg_gt!=pg_prp:
-                        valid_flag = False
-                        break
-            if not valid_flag:
-                print('finding incorrect program')
-                print(exp_info['program'])
-                print(parsed_pg)
-            exp_info['program'] = parsed_pg 
+            if self.args.correct_question_flag:
+                parsed_pg = self.parsed_pgs[exp_id][0]
+                valid_flag = True if len(exp_info['program'])==len(parsed_pg) else False 
+                if valid_flag:
+                    for pg_gt, pg_prp in zip(exp_info['program'], parsed_pg):
+                        if pg_gt!=pg_prp:
+                            valid_flag = False
+                            break
+                if not valid_flag:
+                    print('finding incorrect program')
+                    print(exp_info['program'])
+                    print(parsed_pg)
+                exp_info['program'] = parsed_pg 
             program_cl = transform_conpcet_forms_for_nscl_v2(exp_info['program'])
             exp_info['program_cl'] = program_cl
             exp_info['question_id'] = exp_id
@@ -715,9 +716,6 @@ class clevrerDataset(Dataset):
         return query_info_list, tube_gt_info['tubes'], pos_id_list  
 
     def load_expression_info_v0(self, scene_index):
-        #expression_full_path = os.path.join(self.args.expression_path, \
-        #        'raw_exp_'+str(scene_index).zfill(5)+'.json')
-        #exp_info = jsonload(expression_full_path)
         exp_info = self.grounding_info[str(scene_index)]
         gt_tube_full_path = os.path.join(self.args.tube_gt_path, 'annotation_'+str(scene_index).zfill(5)+'.pk')
         tube_gt_info = pickleload(gt_tube_full_path)
@@ -725,13 +723,13 @@ class clevrerDataset(Dataset):
         query_info_list = []
         for exp_type, exp_list in exp_info.items():
             query_info_list +=exp_list
-        parsed_pgs = self.parsed_pgs[str(scene_index)]
-        assert len(query_info_list)==len(parsed_pgs)
         for q_id, q_info in enumerate(query_info_list):
             query_info_list[q_id]['question_id'] = q_id
             query_info_list[q_id]['question_type'] = 'expression'
             query_info_list[q_id]['question_subtype'] = query_info_list[q_id]['expression_family'] 
             if self.args.correct_question_flag:
+                parsed_pgs = self.parsed_pgs[str(scene_index)]
+                assert len(query_info_list)==len(parsed_pgs)
                 parsed_pg = parsed_pgs[str(q_id)][0]
                 valid_flag = True if len(query_info_list[q_id]['program'])==len(parsed_pg) else False 
                 if valid_flag:
