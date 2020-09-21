@@ -157,6 +157,7 @@ def load_param_parser():
     parser.add_argument('--visualize_retrieval_id', type=int, default=-1)
     parser.add_argument('--visualize_gif_flag', type=int, default=0)
     parser.add_argument('--visualize_ground_vid', type=int, default=-1)
+    parser.add_argument('--expression_result_path', type=str, default='', help='file path to store the grounding/ retrieval result')
     args = parser.parse_args()
     return args 
 
