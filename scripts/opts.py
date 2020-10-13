@@ -11,7 +11,6 @@ def load_param_parser():
 
     # training_target and curriculum learning
     parser.add_argument('--expr', default=None, metavar='DIR', help='experiment name')
-    parser.add_argument('--training-target', required=True, choices=['derender', 'v2'])
     parser.add_argument('--training-visual-modules', default='all', choices=['none', 'object', 'relation', 'all'])
     parser.add_argument('--curriculum', default='all', choices=['off', 'scene', 'program', 'all'])
     parser.add_argument('--question-transform', default='off', choices=['off', 'basic', 'parserv1-groundtruth', 'parserv1-candidates', 'parserv1-candidates-executed'])
@@ -38,7 +37,7 @@ def load_param_parser():
     parser.add_argument('--save-interval', type=int, default=2, metavar='N', help='model save interval (epochs) (default: 10)')
 
     # data related
-    parser.add_argument('--dataset', required=True, choices=['clevrer'], help='dataset')
+    parser.add_argument('--dataset', required=True, choices=['clevrer', 'billiards'], help='dataset')
     parser.add_argument('--data-dir', required=True, type='checked_dir', metavar='DIR', help='data directory')
     parser.add_argument('--data-trim', type=float, default=0, metavar='F', help='trim the dataset')
     parser.add_argument('--data-split',type=float, default=0.75, metavar='F', help='fraction / numer of training samples')
@@ -158,6 +157,7 @@ def load_param_parser():
     parser.add_argument('--visualize_gif_flag', type=int, default=0)
     parser.add_argument('--visualize_ground_vid', type=int, default=-1)
     parser.add_argument('--expression_result_path', type=str, default='', help='file path to store the grounding/ retrieval result')
+    parser.add_argument('--visualize_qa_vid', type=int, default=-1)
     args = parser.parse_args()
     return args 
 

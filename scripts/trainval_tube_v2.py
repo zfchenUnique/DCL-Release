@@ -61,9 +61,7 @@ args.configs.apply(configs)
 
 def main():
     args.dump_dir = ensure_path(osp.join(
-        'dumps', args.series_name, args.desc_name, (
-            args.training_target)
-    ))
+        'dumps', args.series_name, args.desc_name))
     if args.normalized_boxes:
         args.dump_dir = args.dump_dir + '_norm_box'
     if args.even_smp_flag:
@@ -94,9 +92,8 @@ def main():
             args.tb_dir = ensure_path(osp.join(args.tb_dir_root, args.run_name))
 
     initialize_dataset(args.dataset, args.version)
-    # to replace dataset
     #validation_dataset = extra_dataset 
-    if args.testing_flag==1:
+    if args.testing_flag==1 or args.dataset=='billiards':
         validation_dataset = build_clevrer_dataset(args, 'test')
     else:
         validation_dataset = build_clevrer_dataset(args, 'validation')

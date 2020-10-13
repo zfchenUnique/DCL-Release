@@ -18,7 +18,7 @@ COLORS = ['gray', 'red', 'blue', 'green', 'brown', 'yellow', 'cyan', 'purple']
 MATERIALS = ['metal', 'rubber']
 SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
-ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER 
+ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER + ['white'] 
 
 
 def compute_union_box(bbox1, bbox2):
@@ -3357,6 +3357,7 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                 print('fail to parse program!')
                 print(clevr_program)
                 print(block_id)
+                pdb.set_trace()
                 continue 
             concept = exe_stack.pop()
             if len(nscl_program)>0:
