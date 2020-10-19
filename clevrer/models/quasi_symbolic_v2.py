@@ -1280,7 +1280,7 @@ class ProgramExecutorContext(nn.Module):
                 cg = [cg]
             mask = None
             for c in cg:
-                if (c == 'moving' or c == 'stationary') and self.args.diff_for_moving_stationary_flag:
+                if (c == 'moving' or c == 'stationary' or c =='falling') and self.args.diff_for_moving_stationary_flag:
                     ftr = self.further_prepare_for_moving_stationary(self.features[3], time_mask, c)
                 if self.valid_seq_mask is not None:
                     ftr = ftr.view(obj_num, time_step, box_dim) * self.valid_seq_mask - (1-self.valid_seq_mask)

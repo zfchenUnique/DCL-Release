@@ -797,7 +797,7 @@ class clevrerDataset(Dataset):
             img_list.append(img)
         img_tensor = torch.stack(img_list, 0)
         data['img'] = img_tensor 
-        data['valid_seq_mask'] = valid_flag_dict  
+        data['valid_seq_mask'] = valid_flag_dict
         # resize frame boxes
         img_size = self.args.img_size
         ratio = img_size / min(H, W)
@@ -1385,6 +1385,8 @@ def build_clevrer_dataset(args, phase):
 
     if args.dataset=='billiards':
         dataset = billiards_dataset(args, phase=phase, img_transform=image_transform)
+    elif args.dataset =='blocks':
+        dataset = blocks_dataset(args, phase=phase, img_transform=image_transform)
     else:
         dataset = clevrerDataset(args, phase=phase, img_transform=image_transform)
 
@@ -1691,6 +1693,295 @@ class billiards_dataset(Dataset):
             self, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,
             num_workers=nr_workers, pin_memory=False,
             collate_fn=collate_dict)
+
+class blocks_dataset(Dataset):
+    def __init__(self, args, phase, img_transform=None):
+        self.args = args
+        self.phase = phase
+        self.img_transform = img_transform  
+        self.question_ann_full = jsonload(args.question_path)
+        split_dir = os.path.dirname(args.question_path)
+        phase_short = phase if phase!='validation' else 'val' 
+        split_full_path = os.path.join(split_dir, phase_short+'.txt') 
+        vid_mat = np.loadtxt(split_full_path, dtype=int) 
+        vid_num = vid_mat.shape[0] 
+        question_ann = []
+        for idx in range(vid_num):
+            vid = int(vid_mat[idx])
+            vid_str = str(vid)
+            vid_info = self.question_ann_full[vid_str]
+            question_ann.append(vid_info)
+        self.question_ann = question_ann 
+        self.W = 224; self.H = 224
+        self._ignore_list = [] 
+
+    def __getitem__(self, index):
+        return self.__getitem__model_v1(index)
+
+    def prepare_tubes(self, scene_idx):
+        ann_path = os.path.join(self.args.tube_prp_path, str(scene_idx)  +'.pkl')
+        tube_ann = pickleload(ann_path)
+        tube_list =  []
+        obj_num, frm_num = tube_ann['trajectory'].shape[1], tube_ann['trajectory'].shape[0]
+        for idx in range(obj_num):
+            tube_list.append([])
+        for frm_id in range(frm_num):
+            for obj_id in range(obj_num):
+                tmp_box = tube_ann['trajectory'][frm_id, obj_id].tolist()
+                tube_list[obj_id].append(tmp_box)
+        tube_info = {'tubes': tube_list}
+        return tube_info 
+
+    def sample_frames_v1(self, tube_info, img_num):
+        tube_box_dict = {}
+        frm_num = len(tube_info['tubes'][0]) 
+        smp_diff = int(frm_num/img_num)
+        frm_offset =  int(smp_diff//2)
+        frm_list = list(range(frm_offset, frm_num, smp_diff))
+        
+        for tube_id, tmp_tube in enumerate(tube_info['tubes']):
+            tmp_dict = {}
+            tmp_list = []
+            count_idx = 0
+            frm_ids = []
+            for exist_id, frm_id in enumerate(frm_list):
+                if tmp_tube[frm_id] == [0, 0, 0, 0]:
+                    continue 
+                tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
+                frm_ids.append(frm_id)
+                count_idx +=1
+            # make sure each tube has at least one rgb
+            if count_idx == 0:
+                for frm_id in range(frm_num):
+                    if tmp_tube[frm_id] == [0, 0, 0, 0]:
+                        continue 
+                    tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
+                    frm_ids.append(frm_id)
+                    count_idx +=1
+                    frm_list.append(frm_id) 
+
+            tmp_dict['boxes'] = tmp_list
+            tmp_dict['frm_name'] = frm_ids  
+            tube_box_dict[tube_id] = tmp_dict 
+        frm_list_unique = list(set(frm_list))
+        frm_list_unique.sort()
+        # making sure each frame has at least one object
+        for exist_id in range(len(frm_list_unique)-1, -1, -1):
+            exist_flag = False
+            frm_id = frm_list_unique[exist_id]
+            for tube_id, tube in tube_box_dict.items():
+                if frm_id in tube['frm_name']:
+                    exist_flag = True
+                    break
+            if not exist_flag:
+                del frm_list_unique[exist_id]
+
+        tube_box_dict['frm_list'] = frm_list_unique  
+        if self.args.normalized_boxes:
+            frm_num = len(tube_info['tubes'][0]) 
+            tube_num = len(tube_info['tubes']) 
+            valid_flag_dict = np.ones((tube_num, frm_num))
+            for tube_id, tmp_tube in enumerate(tube_info['tubes']):
+                tmp_dict = {}
+                frm_num = len(tmp_tube) 
+                for frm_id in range(frm_num):
+                    tmp_box = tmp_tube[frm_id]
+                    if tmp_box == [0, 0, 0, 0]:
+                        #tmp_box = [0, 0, 0, 0]
+                        if self.args.new_mask_out_value_flag:
+                            tmp_box = [-1*self.W, -1*self.H, -1*self.W, -1*self.H]
+                        else:
+                            tmp_box = [0, 0, 0, 0]
+                        valid_flag_dict[tube_id, frm_id] = 0
+                    x_c = (tmp_box[0] + tmp_box[2])* 0.5
+                    y_c = (tmp_box[1] + tmp_box[3])* 0.5
+                    w = tmp_box[2] - tmp_box[0]
+                    h = tmp_box[3] - tmp_box[1]
+                    tmp_array = np.array([x_c, y_c, w, h])
+                    tmp_array[0] = tmp_array[0] / self.W
+                    tmp_array[1] = tmp_array[1] / self.H
+                    tmp_array[2] = tmp_array[2] / self.W
+                    tmp_array[3] = tmp_array[3] / self.H
+                    tube_info['tubes'][tube_id][frm_id] = tmp_array 
+        tube_box_dict['box_seq'] = tube_info   
+        return tube_box_dict , valid_flag_dict 
+
+    def __getitem__model_v1(self, index):
+        data = {}
+        meta_ann = copy.deepcopy(self.question_ann[index])
+        scene_idx = meta_ann['video_index']
+
+        img_full_path = os.path.join(self.args.frm_img_path, 'img_concat_'+str(scene_idx)+'.png') 
+        tube_info = self.prepare_tubes(scene_idx)
+        frm_dict, valid_flag_dict = self.sample_frames_v1(tube_info, self.args.frm_img_num)   
+        frm_list = frm_dict['frm_list']
+        H=0; W=0
+        img_list = []
+        img_concat = Image.open(img_full_path).convert('RGB')
+        for i, frm in enumerate(frm_list):
+            frm_id = frm 
+            top = frm*self.H
+            bottom = (frm+1)*self.H
+            left  = 0 
+            right = self.W
+            img = img_concat.crop((left, top, right, bottom))
+            W, H = img.size
+            #img.save(str(frm)+'.png')
+            #pdb.set_trace()
+            img, _ = self.img_transform(img, np.array([0, 0, 1, 1]))
+            img_list.append(img)
+        img_tensor = torch.stack(img_list, 0)
+        data['img'] = img_tensor 
+        data['valid_seq_mask'] = valid_flag_dict[:, :128]  
+        # resize frame boxes
+        img_size = self.args.img_size
+        ratio = img_size / min(H, W)
+        for key_id, tube_box_info in frm_dict.items():
+            if not isinstance(key_id, int):
+                continue 
+            for box_id, box in enumerate(tube_box_info['boxes']):
+                tmp_box = torch.tensor(box)*ratio
+                tube_box_info['boxes'][box_id] = tmp_box
+            frm_dict[key_id]=tube_box_info 
+        data['tube_info'] = frm_dict  
+    
+        load_predict_flag = False
+        load_counter_fact_flag = False
+        counterfact_list = [q_id for q_id, ques_info in enumerate(meta_ann['questions']) if ques_info['question_type']=='counterfactual']
+        sample_counterfact_list = counterfact_list 
+        # getting programs
+        for q_id, ques_info in enumerate(meta_ann['questions']):
+            valid_flag = True
+            for pg in ques_info['program']:
+                if pg in self._ignore_list:
+                    valid_flag = False
+                    break
+            if not valid_flag:
+                continue
+                        
+            if ques_info['question_type']=='predictive':
+                load_predict_flag = True
+            if ques_info['question_type']=='counterfactual':
+                if q_id in sample_counterfact_list:
+                    load_counter_fact_flag = True
+                else:
+                    continue
+
+            if 'answer'in ques_info.keys() and ques_info['answer'] == 'no':
+                ques_info['answer'] = False
+            elif 'answer' in ques_info.keys() and ques_info['answer'] == 'yes':
+                ques_info['answer'] = True
+
+            program_cl = transform_conpcet_forms_for_nscl_v2(ques_info['program'])
+            meta_ann['questions'][q_id]['program_cl'] = program_cl 
+            if 'answer'in ques_info.keys():
+                meta_ann['questions'][q_id]['answer'] = ques_info['answer']
+            else:
+                for choice_id, choice_info in enumerate(meta_ann['questions'][q_id]['choices']):
+                    meta_ann['questions'][q_id]['choices'][choice_id]['program_cl'] = \
+                        transform_conpcet_forms_for_nscl_v2(choice_info['program'])
+            if 'question_subtype' not in ques_info.keys():
+                ques_info['question_subtype'] = program_cl[-1]
+
+        q_num_ori = len(meta_ann['questions']) 
+        for q_id in sorted(counterfact_list, reverse=True):
+            if q_id in sample_counterfact_list:
+                continue 
+            del meta_ann['questions'][q_id]
+        data['meta_ann'] = meta_ann 
+        # loadding unseen events
+        if load_predict_flag  and (self.args.version=='v2' or self.args.version=='v2_1'):
+            scene_index = meta_ann['scene_index']
+            data['predictions'], data['img_future'] = self.load_predict_info(scene_index, frm_dict, padding_img= data['img'][-1])
+            _, c, tarH, tarW = img_tensor.shape
+            for key_id, tube_box_info in data['predictions'].items():
+                if not isinstance(key_id, int):
+                    continue
+                for box_id, box in enumerate(tube_box_info['boxes']):
+                    tmp_box = torch.tensor(box).float()
+                    tmp_box[0] = tmp_box[0]*tarW
+                    tmp_box[2] = tmp_box[2]*tarW
+                    tmp_box[1] = tmp_box[1]*tarH 
+                    tmp_box[3] = tmp_box[3]*tarH
+                    data['predictions'][key_id]['boxes'][box_id] = tmp_box
+        else:
+            # just padding for the dataloader
+            data['predictions'] = {}
+            data['img_future'] = torch.zeros(1, 1, 1, 1)
+        data['load_predict_flag'] =  load_predict_flag 
+
+        # loadding counterfact events
+        if load_counter_fact_flag and (self.args.version=='v2' or self.args.version=='v2_1'):
+            scene_index = meta_ann['scene_index']
+            data['counterfacts'], data['img_counterfacts'] = self.load_counterfacts_info(scene_index, frm_dict, padding_img=data['img'][0])
+        else:
+            # just padding for the dataloader
+            data['counterfacts'] = {}
+            data['img_counterfacts'] = torch.zeros(1, 1, 1, 1)
+
+        #pdb.set_trace()
+        # adding scene supervision
+        if self.args.scene_supervision_flag:
+            ann_path = os.path.join(self.args.tube_prp_path, str(scene_idx)  +'.pkl')
+            vid_ann_dict = pickleload(ann_path)
+            obj_num, frm_num = vid_ann_dict['trajectory'].shape[1], vid_ann_dict['trajectory'].shape[0]
+
+            for attri_group, attribute in gdef.all_concepts_clevrer.items():
+                if attri_group=='attribute':
+                    for attr, concept_group in attribute.items(): 
+                        if attr !='color':
+                            continue
+                        attr_list = []
+                        obj_num = len(data['tube_info']) -2 
+                        for t_id in range(obj_num):
+                            target_color = vid_ann_dict['color'][t_id]
+                            concept_index = concept_group.index(target_color)
+                            attr_list.append(concept_index)
+                        attr_key = attri_group + '_' + attr 
+                        data[attr_key] = torch.tensor(attr_list)
+                    
+                elif attri_group=='temporal':
+                    for attr, concept_group in attribute.items(): 
+                        if attr=='status':
+                            obj_num = len(data['tube_info']) -2 
+                            fall_flag_list = []
+                            stationary_flag_list = []
+                            for obj_idx_ori in range(obj_num):
+                                obj_idx = obj_idx_ori
+                                fall_flag = vid_ann_dict['falling_flag'][obj_idx] 
+                                if fall_flag:
+                                    fall_flag_list.append(1)
+                                else:
+                                    fall_flag_list.append(0)
+                                stationary_flag = vid_ann_dict['stationary_flag'][obj_idx] 
+                                if stationary_flag: 
+                                    stationary_flag_list.append(1)
+                                else:
+                                    stationary_flag_list.append(0)
+                            attr_key = attri_group + '_falling' 
+                            data[attr_key] = torch.tensor(fall_flag_list)
+                            attr_key = attri_group + '_stationary' 
+                            data[attr_key] = torch.tensor(stationary_flag_list)
+        return data 
+
+    def __len__(self):
+        if self.args.debug:
+            return 5
+        else:
+            return len(self.question_ann)
+
+    def make_dataloader(self, batch_size, shuffle, drop_last, nr_workers):
+        from jactorch.data.dataloader import JacDataLoader
+
+        def collate_dict(batch):
+            return batch
+
+        return JacDataLoader(
+            self, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,
+            num_workers=nr_workers, pin_memory=False,
+            collate_fn=collate_dict)
+
+
 
 
 if __name__=='__main__':

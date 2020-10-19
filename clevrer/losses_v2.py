@@ -541,6 +541,12 @@ class SceneParsingLoss(MultitaskLossBase):
     def forward(self, feed_dict, f_sng, attribute_embedding, relation_embedding, temporal_embedding, buffer=None, pred_ftr_list=None, decoder=None, result_save_path=''):
         outputs, monitors = dict(), dict()
 
+        valid_obj_id_list = []
+        for obj_id in range(len(feed_dict['tube_info'])-2):
+            valid_flag = len(feed_dict['tube_info'][obj_id]['boxes'])>0
+            valid_obj_id_list.append(valid_flag)
+        obj_num = len(feed_dict['tube_info']) -2 
+
         if pred_ftr_list is not None:
             monitors = self.compute_regu_loss_v2(pred_ftr_list, f_sng, feed_dict, monitors, relation_embedding)
    
@@ -568,6 +574,9 @@ class SceneParsingLoss(MultitaskLossBase):
             all_scores = torch.stack(all_scores, dim=-1)
             #pdb.set_trace()
             all_labels = feed_dict['attribute_' + attribute]
+
+            all_scores = all_scores[valid_obj_id_list]
+            all_labels = all_labels[valid_obj_id_list] 
 
             if all_labels.dim() == all_scores.dim() - 1:
                 acc_key = 'acc/scene/attribute/' + attribute
@@ -709,7 +718,7 @@ class SceneParsingLoss(MultitaskLossBase):
                 elif v =='out':
                     cross_labels = feed_dict['temporal_' + v]<128
                     this_score = temporal_embedding.similarity(all_f_box, v)
-                elif v=='moving':
+                elif v=='moving' or v=='falling':
                     cross_labels = feed_dict['temporal_' + v]>0
                     all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
@@ -717,6 +726,20 @@ class SceneParsingLoss(MultitaskLossBase):
                     cross_labels = feed_dict['temporal_' + v]>0
                     all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
+                this_score = this_score[valid_obj_id_list]
+                cross_labels = cross_labels[valid_obj_id_list]
+                
+                acc_key_pos = 'acc/scene/temporal/' + v +'_pos'
+                acc_key_neg = 'acc/scene/temporal/' + v +'_neg'
+                cross_scores = this_score 
+                acc_mat = ((cross_scores > 0).long() == cross_labels.long()).float()
+                if cross_labels.float().sum()>0:
+                    pos_acc = (acc_mat * cross_labels.float()).sum() / (cross_labels.float().sum()+ 0.000001)
+                    monitors[acc_key_pos] = pos_acc 
+                if (1-cross_labels.float()).sum()>0:
+                    neg_acc = (acc_mat * (1- cross_labels.float())).sum() / ((1-cross_labels.float()).sum()+0.000001)
+                    monitors[acc_key_neg] = neg_acc
+                #pdb.set_trace()
                 acc_key = 'acc/scene/temporal/' + v
                 monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
                 if v=='in' or v=='out':

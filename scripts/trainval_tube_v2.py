@@ -70,7 +70,6 @@ def main():
         args.dump_dir = args.dump_dir + '_col_box_ftr'
     args.dump_dir +=  '_' + args.version + '_' + args.prefix
 
-
     #if args.debug:
     if not args.debug:
         args.ckpt_dir = ensure_path(osp.join(args.dump_dir, 'checkpoints'))
