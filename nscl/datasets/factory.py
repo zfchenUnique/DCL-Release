@@ -53,6 +53,12 @@ def initialize_dataset(dataset, version='v1'):
     elif dataset=='clevrer' and (version =='v2' or version == 'v3' or version =='v4' or version=='v2_1'):
         from  clevrer.definition_clevrer_v2 import CLEVRERDefinitionV2
         def_class = CLEVRERDefinitionV2
+    elif dataset=='billiards':
+        from  clevrer.definition_billiards import BilliardDefinition
+        def_class = BilliardDefinition 
+    elif dataset=='blocks':
+        from  clevrer.definition_blocks import BlockDefinition
+        def_class = BlockDefinition 
     else:
         def_class = dataset_registry.lookup('definition', dataset, fallback=False)
     if def_class is None:

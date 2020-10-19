@@ -202,7 +202,6 @@ class ConceptEmbedding(nn.Module):
 
         mappings = self.get_all_attributes()
         concept = self.get_concept(identifier)
-
         # shape: [batch, attributes, channel] or [attributes, channel]
         query_mapped = torch.stack([m(query) for m in mappings], dim=-2)
         query_mapped = query_mapped / query_mapped.norm(2, dim=-1, keepdim=True)
@@ -210,7 +209,6 @@ class ConceptEmbedding(nn.Module):
 
         margin = self._margin
         logits = ((query_mapped * reference).sum(dim=-1) - 1 + margin) / margin / self._tau
-
         belong = jactorch.add_dim_as_except(concept.log_normalized_belong, logits, -1)
         logits = jactorch.logsumexp(logits + belong, dim=-1)
 

@@ -323,6 +323,9 @@ class ProgramExecutorContext(nn.Module):
             # filtering in/out collisions
             in_mask = torch.min(self._events_buffer[1][0], objset_weight)
             out_mask = torch.min(self._events_buffer[2][0], objset_weight)
+            #print('To debug!')
+            in_mask = objset_weight 
+            out_mask = objset_weight 
             # masking out events after time
             obj_num = len(in_mask)
             for obj_id in range(obj_num):
@@ -883,6 +886,35 @@ class ProgramExecutorContext(nn.Module):
         else:
             time_mask = None
         mask = self._get_time_concept_groups_masks(concept_groups, 3, time_mask)
+        mask = torch.min(selected.unsqueeze(0), mask)
+        if torch.is_tensor(group):
+            return (mask * group.unsqueeze(1)).sum(dim=0)
+        return mask[group]
+
+    def filter_spatial(self, selected, group, concept_groups):
+        if group is None:
+            return selected
+        obj_num = selected.shape[0]
+
+        high_list = []
+        boxes_frm_0 = self.features[3].view(obj_num, -1, 4)[:, 0]
+        for obj_id in range(obj_num):
+            y_c = boxes_frm_0[obj_id, 1] 
+            high_list.append(y_c)
+        sorted_high = sorted(range(len(high_list)), key=lambda k: high_list[k])
+        top_idx = sorted_high[0]
+        while(high_list[top_idx]<=0.000001):
+            sorted_high.pop(0)
+            top_idx = sorted_high[0]
+        mask = -10+torch.zeros(obj_num, dtype=torch.float, device=selected.device)
+        if concept_groups[group][0]=='top':
+            target_idx = sorted_high[0]
+        elif concept_groups[group][0]=='middle':
+            target_idx = sorted_high[1]
+        elif concept_groups[group][0]=='bottom':
+            target_idx = sorted_high[-1]
+        mask[target_idx] =  10
+        #pdb.set_trace() 
         mask = torch.min(selected.unsqueeze(0), mask)
         if torch.is_tensor(group):
             return (mask * group.unsqueeze(1)).sum(dim=0)
@@ -1450,6 +1482,8 @@ class DifferentiableReasoning(nn.Module):
                         buffer.append(ctx.filter_before_after(*inputs, block['time_concept_idx'], block['time_concept_values'], ques_type=tmp_q_type))
                     elif op == 'filter_temporal':
                         buffer.append(ctx.filter_temporal(inputs, block['temporal_concept_idx'], block['temporal_concept_values']))
+                    elif op == 'filter_spatial':
+                        buffer.append(ctx.filter_spatial(*inputs, block['spatial_concept_idx'], block['spatial_concept_values']))
                     elif op == 'filter_collision':
                         tmp_output = ctx.filter_collision(*inputs, block['relational_concept_idx'], block['relational_concept_values'], ques_type=tmp_q_type, future_progs=prog[block_id+1:])
                         buffer.append(tmp_output)
@@ -1779,7 +1813,7 @@ class DifferentiableReasoning(nn.Module):
                 #if ques_type=='counterfactual':
                 #    counter_fact_num +=1
                 #    print(counter_fact_num)
-                
+               
                 buffer = []
 
                 buffers.append(buffer)
@@ -1938,6 +1972,10 @@ class DifferentiableReasoning(nn.Module):
                 ctx._time_buffer_masks = None
                 ctx._attribute_groups_masks = None
                 ctx._attribute_query_masks = None
+                
+                if i==12:
+                    pdb.set_trace()
+
                 for block_id, block in enumerate(prog):
                     if block_id <belong_block_id:
                         continue 

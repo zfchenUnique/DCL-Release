@@ -157,7 +157,10 @@ class SceneGraph(nn.Module):
             box_dim = min(future_frm_num*4, tube_tensor.shape[1])
         elif mode==3:
             box_dim = min(future_frm_num*4, tube_tensor.shape[1])
-        box_ftr[:,:box_dim] = tube_tensor
+        if tube_tensor.shape[1]>box_dim:
+            box_ftr[:,:box_dim] = tube_tensor[:,:box_dim]
+        else:
+            box_ftr[:,:box_dim] = tube_tensor
         if mode==3:
             box_ftr = box_ftr.view(obj_num, future_frm_num, 4)
 

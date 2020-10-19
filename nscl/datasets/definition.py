@@ -15,7 +15,7 @@ __all__ = ['DatasetDefinitionBase', 'get_global_definition', 'set_global_definit
 
 
 class DatasetDefinitionBase(object):
-    parameter_types = ['concept', 'relational_concept', 'attribute', 'temporal_concept', 'time_concept']
+    parameter_types = ['concept', 'relational_concept', 'attribute', 'temporal_concept', 'time_concept', 'spatial_concept']
     variable_types = ['object', 'object_set']
     return_types = ['word', 'integer', 'bool']
 

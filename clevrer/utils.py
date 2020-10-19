@@ -3117,9 +3117,12 @@ def clevrer_to_nsclseq(clevr_program_ori):
         elif block.startswith('filter_after') or block == 'filter_before':
             concept = block.split('_')[-1]
             current = dict(op=block, time_concept=[concept])
-        elif block == 'filter_stationary' or block == 'filter_moving':
+        elif block == 'filter_stationary' or block == 'filter_moving' or block == 'filter_falling':
             concept = block.split('_')[-1]
             current = dict(op='filter_temporal', temporal_concept=[concept])
+        elif block == 'filter_top' or block == 'filter_bottom' or block == 'filter_middle':
+            concept = block.split('_')[-1]
+            current = dict(op='filter_spatial', temporal_concept=[concept])
         elif block.startswith('filter'):
             current = dict(op=block)
         elif block == 'unique' or block == 'events' or block == 'all_events' or block == 'null' or block == 'get_object':
@@ -3392,9 +3395,12 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
         elif block.startswith('filter_after') or block == 'filter_before':
             concept = block.split('_')[-1]
             current = dict(op=block, time_concept=[concept])
-        elif block == 'filter_stationary' or block == 'filter_moving':
+        elif block == 'filter_stationary' or block == 'filter_moving' or block == 'filter_falling':
             concept = block.split('_')[-1]
             current = dict(op='filter_temporal', temporal_concept=[concept])
+        elif block == 'filter_top' or block == 'filter_bottom' or block == 'filter_middle':
+            concept = block.split('_')[-1]
+            current = dict(op='filter_spatial', spatial_concept=[concept])
         elif block.startswith('filter'):
             current = dict(op=block)
         elif block == 'unique'  or block == 'all_events' or block == 'null' or block == 'get_object':
@@ -3442,7 +3448,7 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                 current['inputs'] = [inputs_idx - 1 - off_set, inputs_idx ]
             elif block =='get_col_partner':
                 current['inputs'] = [inputs_idx, col_idx]
-            elif block == 'filter_stationary' or block == 'filter_moving':
+            elif block == 'filter_stationary' or block == 'filter_moving' or block =='filter_falling':
                 if obj_stack is not None:
                     if nscl_program[obj_stack]['op']=='events':
                         obj_stack -=1
