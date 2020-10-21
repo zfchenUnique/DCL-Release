@@ -1679,7 +1679,8 @@ class billiards_dataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            return 5
+            return len(self.question_ann)
+            #return 5
         else:
             return len(self.question_ann)
 
@@ -1966,6 +1967,7 @@ class blocks_dataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
+            #return len(self.question_ann)
             return 5
         else:
             return len(self.question_ann)

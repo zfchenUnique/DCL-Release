@@ -721,10 +721,26 @@ class SceneParsingLoss(MultitaskLossBase):
                 elif v=='moving' or v=='falling':
                     cross_labels = feed_dict['temporal_' + v]>0
                     all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    obj_num = all_f_box_mv.shape[0] 
+                    valid_seq_mask = torch.zeros(obj_num, 128, 1).to(all_f_box_mv.device)
+                    time_step = valid_seq_mask.shape[1]
+                    box_dim = 4
+                    valid_len = feed_dict['valid_seq_mask'].shape[1]
+                    valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
+                    all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * valid_seq_mask - (1-valid_seq_mask)
+                    all_f_box_mv = all_f_box_mv.view(obj_num, -1)
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 elif v=='stationary':
                     cross_labels = feed_dict['temporal_' + v]>0
                     all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    obj_num = all_f_box_mv.shape[0] 
+                    valid_seq_mask = torch.zeros(obj_num, 128, 1).to(all_f_box_mv.device)
+                    time_step = valid_seq_mask.shape[1]
+                    box_dim = 4
+                    valid_len = feed_dict['valid_seq_mask'].shape[1]
+                    valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
+                    all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * valid_seq_mask - (1-valid_seq_mask)
+                    all_f_box_mv = all_f_box_mv.view(obj_num, -1)
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 this_score = this_score[valid_obj_id_list]
                 cross_labels = cross_labels[valid_obj_id_list]

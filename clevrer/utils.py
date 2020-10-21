@@ -20,6 +20,90 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER + ['white'] 
 
+def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
+    base_folder = 'dumps/visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
+    filename = str(feed_dict['meta_ann']['video_index'])
+    if not os.path.isdir(base_folder):
+        os.makedirs(base_folder)
+    videoname = base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
+    if store_img:
+        img_folder = base_folder +'/'+filename +'/img' 
+        os.system('mkdir -p ' + img_folder)
+
+    fps = 12
+    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
+    W, H = 224, 224
+    out = cv2.VideoWriter(videoname, fourcc, fps, (W, H))
+    
+    img_full_path = os.path.join(args.frm_img_path, 'img_concat_'+filename+'.png') 
+    img_concat = cv2.imread(img_full_path)
+
+    color_list = ['red', 'yellow', 'green', 'blue']
+    # BGR
+    red_value = np.array((0,0, 255))
+    yellow_value = np.array((0,255,255))
+    green_value = np.array((0, 255, 0))
+    blue_value = np.array((255, 0, 0))
+    target_color_map = [red_value, yellow_value, green_value, blue_value ]
+    color_dict = {color:target_color_map[c_id] for c_id, color in enumerate(color_list)} 
+    obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
+    
+    color_scoe_list = []
+    for cid, color in enumerate(color_list):
+        color_score = ctx.taxnomy[1].similarity(ctx.features[1], color)
+        color_scoe_list.append(color_score)
+    temporal_list = []
+    for v  in ['falling', 'stationary']:
+        all_f_box_mv = ctx.further_prepare_for_moving_stationary(ctx.features[3], time_mask=None, concept=v)
+        box_dim = 4
+        time_step = ctx.valid_seq_mask.shape[1]
+        all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * ctx.valid_seq_mask - (1-ctx.valid_seq_mask)
+        all_f_box_mv = all_f_box_mv.view(obj_num, -1)
+        this_score = ctx.taxnomy[3].similarity(all_f_box_mv, v)
+        temporal_list.append(this_score)
+    pred_color_mat = torch.stack(color_scoe_list, dim=-1)
+    pred_temporal_mat = torch.stack(temporal_list, dim=-1)
+    n_vis_frames = len(feed_dict['tube_info']['box_seq']['tubes'][0])
+    for idx, frm_id in enumerate(range(n_vis_frames)):
+        st_row_id = idx*H
+        ed_row_id = (idx+1)* H 
+        img = img_concat[st_row_id:ed_row_id]
+        box_list = []
+        for obj_id in range(obj_num):
+            box_xywh = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_id]
+            x1 = int(W*(box_xywh[0] - box_xywh[2]*0.5)) 
+            y1 = int(H*(box_xywh[1] - box_xywh[3]*0.5))
+            x2 = int(W*(box_xywh[0] + box_xywh[2]*0.5)) 
+            y2 = int(H*(box_xywh[1] + box_xywh[3]*0.5)) 
+            color = color_list[int(pred_color_mat[obj_id].argmax())]
+            color_info = color_dict[color].tolist() 
+            img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color_info, 1)
+            cv2.putText(img, str(obj_id), ((x1+x2)//2, (y1+y2)//2), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 3)
+            if pred_temporal_mat[obj_id, 0]>0:
+                #pass 
+                cv2.putText(img, 'fall', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 1)
+            if pred_temporal_mat[obj_id, 1]>0:
+                cv2.putText(img, 'stationary', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 0), 1)
+       
+            if (pred_temporal_mat[:, 0]>0).float().sum()>0:
+                cv2.putText(img, 'fall', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+
+        if store_img:
+            cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, idx, int(whatif_id))), img.astype(np.uint8))
+        out.write(img)
+    out.release()
+    if args.visualize_gif_flag:
+        if os.path.isfile(videoname+'.gif'):
+            cmd_str = 'rm %s' % (videoname+'.gif')
+            os.system( cmd_str)
+
+        cmd_str = 'ffmpeg -i %s -t 32 %s' % (videoname, videoname+'.gif')
+        os.system( cmd_str)
+        cmd_str = 'rm %s' % (videoname)
+        os.system( cmd_str)
+    #pdb.set_trace()
 
 def compute_union_box(bbox1, bbox2):
     EPS = 1e-10

@@ -32,7 +32,7 @@ import torch.nn.functional as F
 import copy
 from scipy import signal 
 import numpy as np
-from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5, visualize_scene_parser
+from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5, visualize_scene_parser, visualize_scene_parser_block
 
 logger = get_logger(__file__)
 
@@ -1388,7 +1388,6 @@ class DifferentiableReasoning(nn.Module):
         buffers_list = []
         result_list = []
         batch_size = len(batch_features)
-       
 
         for vid_id, vid_ftr in enumerate(batch_features):
             features = batch_features[vid_id]
@@ -1398,9 +1397,6 @@ class DifferentiableReasoning(nn.Module):
             buffers = []
             result = []
             obj_num = len(feed_dict['tube_info']) - 2
-            
-            #if feed_dict['meta_ann']['scene_index']==7398:
-            #    pdb.set_trace()
 
             ctx_features = []
             for f_id in range(4): 
@@ -1423,11 +1419,12 @@ class DifferentiableReasoning(nn.Module):
 
 
             if self.args.visualize_flag:
-                ctx.init_events()
-                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
-                    visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
-                #pdb.set_trace()
-
+                if self.args.dataset=='blocks':
+                    visualize_scene_parser_block(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
+                else:
+                    ctx.init_events()
+                    if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
+                        visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
 
             for i,  prog in enumerate(progs):
                 tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
@@ -1772,30 +1769,33 @@ class DifferentiableReasoning(nn.Module):
           
             if self.args.visualize_flag:
             #if self.args.visualize_flag and feed_dict['meta_ann']['scene_index']==5:
-                ctx.init_events()
-                if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
-                    if len(feed_dict['predictions'])>0 or (self.args.version!='v2' and self.args.version!='v2_1'):
-                        if self.args.version=='v2_1':
-                            ctx.init_unseen_events(self.args.visualize_flag, embedding_relation_future=self.embedding_relation_future)
-                        else:
-                            ctx.init_unseen_events(self.args.visualize_flag)
-                        visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
-                        #pdb.set_trace()
-                for obj_id in range(obj_num):
-                    if self.args.expression_mode!=-1 or self.args.retrieval_mode!=-1 or self.args.dataset_stage!=-1:
-                        continue 
-                    selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
-                    selected[obj_id] = 10
-                    if self.args.version=='v4':
-                        ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
-                    if self.args.version=='v3':
-                        ctx.init_counterfactual_events_v3(selected, feed_dict, visualize_flag=self.args.visualize_flag)
-                    if self.args.version=='v2' or self.args.version=='v2_1':
-                        if self.args.version=='v2_1':
-                            ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag, embedding_relation_counterfact = self.embedding_relation_counterfact)
-                        else:
-                            ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
-                    visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
+                if self.args.dataset=='blocks':
+                    pass
+                else:
+                    ctx.init_events()
+                    if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
+                        if len(feed_dict['predictions'])>0 or (self.args.version!='v2' and self.args.version!='v2_1'):
+                            if self.args.version=='v2_1':
+                                ctx.init_unseen_events(self.args.visualize_flag, embedding_relation_future=self.embedding_relation_future)
+                            else:
+                                ctx.init_unseen_events(self.args.visualize_flag)
+                            visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=True, args=self.args)
+                            #pdb.set_trace()
+                    for obj_id in range(obj_num):
+                        if self.args.expression_mode!=-1 or self.args.retrieval_mode!=-1 or self.args.dataset_stage!=-1:
+                            continue 
+                        selected = torch.zeros(obj_num, dtype=torch.float, device=features[1].device) - 10
+                        selected[obj_id] = 10
+                        if self.args.version=='v4':
+                            ctx.init_counterfactual_events_v4(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                        if self.args.version=='v3':
+                            ctx.init_counterfactual_events_v3(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                        if self.args.version=='v2' or self.args.version=='v2_1':
+                            if self.args.version=='v2_1':
+                                ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag, embedding_relation_counterfact = self.embedding_relation_counterfact)
+                            else:
+                                ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
+                        visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
                 #pdb.set_trace()
 
             counter_fact_num = 0 
@@ -1973,8 +1973,8 @@ class DifferentiableReasoning(nn.Module):
                 ctx._attribute_groups_masks = None
                 ctx._attribute_query_masks = None
                 
-                if i==12:
-                    pdb.set_trace()
+                #if i==12:
+                #    pdb.set_trace()
 
                 for block_id, block in enumerate(prog):
                     if block_id <belong_block_id:
