@@ -32,7 +32,7 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, build_constructor  
+from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, build_constructor, keep_only_temporal_concept_learner   
 from opts import load_param_parser 
 
 
@@ -272,6 +272,8 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
         nr_iters = len(train_dataloader)
 
     meters.update(epoch=epoch)
+    if args.dataset=='blocks' and epoch==6:
+        keep_only_temporal_concept_learner(trainer, args, configs)
 
     trainer.trigger_event('epoch:before', trainer, epoch)
     train_iter = iter(train_dataloader)

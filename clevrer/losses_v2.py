@@ -720,7 +720,10 @@ class SceneParsingLoss(MultitaskLossBase):
                     this_score = temporal_embedding.similarity(all_f_box, v)
                 elif v=='moving' or v=='falling':
                     cross_labels = feed_dict['temporal_' + v]>0
-                    all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    if self.args.diff_for_moving_stationary_flag:
+                        all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    else:
+                        all_f_box_mv = all_f_box 
                     obj_num = all_f_box_mv.shape[0] 
                     valid_seq_mask = torch.zeros(obj_num, 128, 1).to(all_f_box_mv.device)
                     time_step = valid_seq_mask.shape[1]
@@ -728,11 +731,15 @@ class SceneParsingLoss(MultitaskLossBase):
                     valid_len = feed_dict['valid_seq_mask'].shape[1]
                     valid_seq_mask[:, :valid_len, 0] = torch.from_numpy(feed_dict['valid_seq_mask']).float()
                     all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * valid_seq_mask - (1-valid_seq_mask)
+
                     all_f_box_mv = all_f_box_mv.view(obj_num, -1)
                     this_score = temporal_embedding.similarity(all_f_box_mv, v)
                 elif v=='stationary':
                     cross_labels = feed_dict['temporal_' + v]>0
-                    all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    if self.args.diff_for_moving_stationary_flag:
+                        all_f_box_mv = further_prepare_for_moving_stationary(all_f_box, time_mask=None, concept=v)
+                    else:
+                        all_f_box_mv = all_f_box 
                     obj_num = all_f_box_mv.shape[0] 
                     valid_seq_mask = torch.zeros(obj_num, 128, 1).to(all_f_box_mv.device)
                     time_step = valid_seq_mask.shape[1]
@@ -748,16 +755,16 @@ class SceneParsingLoss(MultitaskLossBase):
                 acc_key_pos = 'acc/scene/temporal/' + v +'_pos'
                 acc_key_neg = 'acc/scene/temporal/' + v +'_neg'
                 cross_scores = this_score 
-                acc_mat = ((cross_scores > 0).long() == cross_labels.long()).float()
+                acc_mat = ((cross_scores > self.args.obj_threshold).long() == cross_labels.long()).float()
                 if cross_labels.float().sum()>0:
                     pos_acc = (acc_mat * cross_labels.float()).sum() / (cross_labels.float().sum()+ 0.000001)
                     monitors[acc_key_pos] = pos_acc 
                 if (1-cross_labels.float()).sum()>0:
                     neg_acc = (acc_mat * (1- cross_labels.float())).sum() / ((1-cross_labels.float()).sum()+0.000001)
                     monitors[acc_key_neg] = neg_acc
-                #pdb.set_trace()
                 acc_key = 'acc/scene/temporal/' + v
                 monitors[acc_key] = ((this_score > 0).long() == cross_labels.long()).float().mean()
+                #pdb.set_trace()
                 if v=='in' or v=='out':
                     tar_frm_list = get_in_out_frame(all_f_box, v)
                     frm_diff_list = []
@@ -783,9 +790,10 @@ class SceneParsingLoss(MultitaskLossBase):
         return monitors, outputs
 
 class QALoss(MultitaskLossBase):
-    def __init__(self, add_supervision):
+    def __init__(self, add_supervision, args):
         super().__init__()
         self.add_supervision = add_supervision
+        self.args = args
 
     def forward(self, feed_dict, answers, question_index=None, loss_weights=None, accuracy_weights=None, ground_thre=0.5, result_save_path=''):
         """
@@ -858,7 +866,7 @@ class QALoss(MultitaskLossBase):
                     loss = self._bce_loss
                     outputs['answer'].append(tmp_answer_list)
                 else:
-                    argmax = int((a > 0).item())
+                    argmax = int((a > self.args.obj_threshold).item())
                     outputs['answer'].append(argmax)
                     gt = int(gt)
                     loss = self._bce_loss

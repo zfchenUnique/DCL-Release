@@ -20,6 +20,20 @@ SHAPES = ['sphere', 'cylinder', 'cube']
 ORDER  = ['first', 'second', 'last']
 ALL_CONCEPTS= COLORS + MATERIALS + SHAPES + ORDER + ['white'] 
 
+
+def keep_only_temporal_concept_learner(trainer, args, configs):
+    from jactorch.optim import AdamW
+    # fix model parameters
+    for name, param in trainer._model.named_parameters():
+        param.requires_grad = False
+    for name, param in  trainer._model.reasoning.embedding_temporal.named_parameters(): 
+        param.requires_grad = True
+    parameters = trainer._model.reasoning.embedding_temporal.parameters() 
+    #trainable_parameters = filter(lambda x: x.requires_grad, parameters)
+    optimizer = AdamW([{'params': parameters}], args.lr, weight_decay=configs.train.weight_decay)
+    trainer._optimizer = optimizer
+    return trainer 
+
 def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
     base_folder = 'dumps/visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['video_index'])

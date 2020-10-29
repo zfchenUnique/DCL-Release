@@ -737,7 +737,7 @@ class ProgramExecutorContext(nn.Module):
                 return torch.sigmoid(selected).sum(dim=-1)
             else:
                 if _test_quantize.value >= InferenceQuantizationMethod.STANDARD.value:
-                    return (selected > 0).float().sum()
+                    return (selected > self.args.obj_threshold).float().sum()
                 return torch.sigmoid(selected).sum(dim=-1).round()
         elif len(selected.shape)==2:  # for collision
             # mask out the diag elelments for collisions
