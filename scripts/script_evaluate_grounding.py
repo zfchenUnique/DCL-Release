@@ -110,6 +110,7 @@ def evaluate_grounding():
                 new_key_v3 = 'acc/frmDist/' + question_sub_type            
                 new_key_frm = 'acc/qa/' + question_sub_type 
                 new_key_frm_acc = 'acc/spatial/' + question_sub_type 
+                new_key_v3 = 'acc/qa/' + question_sub_type            
                 monitors.setdefault(new_key_v2, []).append((overlap, acc_w))
                 monitors.setdefault(new_key_v3, []).append((frm_dist, acc_w))
                 monitors.setdefault(new_key_frm, []).append((int(frm_dist<frm_thre), acc_w))

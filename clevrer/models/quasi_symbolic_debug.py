@@ -110,8 +110,8 @@ def embed(self, i, buffer, result, fd, valid_num=None):
             new_p = p
             new_l = l
 
-        if fd['meta_ann']['questions'][i]['question_type']!='counterfactual' and fd['meta_ann']['questions'][i]['question_type']!='predictive': 
-            return  
+        #if fd['meta_ann']['questions'][i]['question_type']!='counterfactual' and fd['meta_ann']['questions'][i]['question_type']!='predictive': 
+        #    return  
         gogogo = False
         if new_p == new_l:
             print('Correct:', new_p)
@@ -123,15 +123,21 @@ def embed(self, i, buffer, result, fd, valid_num=None):
         else:
             if DEBUG in ('ALL', 'WRONG'):
                 gogogo = True
-                if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
-                     fd['meta_ann']['questions'][i]['question_type']=='predictive': 
+                if fd['meta_ann']['questions'][i]['question_type']=='descriptive':
+                #if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
+            #         fd['meta_ann']['questions'][i]['question_type']=='predictive': 
                     print('Wrong: ', new_p, new_l)
                     print('%s'%(fd['meta_ann']['questions'][i]['question']))
-                    for choice_info in fd['meta_ann']['questions'][i]['choices']:
-                        print(choice_info['program'])
+                    if 'choices' in fd['meta_ann']['questions'][i]:
+                        for choice_info in fd['meta_ann']['questions'][i]['choices']:
+                            print(choice_info['program'])
+                    #else:
                     print('\n')
-                    print(fd['meta_ann']['scene_index'])
+                    if 'scene_index' in fd['meta_ann']:
+                        print(fd['meta_ann']['scene_index'])
+                    else:
+                        print(fd['meta_ann']['video_index'])
                     print('\n')
-                    #pdb.set_trace()
+                    pdb.set_trace()
                 #print('%s'%(fd['meta_ann']['questions'][i]['program']))
 
