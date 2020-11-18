@@ -37,7 +37,7 @@ def load_param_parser():
     parser.add_argument('--save-interval', type=int, default=2, metavar='N', help='model save interval (epochs) (default: 10)')
 
     # data related
-    parser.add_argument('--dataset', required=True, choices=['clevrer', 'billiards'], help='dataset')
+    parser.add_argument('--dataset', required=True, choices=['clevrer', 'billiards', 'blocks'], help='dataset')
     parser.add_argument('--data-dir', required=True, type='checked_dir', metavar='DIR', help='data directory')
     parser.add_argument('--data-trim', type=float, default=0, metavar='F', help='trim the dataset')
     parser.add_argument('--data-split',type=float, default=0.75, metavar='F', help='fraction / numer of training samples')
@@ -158,6 +158,7 @@ def load_param_parser():
     parser.add_argument('--visualize_ground_vid', type=int, default=-1)
     parser.add_argument('--expression_result_path', type=str, default='', help='file path to store the grounding/ retrieval result')
     parser.add_argument('--visualize_qa_vid', type=int, default=-1)
+    parser.add_argument('--obj_threshold', type=float, default=0.0)
     args = parser.parse_args()
     return args 
 
