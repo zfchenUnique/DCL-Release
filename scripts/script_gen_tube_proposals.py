@@ -777,7 +777,7 @@ def compute_recall_and_precision(opt):
 
     #pdb.set_trace()
 
-    if opt['use_attr_flag'] or opt['version']==2 or opt['version']==1:
+    if opt['use_attr_flag'] or opt['version']==2 or opt['version']==1 or opt['version']==3:
         #tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w']))
         tube_prp_path = os.path.join(opt['tube_folder_path'] , str(opt['connect_w'])+'_'+str(opt['score_w']) + '_'  +str(opt['attr_w'])+ '_'+str(opt['match_thre']))
     else:
