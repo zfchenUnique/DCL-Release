@@ -30,4 +30,4 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --dataset_stage 0 \
     --test_result_path ${TEST_PATH} \
     --load ${MODEL_PATH} \
-    --prefix ${TEST_PATH} \
+    --prefix concept_learning_clevrer \
