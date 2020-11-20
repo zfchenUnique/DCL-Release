@@ -1,4 +1,6 @@
 GPU_ID=$1
+MODEL_PATH='dumps/remote_models/attrMatchNoIoU_epoch_7_prp.pth'
+TEST_PATH='attrMatchNoIoU_epoch_prp_ep7'
 jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender_clevrer_v2.py\
     --dataset clevrer --data-dir ../clevrer \
     --epoch 100 --validation-interval 5 \
@@ -21,8 +23,11 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --prefix new_collision_val \
     --unseen_events_path ../temporal_reasoning-master/dumps/annos/tubeNetAttrV3_offset4_noIoUThre_separate_realOffset5_noAttr_noEdgeSuperv \
     --tube_prp_path ../clevrer/tubeProposalsAttrMatchNoIoUThre/1.0_1.0_0.6_0.7 \
-    --data-workers 2 \
+    --data-workers 0 \
     --batch-size 4 \
     --visualize_flag 1 \
     --visualize_gif_flag 1 \
     --dataset_stage 0 \
+    --test_result_path ${TEST_PATH} \
+    --load ${MODEL_PATH} \
+    --prefix ${TEST_PATH} \
