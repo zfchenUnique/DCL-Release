@@ -773,7 +773,7 @@ class clevrerDataset(Dataset):
         img_full_folder = os.path.join(self.args.frm_img_path, sub_img_folder) 
         # getting image frames 
         tube_info = self.sample_tube_frames(scene_idx)
-        pdb.set_trace()
+        #pdb.set_trace()
 
         if self.args.retrieval_mode==0:
             meta_ann['questions'], meta_ann['tubeGt'], meta_ann['pos_id_list'] = self.load_retrieval_info_v0(scene_idx)
