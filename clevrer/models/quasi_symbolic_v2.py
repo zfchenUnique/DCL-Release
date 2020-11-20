@@ -1421,10 +1421,10 @@ class DifferentiableReasoning(nn.Module):
             if self.args.visualize_flag:
                 if self.args.dataset=='blocks':
                     visualize_scene_parser_block(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
-                #else:
-                #    ctx.init_events()
-                #    if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
-                #        visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
+                else:
+                    ctx.init_events()
+                    if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
+                        visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
 
             for i,  prog in enumerate(progs):
                 tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
