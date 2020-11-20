@@ -14,7 +14,6 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --colli_ftr_type 1 \
     --frm_img_num 31 --even_smp_flag 1 \
     --lr 0.0001 \
-    --dataset_stage -1 \
     --tube_mode 1 \
     --scene_add_supervision 0 \
     --version v2 \
@@ -26,3 +25,4 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --batch-size 4 \
     --visualize_flag 1 \
     --visualize_gif_flag 1 \
+    --dataset_stage 0 \
