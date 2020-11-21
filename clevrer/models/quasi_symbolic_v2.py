@@ -1425,7 +1425,6 @@ class DifferentiableReasoning(nn.Module):
                     ctx.init_events()
                     if self.args.version=='v4' or self.args.version=='v3' or self.args.version=='v2' or self.args.version=='v2_1':
                         visualize_scene_parser(feed_dict, ctx, whatif_id=-2, store_img=True, args=self.args)
-
             for i,  prog in enumerate(progs):
                 tmp_q_type = feed_dict['meta_ann']['questions'][i]['question_type']
                 if tmp_q_type!='descriptive' and tmp_q_type!='expression' and tmp_q_type !='retrieval':
@@ -1797,7 +1796,6 @@ class DifferentiableReasoning(nn.Module):
                                 ctx.init_counterfactual_events_v2(selected, feed_dict, visualize_flag=self.args.visualize_flag)
                         visualize_scene_parser(feed_dict, ctx, whatif_id=obj_id, store_img=True, args=self.args)
 
-                pdb.set_trace()
             counter_fact_num = 0 
             valid_num = 0
             for i,  prog in enumerate(progs):

@@ -24,11 +24,12 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --unseen_events_path ../temporal_reasoning-master/dumps/annos/tubeNetAttrV3_offset4_noIoUThre_separate_realOffset5_noAttr_noEdgeSuperv \
     --tube_prp_path ../clevrer/tubeProposalsAttrMatchNoIoUThre/1.0_1.0_0.6_0.7 \
     --data-workers 0 \
-    --batch-size 4 \
-    --visualize_flag 1 \
-    --visualize_gif_flag 1 \
-    --dataset_stage 0 \
+    --batch-size 1 \
     --test_result_path ${TEST_PATH} \
     --load ${MODEL_PATH} \
-    --prefix concept_learning_clevrer \
+    --prefix qa_clevrer \
     --evaluate \
+    --visualize_flag 1 \
+    --visualize_gif_flag 1 \
+    --dataset_stage -1 \
+    --debug \

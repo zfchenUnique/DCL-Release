@@ -1,4 +1,7 @@
 GPU_ID=$1
+#MODEL_PATH=dumps/blocks/desc_nscl_derender_clevrer_v2_norm_box_even_smp16_col_box_ftr_v2_block_data_v2_4/checkpoints/epoch_25.pth
+MODEL_PATH=dumps/blocks/desc_nscl_derender_clevrer_v2_norm_box_even_smp16_col_box_ftr_v2_block_data_v2_4_1/checkpoints/epoch_100.pth
+TEST_PATH=v2_4_1_epoch_100
 jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender_clevrer_v2.py\
     --batch-size 1 --epoch 100 --validation-interval 5 \
     --save-interval 5 \
@@ -23,7 +26,12 @@ jac-crun ${GPU_ID} scripts/trainval_tube_v2.py --desc clevrer/desc_nscl_derender
     --diff_for_moving_stationary_flag 0 \
     --prefix block_data_v2_4_1 \
     --scene_add_supervision 0 \
+    --test_result_path ${TEST_PATH} \
+    --load ${MODEL_PATH} \
+    --prefix concept_learning_blocks \
     --evaluate \
+    --visualize_flag 1 \
+    --visualize_gif_flag 1 \
     #--resume dumps/blocks/desc_nscl_derender_clevrer_v2_norm_box_even_smp16_col_box_ftr_v2_block_data_v2_4_1/checkpoints/epoch_5.pth \
     #--resume dumps/blocks/desc_nscl_derender_clevrer_v2_norm_box_even_smp16_col_box_ftr_v2_block_data_v2_4_1/checkpoints/epoch_5.pth \
     #--resume dumps/blocks/desc_nscl_derender_clevrer_v2_norm_box_even_smp16_col_box_ftr_v2_block/checkpoints/epoch_30.pth \

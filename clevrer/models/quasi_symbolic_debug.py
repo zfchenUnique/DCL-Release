@@ -119,13 +119,13 @@ def embed(self, i, buffer, result, fd, valid_num=None):
                 gogogo = True
                 if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or fd['meta_ann']['questions'][i]['question_type']=='predictive': 
                     print('%s'%(fd['meta_ann']['questions'][i]['question']))
-                    #pdb.set_trace()
+                    pdb.set_trace()
         else:
-            if DEBUG in ('ALL', 'WRONG'):
+            if DEBUG in ('ALL', 'WRONG') and 0:
                 gogogo = True
-                if fd['meta_ann']['questions'][i]['question_type']=='descriptive':
-                #if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
-            #         fd['meta_ann']['questions'][i]['question_type']=='predictive': 
+                #if fd['meta_ann']['questions'][i]['question_type']=='descriptive':
+                if fd['meta_ann']['questions'][i]['question_type']=='counterfactual' or \
+                     fd['meta_ann']['questions'][i]['question_type']=='predictive': 
                     print('Wrong: ', new_p, new_l)
                     print('%s'%(fd['meta_ann']['questions'][i]['question']))
                     if 'choices' in fd['meta_ann']['questions'][i]:
