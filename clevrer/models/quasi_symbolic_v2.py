@@ -1511,8 +1511,9 @@ class DifferentiableReasoning(nn.Module):
                     if buffer[-1]=='error':
                         break 
                 result.append((op, buffer[-1]))
-                if tmp_q_type!='expression': 
-                    quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
+                #if tmp_q_type!='expression': 
+                quasi_symbolic_debug.embed(self, i, buffer, result, feed_dict)
+                pdb.set_trace()
             
             programs_list.append(programs)
             buffers_list.append(buffers)

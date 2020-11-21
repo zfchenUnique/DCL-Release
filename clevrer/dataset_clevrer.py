@@ -213,6 +213,7 @@ class clevrerDataset(Dataset):
             exp_info['question_id'] = exp_id
             exp_info['question_type'] = 'retrieval'
             exp_info['question_subtype'] = exp_info['expression_family']
+        pdb.set_trace()
         if self.args.visualize_retrieval_id >=0:
             self.retrieval_info['expressions'] = [self.retrieval_info['expressions'][self.args.visualize_retrieval_id]]
     
@@ -1809,8 +1810,18 @@ class blocks_dataset(Dataset):
 
     def __getitem__model_v1(self, index):
         data = {}
-        meta_ann = copy.deepcopy(self.question_ann[index])
-        scene_idx = meta_ann['video_index']
+        pdb.set_trace()
+        if self.args.visualize_video_index >=0: 
+            scene_idx = self.args.visualize_video_index
+            index = -2
+            for tmp_index, tmp_ann in enumerate(self.question_ann):
+                if tmp_ann['video_index'] == scene_idx:
+                    break
+            index = tmp_index
+            meta_ann = copy.deepcopy(self.question_ann[index])
+        else:
+            meta_ann = copy.deepcopy(self.question_ann[index])
+            scene_idx = meta_ann['video_index']
 
         img_full_path = os.path.join(self.args.frm_img_path, 'img_concat_'+str(scene_idx)+'.png') 
         tube_info = self.prepare_tubes(scene_idx)
@@ -1967,8 +1978,8 @@ class blocks_dataset(Dataset):
 
     def __len__(self):
         if self.args.debug:
-            #return len(self.question_ann)
-            return 5
+            return len(self.question_ann)
+            #return 5
         else:
             return len(self.question_ann)
 

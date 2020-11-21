@@ -68,7 +68,10 @@ def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, 
         color_scoe_list.append(color_score)
     temporal_list = []
     for v  in ['falling', 'stationary']:
-        all_f_box_mv = ctx.further_prepare_for_moving_stationary(ctx.features[3], time_mask=None, concept=v)
+        if  args.diff_for_moving_stationary_flag:
+            all_f_box_mv = ctx.further_prepare_for_moving_stationary(ctx.features[3], time_mask=None, concept=v)
+        else:
+            all_f_box_mv = ctx.features[3] 
         box_dim = 4
         time_step = ctx.valid_seq_mask.shape[1]
         all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * ctx.valid_seq_mask - (1-ctx.valid_seq_mask)
@@ -91,18 +94,18 @@ def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, 
             y2 = int(H*(box_xywh[1] + box_xywh[3]*0.5)) 
             color = color_list[int(pred_color_mat[obj_id].argmax())]
             color_info = color_dict[color].tolist() 
-            img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color_info, 1)
+            img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color_info, 2)
             cv2.putText(img, str(obj_id), ((x1+x2)//2, (y1+y2)//2), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 3)
             if pred_temporal_mat[obj_id, 0]>0:
                 #pass 
-                cv2.putText(img, 'fall', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
-                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 1)
+                cv2.putText(img, 'falling', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+                #img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 1)
             if pred_temporal_mat[obj_id, 1]>0:
                 cv2.putText(img, 'stationary', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
-                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 0), 1)
+                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 0), 2)
        
-            if (pred_temporal_mat[:, 0]>0).float().sum()>0:
-                cv2.putText(img, 'fall', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
+            #if (pred_temporal_mat[:, 0]>0).float().sum()>0:
+            #    cv2.putText(img, 'fall', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
 
         if store_img:
             cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, idx, int(whatif_id))), img.astype(np.uint8))
@@ -117,7 +120,6 @@ def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, 
         os.system( cmd_str)
         cmd_str = 'rm %s' % (videoname)
         os.system( cmd_str)
-    #pdb.set_trace()
 
 def compute_union_box(bbox1, bbox2):
     EPS = 1e-10
@@ -152,6 +154,8 @@ def compute_LS(traj, gt_traj):
     return sum(IoU_list) / frm_num
 
 def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
+    vis_size = 5
+    max_dist = 20
     base_folder = 'visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
     if args.visualize_retrieval_id>=0:
@@ -371,17 +375,41 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         #print('%d/%d' %(i, box_ftr.shape[1]))
         if (whatif_id==-2):
             for in_info in in_list:
-                if i==in_info[1]:
+                #if i==in_info[1]:
+                offset = i  - in_info[1] # for better visualization
+                #if scene_idx ==10001:
+                #    pdb.set_trace()
+                if  offset >=0 and offset < vis_size:
                     box_id = in_info[0]
                     box = box_list[box_id]
-                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 128, 0), 1)
-                    cv2.putText(img, 'in', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 28, 0), 2)
+                    w_dist1 = box[0]
+                    h_dist1 = box[1]
+                    w_dist2 = W - box[2]
+                    h_dist2 = H - box[3]
+                    if min([w_dist1, h_dist1, w_dist2, h_dist2])>max_dist:
+                        continue
+
+                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 0, 0), 2)
+                    cv2.putText(img, 'in', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+                    #img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 128, 0), 1)
+                    #cv2.putText(img, 'in', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 28, 0), 2)
             for out_info in out_list:
-                if i==out_info[1]:
+                offset = out_info[1] - i  # for better visualization
+                if  offset >= 0 and offset < vis_size:
+                #if i==out_info[1]:
                     box_id = out_info[0]
                     box = box_list[box_id]
-                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 153, 255), 1)
-                    cv2.putText(img, 'out', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 153, 255), 2)
+                    w_dist1 = box[0]
+                    h_dist1 = box[1]
+                    w_dist2 = W - box[2]
+                    h_dist2 = H - box[3]
+                    if min([w_dist1, h_dist1, w_dist2, h_dist2])>max_dist:
+                        continue
+                    #img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (255, 153, 255), 1)
+                    #cv2.putText(img, 'out', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 153, 255), 2)
+                    img = cv2.rectangle(img, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 255, 255), 2)
+                    cv2.putText(img, 'out', (int(box[0]), max(int(box[1])-10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
+        
         
         for t_id1 in range(obj_num):
             
@@ -402,7 +430,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                         y1_min = min(box1[1], box2[1])
                         x2_max = max(box1[2], box2[2])
                         y2_max = max(box1[3], box2[3])
-                        img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
+                        img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 2)
                         cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
                 elif (whatif_id==-1 and ctx._events_buffer[0][0][t_id1, t_id2, i]>args.colli_threshold) or \
                         (whatif_id>=0 and ctx._counter_events_colli_set[t_id1, t_id2, i]>args.colli_threshold) or \
@@ -423,7 +451,7 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
 
                     #if whatif_id!=-1: 
                     #    pdb.set_trace()
-                    img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 1)
+                    img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 2)
                     
                     cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
 
@@ -441,7 +469,9 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         os.system( cmd_str)
         cmd_str = 'rm %s' % (videoname)
         os.system( cmd_str)
-    #pdb.set_trace()
+    #if scene_idx==10004:
+    #    pdb.set_trace()
+
 
 def check_valid_box(box, W, H):
     x1, y1, x2, y2 = box
