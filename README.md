@@ -30,4 +30,27 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 
 ## Dataset preparation
 - Download videos, video annotation,  questions and answers, and object proposals accordingly from the [official website](http://clevrer.csail.mit.edu/#)
-- Transform videos into ".png" frames with ffmpeg. 
+- Transform videos into ".png" frames with ffmpeg.
+- Organize the data as shown below.
+    ```
+    clevrer
+    ├── annotation_00000-01000
+    │   ├── annotation_00000.json
+    │   ├── annotation_00001.json
+    │   └── ...
+    ├── ...
+    ├── image_00000-01000
+    │   │   ├── 1.png
+    │   │   ├── 2.png
+    │   │   └── ...
+    │   └── ...
+    ├── ...
+    ├── questions
+    │   ├── train.json
+    │   ├── validation.json
+    │   └── test.json
+    ├── proposals
+    │   ├── proposal_00000.json
+    │   ├── proposal_00001.json
+    │   └── ...
+    ```
