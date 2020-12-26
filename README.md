@@ -62,8 +62,7 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
     cd clevrer_dynamic_propnet
     sh ./scripts/eval_fast_release.sh
 ```
-- Download [the pretrained DCL model]()
-- Answering questions. 
+- Download [the pretrained DCL model]() and answer questions. 
 ```
    sh scripts/script_test_prp_clevrer_qa.sh 0
 ```
