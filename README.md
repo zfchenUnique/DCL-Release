@@ -55,6 +55,23 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
     │   └── ...
     ```
 ## Fast Evaluation
+- Download the extracted object trajectories from [google drive]().
+- Git clone the dynamic model, download [the pretrained propNet models]() and make dynamic prediction by 
+```
+    git clone https://github.com/zfchenUnique/clevrer_dynamic_propnet.git
+    cd clevrer_dynamic_propnet
+    sh ./scripts/eval_fast_release.sh
+```
+- Download [the pretrained DCL model]()
+- Answering questions. 
+```
+   sh scripts/script_test_prp_clevrer_qa.sh 0
+```
+- Re-organize questions for submission on [evalAI](https://eval.ai/web/challenges/challenge-page/667/overview).
+```
+   sh scripts/script_transform_answer_order.sh    
+```
+
 ## Step-by-step Training
 
 ## Generalization to CLEVRER-Grounding
