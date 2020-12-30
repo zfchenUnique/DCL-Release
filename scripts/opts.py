@@ -107,7 +107,7 @@ def load_param_parser():
     parser.add_argument('--pstep', type=int, default=2)
     parser.add_argument('--frame_offset', type=int, default=4)
     parser.add_argument('--colli_threshold', type=float, default=0.0)
-    # use correct question parser
+    # use program question parser
     parser.add_argument('--correct_question_path', type=str, default='../language_parsing/data/new_results/')
     parser.add_argument('--correct_question_flag', type=int, default=1)
     parser.add_argument('--dataset_stage', type=int, default=-1, help='0 for descriptive only')

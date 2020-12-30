@@ -830,7 +830,10 @@ class QALoss(MultitaskLossBase):
             loss_w = loss_weights[i] if loss_weights is not None else 1
             acc_w = accuracy_weights[i] if accuracy_weights is not None else 1
 
-            gt = feed_dict['answer'][j]
+            if len(feed_dict['answer'])>0:
+                gt = feed_dict['answer'][j]
+            else:
+                gt = None
             response_query_type = gdef.qtype2atype_dict[query_type]
 
             question_type = feed_dict['question_type'][j]
@@ -854,21 +857,24 @@ class QALoss(MultitaskLossBase):
                 argmax = a.argmax(dim=-1).item()
                 idx2word = {v: k for k, v in word2idx.items()}
                 outputs['answer'].append(idx2word[argmax])
-                gt = word2idx[gt]
+                if gt is not None:
+                    gt = word2idx[gt]
                 loss = self._xent_loss
             elif response_query_type == 'bool':
-                if isinstance(gt, list):
+                if isinstance(a, list):
                     tmp_answer_list = []
-                    for idx in range(len(gt)):
+                    for idx in range(len(a)):
                         argmax = int((a[idx] > 0).item())
-                        gt[idx] = int(gt[idx])
+                        if gt is not None:
+                            gt[idx] = int(gt[idx])
                         tmp_answer_list.append(argmax)
                     loss = self._bce_loss
                     outputs['answer'].append(tmp_answer_list)
                 else:
                     argmax = int((a > self.args.obj_threshold).item())
                     outputs['answer'].append(argmax)
-                    gt = int(gt)
+                    if gt is not None:
+                        gt = int(gt)
                     loss = self._bce_loss
             elif response_query_type == 'integer':
                 try:
@@ -876,7 +882,8 @@ class QALoss(MultitaskLossBase):
                 except ValueError:
                     argmax = 0
                 outputs['answer'].append(argmax)
-                gt = int(gt)
+                if gt is not None:
+                    gt = int(gt)
                 loss = self._mse_loss
 
             elif question_type_new=='expression' and question_sub_type.startswith('object'):
@@ -974,16 +981,17 @@ class QALoss(MultitaskLossBase):
             key = 'acc/qa/' + query_type
             new_key = 'acc/qa/' + question_type_new            
 
-            if isinstance(gt, list) and question_type_new!='retrieval':
-                for idx in range(len(gt)):
+            if gt is not None and isinstance(gt, list) and question_type_new!='retrieval':
+                for idx in range(len(a)):
                     monitors.setdefault(key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault('acc/qa', []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                     monitors.setdefault(new_key, []).append((int(gt[idx] == tmp_answer_list[idx]), acc_w))
                 monitors.setdefault(new_key+'_per_ques', []).append((int(gt == tmp_answer_list), acc_w))
             elif question_type_new=='descriptive' or question_type_new=='explanatory':
-                monitors.setdefault(key, []).append((int(gt == argmax), acc_w))
-                monitors.setdefault('acc/qa', []).append((int(gt == argmax), acc_w))
-                monitors.setdefault(new_key, []).append((int(gt == argmax), acc_w))
+                if gt is not None:
+                    monitors.setdefault(key, []).append((int(gt == argmax), acc_w))
+                    monitors.setdefault('acc/qa', []).append((int(gt == argmax), acc_w))
+                    monitors.setdefault(new_key, []).append((int(gt == argmax), acc_w))
             
             elif question_type_new=='expression' and question_sub_type.startswith('object'):
                 new_key_v2 = 'acc/mIoU/' + question_sub_type             
@@ -1043,7 +1051,7 @@ class QALoss(MultitaskLossBase):
                         monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                         monitors.setdefault('loss/qa', []).append((l, loss_w))
                         monitors.setdefault('loss/qa/' + question_type_new, []).append((l, loss_w))
-                else:
+                elif gt is not None:
                     l = loss(a, gt)
                     monitors.setdefault('loss/qa/' + query_type, []).append((l, loss_w))
                     monitors.setdefault('loss/qa', []).append((l, loss_w))

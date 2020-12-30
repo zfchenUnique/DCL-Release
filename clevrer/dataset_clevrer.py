@@ -257,7 +257,8 @@ class clevrerDataset(Dataset):
                 tmp_dict = {'question': ques_info['question'], 'question_id': q_idx, 'question_type': 'descriptive'}
                 tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
                 tmp_dict['program'] = ques_info['program']
-                tmp_dict['answer'] = ques_info['answer']
+                if 'answer' in ques_info:
+                    tmp_dict['answer'] = ques_info['answer']
                 q_idx +=1
                 question_ann.append(tmp_dict)
             for q_id, ques_info in enumerate(mc_ques_info['questions']):
@@ -841,8 +842,9 @@ class clevrerDataset(Dataset):
 
             program_cl = transform_conpcet_forms_for_nscl_v2(ques_info['program'])
             meta_ann['questions'][q_id]['program_cl'] = program_cl 
-            if 'answer'in ques_info.keys():
-                meta_ann['questions'][q_id]['answer'] = ques_info['answer']
+            if ques_info['question_type']=='descriptive':
+                if 'answer'in ques_info.keys():
+                    meta_ann['questions'][q_id]['answer'] = ques_info['answer']
             else:
                 for choice_id, choice_info in enumerate(meta_ann['questions'][q_id]['choices']):
                     meta_ann['questions'][q_id]['choices'][choice_id]['program_cl'] = \

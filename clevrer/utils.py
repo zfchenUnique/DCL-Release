@@ -3488,7 +3488,7 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                 print('fail to parse program!')
                 print(clevr_program)
                 print(block_id)
-                pdb.set_trace()
+                #pdb.set_trace()
                 continue 
             concept = exe_stack.pop()
             if len(nscl_program)>0:
