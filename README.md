@@ -1,4 +1,4 @@
-# NSCL-PyTorch
+# DCL-PyTorch
 Pytorch implementation for the Dynamic Concept Learner (DCL) on CLEVRER.
 
 ## Framework
@@ -55,14 +55,14 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
     │   └── ...
     ```
 ## Fast Evaluation
-- Download the extracted object trajectories from [google drive]().
-- Git clone the dynamic model, download [the pretrained propNet models]() and make dynamic prediction by 
+- Download the extracted object trajectories from [google drive](https://drive.google.com/file/d/18NkK29Hnu3hMPaenveB5g4Lp9WRdiIA7/view?usp=sharing).
+- Git clone the dynamic model, download [the pretrained propNet models](https://drive.google.com/drive/folders/16FnmnZBb11ge_gJNWUMp8EACRZ5nKe-W?usp=sharing) and make dynamic prediction by 
 ```
     git clone https://github.com/zfchenUnique/clevrer_dynamic_propnet.git
     cd clevrer_dynamic_propnet
     sh ./scripts/eval_fast_release.sh
 ```
-- Download [the pretrained DCL model]() and answer questions. 
+- Download [the pretrained DCL model](https://drive.google.com/file/d/11JwFcmC1wYR7L1kSfM3avCwnHqZ-nA7l/view?usp=sharing) and answer questions. 
 ```
    sh scripts/script_test_prp_clevrer_qa.sh 0
 ```
