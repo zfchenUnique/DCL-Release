@@ -66,10 +66,7 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 ```
    sh scripts/script_test_prp_clevrer_qa.sh 0
 ```
-- Re-organize questions for submission on [evalAI](https://eval.ai/web/challenges/challenge-page/667/overview).
-```
-   sh scripts/script_transform_answer_order.sh    
-```
+- Get the accuracy on [evalAI](https://eval.ai/web/challenges/challenge-page/667/overview).
 
 ## Step-by-step Training
 - Step 1: extract object trajectories for train and val set by
