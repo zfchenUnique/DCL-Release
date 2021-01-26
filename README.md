@@ -10,9 +10,9 @@ Pytorch implementation for the Dynamic Concept Learner (DCL).
 <br />
 [Zhenfang Chen](https://zfchenunique.github.io/), 
 [Jiayuan Mao](http://jiayuanm.com), 
-[Jiajun Wu](https://jiajunwu.com/)
+[Jiajun Wu](https://jiajunwu.com/),
 [Joshua B. Tenenbaum](https://web.mit.edu/cocosci/josh.html), and
-[Chuang Gan](http://people.csail.mit.edu/ganchuang/), 
+[Chuang Gan](http://people.csail.mit.edu/ganchuang/)
 <br />
 
 ## Prerequisites
