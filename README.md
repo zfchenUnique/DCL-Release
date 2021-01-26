@@ -1,5 +1,13 @@
 # DCL-PyTorch
-Pytorch implementation for the Dynamic Concept Learner (DCL) on CLEVRER.
+Pytorch implementation for the Dynamic Concept Learner (DCL).
+**[Grounding Physical Object and Event Concepts Through Dynamic Visual Reasoning](https://openreview.net/forum?id=bhCDO_cEGCz)**
+<br />
+[Zhenfang Chen](https://zfchenunique.github.io/), 
+[Jiayuan Mao](http://jiayuanm.com), 
+[Jiajun Wu](https://jiajunwu.com/)
+[Joshua B. Tenenbaum](https://web.mit.edu/cocosci/josh.html), and
+[Chuang Gan](http://people.csail.mit.edu/ganchuang/), 
+<br />
 
 ## Framework
 <div align="center">
@@ -71,35 +79,37 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 ## Step-by-step Training
 - Step 1: extract object trajectories for train and val set by
 ```
-   sh scripts/script_extract_object_trajectory.sh
+   sh scripts/script_gen_tubes.sh
 ```
-- Step 2: extract predictive and counterfactual scenes by
+- Step 2: train a concept learner with descriptive and explanatory questions for static concepts (i.e. color, shape and material)
+```
+   sh scripts/script_train_dcl_stage1.sh 0
+```
+- Step 3: extract static attribute & refine object trajectories
+```
+   sh scripts/script_gen_tubes_refine.sh
+```
+- Step 4: extract predictive and counterfactual scenes by
 ```
     cd clevrer_dynamic_propnet
     sh ./scripts/extract_train_val.sh
 ```
-- Step 3: train a concept learner with descriptive and explanatory questions for static concepts (i.e. color, shape and material)
-```
-```
-- Step 4: refine object trajectories
-```
-```
 - Step 5: train DCL with all questions and the refined trajectories
 ```
+   sh scripts/script_train_dcl_stage2.sh 0
 ```
 
 ## Generalization to CLEVRER-Grounding
-- Step 1: download expressions and annotations from google drive
+- Step 1: download expressions and annotations from [google drive]()
 - Step 2: download programs parsed by a pretrained model 
 - Step 3: evaluate  the performance on CLEVRER-Grounding 
 ```
 ```
 ## Generalization to CLEVRER-Retrieval
-- Step 1: download expressions and annotations from google drive
+- Step 1: download expressions and annotations from [google drive]()
 - Step 2: download programs parsed by a pretrained model 
 - Step 3: evaluate  the performance on CLEVRER-Grounding 
 ## Extension to Tower Blocks
-- Step 1: download expressions and annotations from google drive
+- Step 1: download expressions and annotations from [google drive]()
 - Step 2: download programs parsed by a pretrained model 
 - Step 3: evaluate  the performance on CLEVRER-Grounding 
-## Acknowledge
