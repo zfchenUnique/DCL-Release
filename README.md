@@ -1,5 +1,11 @@
 # DCL-PyTorch
 Pytorch implementation for the Dynamic Concept Learner (DCL).
+
+## Framework
+<div align="center">
+  <img src="_assets/framework.png" width="100%">
+</div>
+
 **[Grounding Physical Object and Event Concepts Through Dynamic Visual Reasoning](https://openreview.net/forum?id=bhCDO_cEGCz)**
 <br />
 [Zhenfang Chen](https://zfchenunique.github.io/), 
@@ -8,11 +14,6 @@ Pytorch implementation for the Dynamic Concept Learner (DCL).
 [Joshua B. Tenenbaum](https://web.mit.edu/cocosci/josh.html), and
 [Chuang Gan](http://people.csail.mit.edu/ganchuang/), 
 <br />
-
-## Framework
-<div align="center">
-  <img src="_assets/framework.png" width="100%">
-</div>
 
 ## Prerequisites
 - Python 3
