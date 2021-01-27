@@ -93,7 +93,8 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 - Step 4: extract predictive and counterfactual scenes by
 ```
     cd clevrer_dynamic_propnet
-    sh ./scripts/extract_train_val.sh
+    sh ./scripts/extract_train_val.sh # train
+    sh ./scripts/eval_fast_release.sh # val
 ```
 - Step 5: train DCL with all questions and the refined trajectories
 ```
@@ -101,16 +102,26 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 ```
 
 ## Generalization to CLEVRER-Grounding
-- Step 1: download expressions and annotations from [google drive]()
-- Step 2: download programs parsed by a pretrained model 
-- Step 3: evaluate  the performance on CLEVRER-Grounding 
+- Step 1: download [expression annotation](https://drive.google.com/file/d/12CKy0AK_eWnf86gyWpWMC1Zyo9iATFcz/view?usp=sharing) and [parsed programs](https://drive.google.com/file/d/1EGu97lQR-MDyyjkhoaLyhRnqbqLxGCtz/view?usp=sharing) from google drive
+- Step 2: evaluate  the performance on CLEVRER-Grounding 
 ```
+    sh ./scripts/script_grounding.sh  0
+    jac-crun 0 scripts/script_evaluate_grounding.py
 ```
 ## Generalization to CLEVRER-Retrieval
-- Step 1: download expressions and annotations from [google drive]()
-- Step 2: download programs parsed by a pretrained model 
-- Step 3: evaluate  the performance on CLEVRER-Grounding 
+- Step 1: download [expression annotation](https://drive.google.com/file/d/1mzSRnG6ufI_YRhbfH7Oj1i4cR5e4ty-S/view?usp=sharing) and [parsed programs](https://drive.google.com/file/d/1T0aVJNjVI7xyJQbnao9pffDOj1Puys_o/view?usp=sharing) from google drive
+- Step 2: evaluate  the performance on CLEVRER-Retrieval
+```
+    sh ./scripts/script_retrieval.sh  0
+    jac-crun 0 scripts/script_evaluate_retrieval.py
+```
 ## Extension to Tower Blocks
-- Step 1: download expressions and annotations from [google drive]()
-- Step 2: download programs parsed by a pretrained model 
-- Step 3: evaluate  the performance on CLEVRER-Grounding 
+- Step 1: download [question annotation](https://drive.google.com/drive/folders/11ai3w-6kyLdgDdM3S3UjIeqGWPh0aILP?usp=sharing) and [videos](https://www.dropbox.com/sh/8n00jyzo0m2slxe/AAChn5uB5g4HHu2mZxbapgzsa?dl=0) from google drive
+- Step 2: train on Tower block QA
+```
+    sh ./scripts/script_train_blocks.sh 0
+```
+- Step 3: download the [pretrain model](https://drive.google.com/file/d/1mzSRnG6ufI_YRhbfH7Oj1i4cR5e4ty-S/view?usp=sharing) from google drive and evaluate  on Tower block QA
+```
+    sh ./scripts/script_eval_blocks.sh 0
+```
