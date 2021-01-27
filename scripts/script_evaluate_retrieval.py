@@ -38,8 +38,8 @@ def evaluate_retrieval():
         answers = test_result['answer'] 
         gts = test_result['gt']
         pos_id_list = retrieval_info['vid2exp'][str(vid)]
-        #pdb.set_trace()
         question_type_new = 'retrieval'
+
         for i, tmp_answer in enumerate(answers):
             query_type, a = tmp_answer 
             acc_w = 1
@@ -51,7 +51,11 @@ def evaluate_retrieval():
                 if isinstance(a, str) and a=='error':
                     prp_score = -10.0
                 else:
+                    #try:
                     prp_score = torch.max(a)
+                    #prp_score = torch.max(a[0])
+                    #except:
+                    #    prp_score = a
                 correct_flag = 0
                 if i in pos_id_list and prp_score>0:
                     correct_flag =1
@@ -66,7 +70,10 @@ def evaluate_retrieval():
                 if isinstance(a, str) and a=='error':
                     prp_score = -10.0
                 else:
-                    prp_score = torch.max(a[0])
+                    try:
+                        prp_score = torch.max(a[0])
+                    except:
+                        prp_score = a
                 correct_flag = 0
                 if i in pos_id_list and prp_score>0:
                     correct_flag =1
@@ -80,7 +87,10 @@ def evaluate_retrieval():
                 if isinstance(a, str) and a=='error':
                     prp_score = -10.0
                 else:
-                    prp_score = torch.max(a[0])
+                    try:
+                        prp_score = torch.max(a[0])
+                    except:
+                        prp_score = a
                 correct_flag = 0
                 if i in pos_id_list and prp_score>0:
                     correct_flag =1
@@ -135,7 +145,6 @@ def evaluate_retrieval():
     monitors = compute_text_mAP(score_matrix, retrieval_info, monitors, opt)
 
     print_monitors(monitors)
-    pdb.set_trace()
     return monitors 
 
 def compute_text_mAP(score_matrix, retrieval_info, monitors, opt):  
@@ -162,7 +171,6 @@ def compute_text_mAP(score_matrix, retrieval_info, monitors, opt):
 
                 sub_type_ap_list[sub_idx].append((tmp_ap, 1))
         text_ap_list.append((tmp_ap, 1))
-        #pdb.set_trace()
     monitors['acc/text/mAP'] = text_ap_list
     for sub_idx, sub_type in enumerate(RETRIEVAL_TYPE):
         monitors['acc/text/mAP/'+sub_type] = sub_type_ap_list[sub_idx]
@@ -205,11 +213,10 @@ def print_monitors(monitors):
 
 def load_options():
     opt = {}
-    #retrieval_result_path = 'dumps/retrieval_cache_prp'
-    retrieval_result_path = 'dumps/retrieval_cache_vis_sup'
-    tube_gt_path = '../clevrer/tubeProposalsGt'
-    tube_prp_path = '../clevrer/tubeProposalsAttrMatchNoIoUThre/1.0_1.0_0.6_0.7'
-    expression_path = '/home/zfchen/code/nsclClevrer/clevrer/expressions/exp_val_retrieval_v4/5000_500_0/refine_retrieval_exp.json'
+    retrieval_result_path = 'dumps/retrieval_cache_rgb_sep_prp_ep7'
+    tube_gt_path = 'data/raw_data/tubeProposalsGt'
+    tube_prp_path = 'data/raw_data/train_val_proposals'
+    expression_path = '../clevrer/expressions/exp_val_retrieval_v5/5000_100_0/refine_retrieval_exp.json'
 
     opt['retrieval_result_path'] = retrieval_result_path
     opt['tube_gt_path'] = tube_gt_path
