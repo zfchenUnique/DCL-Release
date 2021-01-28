@@ -117,6 +117,8 @@ parser.add_argument('--output_attr_path', type=str, default='dumps/clevrer/tmpPr
 parser.add_argument('--start_index', type=int, default=0)
 parser.add_argument('--correct_question_path', type=str, default='../question_parsing/data/new_results/')
 parser.add_argument('--correct_question_flag', type=int, default=1)
+parser.add_argument('--expression_mode', type=int, default=-1)
+parser.add_argument('--retrieval_mode', type=int, default=-1)
 parser.add_argument('--dataset_stage', type=int, default=-1, help='0 for descriptive only')
 parser.add_argument('--data_train_length', type=int, default=-1, help='for evaluating data efficiency.')
 parser.add_argument('--colli_ftr_type', type=int, default=1, help='0 for average rgb, 1 for KNN sampling')
@@ -192,7 +194,7 @@ def main():
             args.tb_dir_root = ensure_path(osp.join(args.dump_dir, 'tensorboard'))
             args.tb_dir = ensure_path(osp.join(args.tb_dir_root, args.run_name))
 
-    initialize_dataset(args.dataset)
+    initialize_dataset(args.dataset, args.version)
     # to replace dataset
     validation_dataset = build_clevrer_dataset(args, args.setname)
     main_train(validation_dataset)
