@@ -39,8 +39,6 @@ class Model(ReasoningV2ModelForCLEVRER):
             embedding_relation_future = copy.deepcopy(tax)
             setattr(self.reasoning, 'embedding_relation_counterfact', embedding_relation_counterfact)
             setattr(self.reasoning, 'embedding_relation_future', embedding_relation_future)
-        #pdb.set_trace()
-
 
     def build_temporal_prediction_model(self, args, desc_pred, desc_spatial_pred=None):
         if args.version=='v3':
@@ -115,19 +113,20 @@ class Model(ReasoningV2ModelForCLEVRER):
 
                 if 'program_cl' in ques.keys():
                     tmp_prog.append(ques['program_cl'])
-                if 'answer' in ques.keys():
-                    feed_dict['answer'].append(ques['answer'])
+                if ques['question_type']=='descriptive' or ques['question_type']=='expression':
+                    if 'answer' in ques.keys():
+                        feed_dict['answer'].append(ques['answer'])
                     feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
                 else:
                     tmp_answer_list = []
                     for choice_info in ques['choices']:
-                        if choice_info['answer'] == 'wrong':
-                            tmp_answer_list.append(False)
-                        elif choice_info['answer'] == 'correct':
-                            tmp_answer_list.append(True)
-                        else:
-                            pdb.set_trace()
-                    feed_dict['answer'].append(tmp_answer_list)
+                        if 'answer' in choice_info:
+                            if choice_info['answer'] == 'wrong':
+                                tmp_answer_list.append(False)
+                            elif choice_info['answer'] == 'correct':
+                                tmp_answer_list.append(True)
+                    if 'answer' in choice_info:
+                        feed_dict['answer'].append(tmp_answer_list)
                     feed_dict['question_type'].append(ques['program_cl'][-1]['op'])
                 feed_dict['question_type_new'].append(ques['question_type'])
             programs.append(tmp_prog)

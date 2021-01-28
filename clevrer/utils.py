@@ -34,93 +34,6 @@ def keep_only_temporal_concept_learner(trainer, args, configs):
     trainer._optimizer = optimizer
     return trainer 
 
-def visualize_scene_parser_block(feed_dict, ctx, whatif_id=-1, store_img=False, args=None):
-    base_folder = 'dumps/visualization/'+ args.prefix + '/'+ os.path.basename(args.load).split('.')[0]
-    filename = str(feed_dict['meta_ann']['video_index'])
-    if not os.path.isdir(base_folder):
-        os.makedirs(base_folder)
-    videoname = base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
-    if store_img:
-        img_folder = base_folder +'/'+filename +'/img' 
-        os.system('mkdir -p ' + img_folder)
-
-    fps = 12
-    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    W, H = 224, 224
-    out = cv2.VideoWriter(videoname, fourcc, fps, (W, H))
-    
-    img_full_path = os.path.join(args.frm_img_path, 'img_concat_'+filename+'.png') 
-    img_concat = cv2.imread(img_full_path)
-
-    color_list = ['red', 'yellow', 'green', 'blue']
-    # BGR
-    red_value = np.array((0,0, 255))
-    yellow_value = np.array((0,255,255))
-    green_value = np.array((0, 255, 0))
-    blue_value = np.array((255, 0, 0))
-    target_color_map = [red_value, yellow_value, green_value, blue_value ]
-    color_dict = {color:target_color_map[c_id] for c_id, color in enumerate(color_list)} 
-    obj_num = len(feed_dict['tube_info']['box_seq']['tubes'])
-    
-    color_scoe_list = []
-    for cid, color in enumerate(color_list):
-        color_score = ctx.taxnomy[1].similarity(ctx.features[1], color)
-        color_scoe_list.append(color_score)
-    temporal_list = []
-    for v  in ['falling', 'stationary']:
-        if  args.diff_for_moving_stationary_flag:
-            all_f_box_mv = ctx.further_prepare_for_moving_stationary(ctx.features[3], time_mask=None, concept=v)
-        else:
-            all_f_box_mv = ctx.features[3] 
-        box_dim = 4
-        time_step = ctx.valid_seq_mask.shape[1]
-        all_f_box_mv = all_f_box_mv.view(obj_num, time_step, box_dim) * ctx.valid_seq_mask - (1-ctx.valid_seq_mask)
-        all_f_box_mv = all_f_box_mv.view(obj_num, -1)
-        this_score = ctx.taxnomy[3].similarity(all_f_box_mv, v)
-        temporal_list.append(this_score)
-    pred_color_mat = torch.stack(color_scoe_list, dim=-1)
-    pred_temporal_mat = torch.stack(temporal_list, dim=-1)
-    n_vis_frames = len(feed_dict['tube_info']['box_seq']['tubes'][0])
-    for idx, frm_id in enumerate(range(n_vis_frames)):
-        st_row_id = idx*H
-        ed_row_id = (idx+1)* H 
-        img = img_concat[st_row_id:ed_row_id]
-        box_list = []
-        for obj_id in range(obj_num):
-            box_xywh = feed_dict['tube_info']['box_seq']['tubes'][obj_id][frm_id]
-            x1 = int(W*(box_xywh[0] - box_xywh[2]*0.5)) 
-            y1 = int(H*(box_xywh[1] - box_xywh[3]*0.5))
-            x2 = int(W*(box_xywh[0] + box_xywh[2]*0.5)) 
-            y2 = int(H*(box_xywh[1] + box_xywh[3]*0.5)) 
-            color = color_list[int(pred_color_mat[obj_id].argmax())]
-            color_info = color_dict[color].tolist() 
-            img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), color_info, 2)
-            cv2.putText(img, str(obj_id), ((x1+x2)//2, (y1+y2)//2), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 3)
-            if pred_temporal_mat[obj_id, 0]>0:
-                #pass 
-                cv2.putText(img, 'falling', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
-                #img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (255, 0, 255), 1)
-            if pred_temporal_mat[obj_id, 1]>0:
-                cv2.putText(img, 'stationary', (x1, y1), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
-                img = cv2.rectangle(img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 0), 2)
-       
-            #if (pred_temporal_mat[:, 0]>0).float().sum()>0:
-            #    cv2.putText(img, 'fall', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
-
-        if store_img:
-            cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, idx, int(whatif_id))), img.astype(np.uint8))
-        out.write(img)
-    out.release()
-    if args.visualize_gif_flag:
-        if os.path.isfile(videoname+'.gif'):
-            cmd_str = 'rm %s' % (videoname+'.gif')
-            os.system( cmd_str)
-
-        cmd_str = 'ffmpeg -i %s -t 32 %s' % (videoname, videoname+'.gif')
-        os.system( cmd_str)
-        cmd_str = 'rm %s' % (videoname)
-        os.system( cmd_str)
-
 def compute_union_box(bbox1, bbox2):
     EPS = 1e-10
     union_box = [0, 0, 0, 0]
@@ -378,7 +291,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                 #if i==in_info[1]:
                 offset = i  - in_info[1] # for better visualization
                 #if scene_idx ==10001:
-                #    pdb.set_trace()
                 if  offset >=0 and offset < vis_size:
                     box_id = in_info[0]
                     box = box_list[box_id]
@@ -422,7 +334,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                     #pred_score = ctx._unseen_event_buffer[0][t_id1, t_id2]
                     #pred_id = ctx._unseen_event_buffer[1][t_id1, t_id2]
                     #if i==pred_id+len(feed_dict['tube_info']['frm_list']) - args.n_his -1 and \
-                        #pdb.set_trace()
                         #pred_score >args.colli_threshold:
                         box1 = box_list[t_id1]
                         box2 = box_list[t_id2]
@@ -449,8 +360,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
                     if not (valid_box_flag1  and valid_box_flag2):
                         continue 
 
-                    #if whatif_id!=-1: 
-                    #    pdb.set_trace()
                     img = cv2.rectangle(img, (int(x1_min), int(y1_min)), (int(x2_max), int(y2_max)), (0,0,255), 2)
                     
                     cv2.putText(img, 'collision', (int(x1_min), int(y1_min)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0,255), 2)
@@ -469,8 +378,6 @@ def visualize_scene_parser(feed_dict, ctx, whatif_id=-1, store_img=False, args=N
         os.system( cmd_str)
         cmd_str = 'rm %s' % (videoname)
         os.system( cmd_str)
-    #if scene_idx==10004:
-    #    pdb.set_trace()
 
 
 def check_valid_box(box, W, H):
@@ -631,69 +538,6 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
                 cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
         out.write(img)
 
-def visualize_decoder(decode_output, feed_dict, args, store_img=False):
-    whatif_id = 'decode'
-    base_folder = os.path.basename(args.load).split('.')[0]
-    filename = str(feed_dict['meta_ann']['scene_index'])
-    videoname = 'dumps/'+ base_folder + '/' + filename + '_' + whatif_id +'.avi'
-    #videoname = filename + '.mp4'
-    if store_img:
-        img_folder = 'dumps/'+base_folder +'/'+filename 
-        os.system('mkdir -p ' + img_folder)
-
-    background_fn = '../temporal_reasoning-master/background.png'
-    if not os.path.isfile(background_fn):
-        background_fn = '../temporal_reasoningv2/background.png'
-    bg = cv2.imread(background_fn)
-    H, W, C = bg.shape
-    bg = cv2.resize(bg, (W, H), interpolation=cv2.INTER_AREA)
-    fps = 6
-    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    out = cv2.VideoWriter(videoname, fourcc, fps, (W, H))
-    
-    scene_idx = feed_dict['meta_ann']['scene_index']
-    sub_idx = int(scene_idx/1000)
-    sub_img_folder = 'image_'+str(sub_idx).zfill(2)+'000-'+str(sub_idx+1).zfill(2)+'000'
-    img_full_folder = os.path.join(args.frm_img_path, sub_img_folder) 
-
-    n_frame = min(decode_output.shape[1], len(feed_dict['tube_info']['frm_list']))
-    padding_patch_list = []
-    for i in range(n_frame):
-        frm_id = feed_dict['tube_info']['frm_list'][i]
-        img = copy.deepcopy(bg)
-        img_full_path = os.path.join(img_full_folder, 'video_'+str(scene_idx).zfill(5), str(frm_id+1)+'.png')
-        img_ori = np.array(Image.open(img_full_path).convert('RGB'))
-        for tube_id in range(len(feed_dict['tube_info']['box_seq']['tubes'])):
-            tmp_box = feed_dict['tube_info']['box_seq']['tubes'][tube_id][frm_id]
-            x = float(tmp_box[0] - tmp_box[2]*0.5)
-            y = float(tmp_box[1] - tmp_box[3]*0.5)
-            w = float(tmp_box[2])
-            h = float(tmp_box[3])
-
-            # filter invalid boxes
-            if w <=0 or h<=0:
-                continue 
-
-            x1, y1, x2, y2 = int(x*W), int(y*H), int(x*W) +int(w*W), int(h*H)+int(y*H)
-            w_1, h_1 = int(w*W), int(h*H)
-            mean = np.array([0.485, 0.456, 0.406]).reshape((1, 1, 3))
-            std = np.array([0.229, 0.224, 0.225]).reshape((1, 1, 3))
-            img_patch = decode_output[tube_id, i].permute([1,  2, 0]).data.cpu().numpy()*std + mean 
-            patch_resize = cv2.resize(img_patch*255, (w_1, h_1))
-            img[y1:y2, x1:x2] = patch_resize
-            img = cv2.rectangle(img, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
-            cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
-       
-            img_ori = cv2.rectangle(img_ori, (int(x*W), int(y*H)), (int(x*W + w*W), int(y*H + h*H)), (36,255,12), 1)
-            cv2.putText(img_ori, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
-
-        img_out = np.concatenate([img, img_ori], axis=0)[:, :, ::-1]
-        if store_img:
-            cv2.imwrite(os.path.join( img_folder, '%s_%d.png' % (filename, i)), img_out.astype(np.uint8))
-        out.write(img_out)
-    pdb.set_trace()
-
-
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 
     # print('states', states.shape)
@@ -833,39 +677,6 @@ def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args
                 cv2.putText(img, str(tube_id), (int(x*W), int(y*H)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (36,255,12), 2)
             if store_img:
                 cv2.imwrite(os.path.join( img_folder, '%s_%d_%d.png' % (filename, i, int(whatif_id))), img.astype(np.uint8))
-
-
-def build_constructor(input_ftr_dim, hidden_size, patch_size):
-    
-    class featureDecoder(nn.Module):
-        def __init__(self, input_size, hidden_size, output_size):
-            super(featureDecoder, self).__init__()
-            self.conv1 = nn.ConvTranspose2d(input_size, hidden_size*3, kernel_size=3, stride=1, padding=0)
-            self.conv2 = nn.ConvTranspose2d(hidden_size*3, hidden_size*2, kernel_size=4, stride=2, padding=1)
-            self.conv3 = nn.ConvTranspose2d(hidden_size*2, hidden_size, kernel_size=4, stride=2, padding=1)
-            self.conv4 = nn.ConvTranspose2d(hidden_size, 3, kernel_size=4, stride=2, padding=1)
-            self.relu = nn.LeakyReLU()
-
-        def forward(self, x):
-            '''
-            args:
-                x: [n_particles, input_size]
-            returns:
-                [n_particles, output_size]
-            '''
-            # 3 x 3
-            x_1 = self.relu(self.conv1(x))
-            # 6 x 6
-            x_2 = self.relu(self.conv2(x_1))
-            # 12 x 12
-            x_3 = self.relu(self.conv3(x_2))
-            # 24 x 24
-            x_4 = self.relu(self.conv4(x_3))
-            return x_4
-            #return x_1, x_2, x_3, x_4
-
-    decoder = featureDecoder(input_ftr_dim, hidden_size, patch_size)
-    return decoder 
 
 def prepare_data_for_testing(output_dict_list, feed_dict_list, json_output_list):
     for vid, output_answer_list in enumerate(output_dict_list['answer']):
@@ -1254,7 +1065,6 @@ def predict_counterfact_features_v2(model, feed_dict, f_sng, args, counter_fact_
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects_ori, pred_frm_num, box_dim)
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
-        #pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
@@ -1305,7 +1115,6 @@ def predict_counterfact_features(model, feed_dict, f_sng, args, counter_fact_id)
     box_dim = 4
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().view(n_objects, pred_frm_num, box_dim) 
     rel_ftr_exp = torch.stack(pred_rel_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects, n_objects, pred_frm_num, ftr_dim)
-    #pdb.set_trace()
     return None, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
 
 def predict_future_feature(model, feed_dict, f_sng, args):
@@ -1450,7 +1259,6 @@ def predict_future_feature_v2(model, feed_dict, f_sng, args):
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=-1, store_img=True, args=args)
-        pdb.set_trace()
     return None, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1)  
 
 def predict_normal_feature(model, feed_dict, f_sng, args):
@@ -1500,7 +1308,6 @@ def predict_normal_feature(model, feed_dict, f_sng, args):
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[:pred_frm_num], dim=1).view(n_objects, n_objects, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_list[:pred_frm_num], dim=1)[:, :, box_dim:].contiguous().view(n_objects, pred_frm_num, ftr_dim) 
     
-    #pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects, -1)  
 
 def check_valid_object_id_list_spatial(x, args):
@@ -1698,7 +1505,6 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
                     if Ra_dist[-1] > args.rela_dist_thre:
                         invalid_rela_list.append(idx)
                     #print(Ra_dist[-1])
-        #pdb.set_trace()
         if args.add_rela_dist_mode==2:
             Rr, Rs = update_valid_rela_input(n_objects, invalid_rela_list, feats, args)
         # update gt spatial relations         
@@ -1749,7 +1555,6 @@ def predict_normal_feature_v3(model, feed_dict, f_sng, args):
     obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
-        pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list    
 
 def update_new_appear_objects(x, Ra, feed_dict, f_sng, args, p_id, object_appear_id_list, spatial_only=False, semantic_only_flag=False, x_spatial=None):
@@ -1763,9 +1568,6 @@ def update_new_appear_objects(x, Ra, feed_dict, f_sng, args, p_id, object_appear
         valid_obj_id_list = check_valid_object_id_list_spatial(x_v3, args) 
         patch_size = x.shape[2]
         x_v3 = x_v3.view(n_obj, -1, patch_size, patch_size)
-        #print('debug')
-        #pdb.set_trace()
-        #x = x_v3.clone()
     else:
         if x_spatial is not None:
             valid_obj_id_list = check_valid_object_id_list_v2(x_spatial, args) 
@@ -1835,7 +1637,6 @@ def predict_spatial_feature(model, feed_dict, f_sng, args):
         Ra = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
 
         # remove invalid object, object coordinates that has been out of size
-        #pdb.set_trace()
         valid_object_id_list = check_valid_object_id_list_spatial(x, args) 
         if len(valid_object_id_list) == 0:
             break
@@ -1859,7 +1660,6 @@ def predict_spatial_feature(model, feed_dict, f_sng, args):
                 Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
                 Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
         Ra[:, 0::rela_spa_dim] = -0.5
-        #pdb.set_trace()
         # padding spatial relation feature
         pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, args.bbox_size, args.bbox_size, dtype=Ra.dtype, \
                 device=Ra.device) - 1.0
@@ -1904,7 +1704,6 @@ def predict_spatial_feature(model, feed_dict, f_sng, args):
     spatial_feature = box_ftr*0.5 +0.5 
     if args.visualize_flag:
         visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=100, store_img=True, args=args)
-        pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 
     return spatial_feature
 
@@ -1947,11 +1746,9 @@ def predict_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
     ftr_dim = f_sng[1].shape[-1]
     t_dim = ftr_t_dim//box_dim
     spatial_gt = f_sng[3].view(obj_num, t_dim, box_dim)
-    #pdb.set_trace()
 
     for p_id in range(args.pred_normal_num):
         
-        #x_spatial = torch.cat(pred_obj_spatial_list[p_id:p_id+x_step], dim=1)
         if spatial_feature is None:
             st_id = p_id 
             ed_id = st_id + x_step 
@@ -2078,8 +1875,6 @@ def compare_l2_distance(f_sng, feed_dict, obj_ftr, rel_ftr_exp, valid_object_id_
                         tmp_gt[obj_id, frm_id] = 0.0
 
         l2_dist = torch.dist(tmp_ftr, tmp_gt)
-        print(l2_dist)
-        #pdb.set_trace()
 
 
 def predict_future_semantic_feature(model, feed_dict, f_sng, args, spatial_feature):
@@ -2185,12 +1980,8 @@ def predict_future_semantic_feature(model, feed_dict, f_sng, args, spatial_featu
         pred_rel_spatial_list.append(pred_rel_spatial.view(n_objects_ori*n_objects_ori, rela_spa_dim, 1, 1)) # just padding
     #make the output consitent with video scene graph
     pred_frm_num = len(pred_obj_ftr_list) 
-    #pdb.set_trace()
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_ftr_list[-pred_frm_num:], dim=1).contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
-    if args.visualize_flag and 0:
-        # estimate the l2 difference
-        pdb.set_trace()
     args.semantic_only_flag = semantic_only_flag_bp 
     return obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
@@ -2252,7 +2043,6 @@ def predict_future_spatial_feature(model, feed_dict, f_sng, args):
         Ra = torch.cat(pred_rel_spatial_list[p_id:p_id+x_step], dim=1) 
 
         # remove invalid object, object coordinates that has been out of size
-        #pdb.set_trace()
         valid_object_id_list = check_valid_object_id_list_spatial(x, args) 
         if len(valid_object_id_list) == 0:
             break
@@ -2271,7 +2061,6 @@ def predict_future_spatial_feature(model, feed_dict, f_sng, args):
                 Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
                 Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
         Ra[:, 0::rela_spa_dim] = -0.5
-        #pdb.set_trace()
         # padding spatial relation feature
         pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, args.bbox_size, args.bbox_size, dtype=Ra.dtype, \
                 device=Ra.device) - 1.0
@@ -2315,7 +2104,6 @@ def predict_future_spatial_feature(model, feed_dict, f_sng, args):
     spatial_feature = box_ftr*0.5 +0.5 
     if args.visualize_flag:
         visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=-1, store_img=True, args=args)
-        #pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 
     return spatial_feature
 
@@ -2394,7 +2182,6 @@ def predict_counterfact_spatial_feature(model, feed_dict, f_sng, args, counter_f
                 Ra[idx, 1:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 0::state_dim] - feats[j, 0::state_dim]  # x
                 Ra[idx, 2:rela_spa_dim*x_step:rela_spa_dim] = feats[i, 1::state_dim] - feats[j, 1::state_dim]  # y
         Ra[:, 0::rela_spa_dim] = -0.5
-        #pdb.set_trace()
         # padding spatial relation feature
         pred_rel_spatial_gt = torch.zeros(n_objects_ori*n_objects_ori, rela_spa_dim, args.bbox_size, args.bbox_size, dtype=Ra.dtype, \
                 device=Ra.device) - 1.0
@@ -2437,9 +2224,6 @@ def predict_counterfact_spatial_feature(model, feed_dict, f_sng, args, counter_f
     pred_frm_num = len(pred_obj_list) 
     box_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, :box_dim].contiguous().mean(4).mean(3).view(n_objects_ori, pred_frm_num, box_dim) 
     spatial_feature = box_ftr*0.5 +0.5 
-    if args.visualize_flag and 0:
-        visualize_prediction_v2(spatial_feature, feed_dict, whatif_id=counter_fact_id, store_img=True, args=args)
-        pdb.set_trace()
     args.box_only_flag = box_only_flag_bp 
     return spatial_feature
 
@@ -2565,9 +2349,6 @@ def predict_counterfact_semantic_feature(model, feed_dict, f_sng, args, spatial_
     pred_frm_num = len(pred_obj_ftr_list) 
     rel_ftr_exp = torch.stack(pred_rel_ftr_list[-pred_frm_num:], dim=1).view(n_objects_ori, n_objects_ori, pred_frm_num, ftr_dim)
     obj_ftr = torch.stack(pred_obj_ftr_list[-pred_frm_num:], dim=1).contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
-    if args.visualize_flag and 0:
-        # estimate the l2 difference
-        pdb.set_trace()
     args.semantic_only_flag = semantic_only_flag_bp 
     return obj_ftr, rel_ftr_exp, valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
@@ -2704,7 +2485,6 @@ def predict_normal_feature_v4(model, feed_dict, f_sng, args):
     obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
-        pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 def predict_normal_feature_v2(model, feed_dict, f_sng, args):
@@ -2817,7 +2597,6 @@ def predict_normal_feature_v2(model, feed_dict, f_sng, args):
     obj_ftr = torch.stack(pred_obj_list[-pred_frm_num:], dim=1)[:, :, box_dim:].contiguous().view(n_objects_ori, pred_frm_num, ftr_dim) 
     if args.visualize_flag:
         visualize_prediction_v2(box_ftr, feed_dict, whatif_id=100, store_img=True, args=args)
-        pdb.set_trace()
     return obj_ftr, None, rel_ftr_exp, box_ftr.view(n_objects_ori, -1), valid_object_id_stack, pred_rel_spatial_list, pred_rel_spatial_gt_list     
 
 
@@ -2969,12 +2748,6 @@ def visualize_prediction_v2(box_ftr, feed_dict, whatif_id=-1, store_img=False, a
 
 def visualize_prediction(box_ftr, feed_dict, whatif_id=-1, store_img=False, args=None):
 
-    # print('states', states.shape)
-    # print('actions', actions.shape)
-    # print(filename)
-
-    # print(actions[:, 0, :])
-    # print(states[:20, 0, :])
     base_folder = os.path.basename(args.load).split('.')[0]
     filename = str(feed_dict['meta_ann']['scene_index'])
     videoname = 'dumps/'+ base_folder + '/' + filename + '_' + str(int(whatif_id)) +'.avi'
@@ -3488,7 +3261,6 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
                 print('fail to parse program!')
                 print(clevr_program)
                 print(block_id)
-                #pdb.set_trace()
                 continue 
             concept = exe_stack.pop()
             if len(nscl_program)>0:
@@ -3591,8 +3363,5 @@ def clevrer_to_nsclseq_v2(clevr_program_ori):
             nscl_program.append(current)
 
     return nscl_program
-
-
-
 
 

@@ -16,13 +16,6 @@ import math
 import random
 import cv2
 #torch.multiprocessing.set_sharing_strategy('file_system')
-#set_debugger()
-#_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_in', 'filter_out', 'filter_order', 'start', 'filter_moving', 'filter_stationary', 'filter_order', 'end']
-#_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor', 'filter_order']
-#_ignore_list = ['get_counterfact', 'unseen_events', 'filter_ancestor']
-#_ignore_list = []
-#_ignore_list = ['get_counterfact']
-#_used_list = ['filter_order']
 
 def get_motion(obj_idx, frame_idx, motion_trajectory):
     """Returns the motion of a specified object at a specified frame."""
@@ -172,7 +165,6 @@ class clevrerDataset(Dataset):
         if self.args.correct_question_flag==1 and (self.args.expression_mode!=-1 or 
                 self.args.retrieval_mode!=-1):
             self._init_parse_expression()
-        #self.vocab = gen_vocab(self)
         self.W = 480; self.H = 320
         if self.args.expression_mode==-1 and self.args.retrieval_mode==-1:
             self._set_dataset_mode()
@@ -289,8 +281,6 @@ class clevrerDataset(Dataset):
             x = int(obj['x'] * W )
 
             img = np.array(patch)
-            # print(x, y, H, W)
-            #h, w = img.shape[0], img.shape[1]
             h, w = int(obj['h'] * H), int(obj['w'] * W)
             h = min(h, img.shape[0])
             w = min(w, img.shape[1])
@@ -304,7 +294,6 @@ class clevrerDataset(Dataset):
 
             if y + h_ < 0 or y >= H or x + w_ < 0 or x >= W:
                 continue
-            #img_patch[y:y+h_, x:x+w_] = merge_img_patch(
             img_patch[y:y+h_, x:x+w_] = merge_img_patch_v2(
                 img_patch[y:y+h_, x:x+w_], img[y_:y_+h_, x_:x_+w_])
         img_patch = Image.fromarray(img_patch)
@@ -333,9 +322,6 @@ class clevrerDataset(Dataset):
             what_if_flag = pred_info['what_if']
             if what_if_flag ==-1:
                 continue
-            #sub_path = 'dumps/visualization/video_%d_counterId_%d' %(scene_index, pred_info['what_if'])
-            #if not os.path.exists(sub_path):
-            #    os.makedirs(sub_path) 
             for traj_id, traj_info in enumerate(pred_info['trajectory']):
                 frame_index = traj_info['frame_index']
                 # TODO may have bug if events happens in the prediction frame
@@ -345,7 +331,6 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
-                #cv2.imwrite(sub_path+'/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
                 #print('Debug')
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
@@ -452,9 +437,6 @@ class clevrerDataset(Dataset):
             what_if_flag = pred_info['what_if']
             if what_if_flag !=-1:
                 continue 
-            #sub_path = 'dumps/visualization/video_%d_counterId_%d' %(scene_index, pred_info['what_if'])
-            #if not os.path.exists(sub_path):
-            #    os.makedirs(sub_path) 
             for traj_id, traj_info in enumerate(pred_info['trajectory']):
                 frame_index = traj_info['frame_index']
                 if self.args.n_seen_frames > frame_index:
@@ -463,7 +445,6 @@ class clevrerDataset(Dataset):
                 img_list = traj_info['imgs']
                 obj_list = traj_info['objects']
                 syn_img = self.merge_frames_for_prediction(img_list, obj_list)
-                #cv2.imwrite(sub_path+'/img_%d_countId_%d.png'%(frame_index, what_if_flag) , np.array(syn_img))
                 _exist_obj_flag = False 
                 for r_id, obj_id in enumerate(traj_info['ids']):
                     
@@ -658,8 +639,6 @@ class clevrerDataset(Dataset):
                 continue
             if op.startswith('filter'):
                 continue
-            #if op.startswith('query'):
-            #    continue
             tar_list.append(op)
 
     def _filter_program_types(self):
@@ -842,7 +821,7 @@ class clevrerDataset(Dataset):
 
             program_cl = transform_conpcet_forms_for_nscl_v2(ques_info['program'])
             meta_ann['questions'][q_id]['program_cl'] = program_cl 
-            if ques_info['question_type']=='descriptive':
+            if ques_info['question_type']=='descriptive' or ques_info['question_type']=='expression':
                 if 'answer'in ques_info.keys():
                     meta_ann['questions'][q_id]['answer'] = ques_info['answer']
             else:
@@ -1386,317 +1365,12 @@ def build_clevrer_dataset(args, phase):
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    if args.dataset=='billiards':
-        dataset = billiards_dataset(args, phase=phase, img_transform=image_transform)
-    elif args.dataset =='blocks':
+    if args.dataset =='blocks':
         dataset = blocks_dataset(args, phase=phase, img_transform=image_transform)
     else:
         dataset = clevrerDataset(args, phase=phase, img_transform=image_transform)
 
     return dataset
-
-class billiards_dataset(Dataset):
-    def __init__(self, args, phase, img_transform=None):
-        self.args = args
-        self.phase = phase
-        self.img_transform = img_transform  
-        
-        question_ann_full_path = os.path.join(args.question_path, phase+'.json') 
-        self.question_ann = jsonload(question_ann_full_path)
-        if phase == 'train' and self.args.data_train_length!=-1:
-            dataset_len = len(self.question_ann)
-            dataset_len = min(dataset_len, self.args.data_train_length)
-            self.question_ann = self.question_ann[:dataset_len]
-        self.W = 192; self.H = 96
-        self._ignore_list = [] 
-
-    def __getitem__(self, index):
-        return self.__getitem__model_v1(index)
-
-    def prepare_tubes(self, scene_idx, start_index, end_index):
-        sub_img_folder = str(scene_idx).zfill(3) 
-        ann_path = os.path.join(self.args.frm_img_path, self.phase, sub_img_folder+'.pkl')
-        tube_ann = pickleload(ann_path)
-        tube_ann = tube_ann[start_index: end_index]
-        tube_list =  []
-        obj_num, frm_num = tube_ann.shape[1], tube_ann.shape[0]
-        for idx in range(obj_num):
-            tube_list.append([])
-        for frm_id in range(frm_num):
-            for obj_id in range(obj_num):
-                tmp_box = tube_ann[frm_id, obj_id, 1:].tolist()
-                tube_list[obj_id].append(tmp_box)
-        tube_info = {'tubes': tube_list}
-        return tube_info 
-
-    def sample_frames_v1(self, tube_info, img_num):
-        tube_box_dict = {}
-        frm_num = len(tube_info['tubes'][0]) 
-        smp_diff = int(frm_num/img_num)
-        frm_offset =  int(smp_diff//2)
-        frm_list = list(range(frm_offset, frm_num, smp_diff))
-        
-        for tube_id, tmp_tube in enumerate(tube_info['tubes']):
-            tmp_dict = {}
-            tmp_list = []
-            count_idx = 0
-            frm_ids = []
-            for exist_id, frm_id in enumerate(frm_list):
-                if tmp_tube[frm_id] == [0, 0, 1, 1]:
-                    continue 
-                tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
-                frm_ids.append(frm_id)
-                count_idx +=1
-            # make sure each tube has at least one rgb
-            if count_idx == 0:
-                for frm_id in range(frm_num):
-                    if tmp_tube[frm_id] == [0, 0, 1, 1]:
-                        continue 
-                    tmp_list.append(copy.deepcopy(tmp_tube[frm_id]))
-                    frm_ids.append(frm_id)
-                    count_idx +=1
-                    frm_list.append(frm_id) 
-
-            tmp_dict['boxes'] = tmp_list
-            tmp_dict['frm_name'] = frm_ids  
-            tube_box_dict[tube_id] = tmp_dict 
-        frm_list_unique = list(set(frm_list))
-        frm_list_unique.sort()
-
-        # making sure each frame has at least one object
-        for exist_id in range(len(frm_list_unique)-1, -1, -1):
-            exist_flag = False
-            frm_id = frm_list_unique[exist_id]
-            for tube_id, tube in tube_box_dict.items():
-                if frm_id in tube['frm_name']:
-                    exist_flag = True
-                    break
-            if not exist_flag:
-                del frm_list_unique[exist_id]
-
-        tube_box_dict['frm_list'] = frm_list_unique  
-        if self.args.normalized_boxes:
-            frm_num = len(tube_info['tubes'][0]) 
-            tube_num = len(tube_info['tubes']) 
-            valid_flag_dict = np.ones((tube_num, frm_num))
-            for tube_id, tmp_tube in enumerate(tube_info['tubes']):
-                tmp_dict = {}
-                frm_num = len(tmp_tube) 
-                for frm_id in range(frm_num):
-                    tmp_box = tmp_tube[frm_id]
-                    if tmp_box == [0, 0, 1, 1]:
-                        #tmp_box = [0, 0, 0, 0]
-                        if self.args.new_mask_out_value_flag:
-                            tmp_box = [-1*self.W, -1*self.H, -1*self.W, -1*self.H]
-                        else:
-                            tmp_box = [0, 0, 0, 0]
-                        valid_flag_dict[tube_id, frm_id] = 0
-                    x_c = (tmp_box[0] + tmp_box[2])* 0.5
-                    y_c = (tmp_box[1] + tmp_box[3])* 0.5
-                    w = tmp_box[2] - tmp_box[0]
-                    h = tmp_box[3] - tmp_box[1]
-                    tmp_array = np.array([x_c, y_c, w, h])
-                    tmp_array[0] = tmp_array[0] / self.W
-                    tmp_array[1] = tmp_array[1] / self.H
-                    tmp_array[2] = tmp_array[2] / self.W
-                    tmp_array[3] = tmp_array[3] / self.H
-                    tube_info['tubes'][tube_id][frm_id] = tmp_array 
-        tube_box_dict['box_seq'] = tube_info   
-        return tube_box_dict , valid_flag_dict 
-
-    def __getitem__model_v1(self, index):
-        
-        data = {}
-        meta_ann = copy.deepcopy(self.question_ann[index])
-        scene_idx = meta_ann['video_index']
-        st_frm_id = meta_ann['start_frame_id']
-        ed_frm_id = meta_ann['end_frame_id']
-
-        sub_img_folder = str(scene_idx).zfill(3) 
-        img_full_folder = os.path.join(self.args.frm_img_path, self.phase , sub_img_folder) 
-        tube_info = self.prepare_tubes(scene_idx, st_frm_id, ed_frm_id)
-
-        frm_dict, valid_flag_dict = self.sample_frames_v1(tube_info, self.args.frm_img_num)   
-        frm_list = frm_dict['frm_list']
-        H=0; W=0
-        img_list = []
-        for i, frm in enumerate(frm_list):
-            frm_id = frm + st_frm_id 
-            img_full_path = os.path.join(img_full_folder, str(frm_id).zfill(3)+'.jpg')
-            img = Image.open(img_full_path).convert('RGB')
-            W, H = img.size
-            img, _ = self.img_transform(img, np.array([0, 0, 1, 1]))
-            img_list.append(img)
-        img_tensor = torch.stack(img_list, 0)
-        data['img'] = img_tensor 
-        data['valid_seq_mask'] = valid_flag_dict  
-        # resize frame boxes
-        img_size = self.args.img_size
-        ratio = img_size / min(H, W)
-        for key_id, tube_box_info in frm_dict.items():
-            if not isinstance(key_id, int):
-                continue 
-            for box_id, box in enumerate(tube_box_info['boxes']):
-                tmp_box = torch.tensor(box)*ratio
-                tube_box_info['boxes'][box_id] = tmp_box
-            frm_dict[key_id]=tube_box_info 
-        data['tube_info'] = frm_dict  
-    
-        load_predict_flag = False
-        load_counter_fact_flag = False
-        counterfact_list = [q_id for q_id, ques_info in enumerate(meta_ann['questions']) if ques_info['question_type']=='counterfactual']
-        sample_counterfact_list = random.sample(counterfact_list, self.args.max_counterfact_num) if self.phase=='train' and len(counterfact_list)>=self.args.max_counterfact_num else  counterfact_list 
-        # getting programs
-        for q_id, ques_info in enumerate(meta_ann['questions']):
-            valid_flag = True
-            for pg in ques_info['program']:
-                if pg in self._ignore_list:
-                    valid_flag = False
-                    break
-            if not valid_flag:
-                continue
-                        
-            if ques_info['question_type']=='predictive':
-                load_predict_flag = True
-            if ques_info['question_type']=='counterfactual':
-                if q_id in sample_counterfact_list:
-                    load_counter_fact_flag = True
-                else:
-                    continue
-
-            if 'answer'in ques_info.keys() and ques_info['answer'] == 'no':
-                ques_info['answer'] = False
-            elif 'answer' in ques_info.keys() and ques_info['answer'] == 'yes':
-                ques_info['answer'] = True
-
-            program_cl = transform_conpcet_forms_for_nscl_v2(ques_info['program'])
-            meta_ann['questions'][q_id]['program_cl'] = program_cl 
-            if 'answer'in ques_info.keys():
-                meta_ann['questions'][q_id]['answer'] = ques_info['answer']
-            else:
-                for choice_id, choice_info in enumerate(meta_ann['questions'][q_id]['choices']):
-                    meta_ann['questions'][q_id]['choices'][choice_id]['program_cl'] = \
-                        transform_conpcet_forms_for_nscl_v2(choice_info['program'])
-            if 'question_subtype' not in ques_info.keys():
-                ques_info['question_subtype'] = program_cl[-1]
-
-        q_num_ori = len(meta_ann['questions']) 
-        for q_id in sorted(counterfact_list, reverse=True):
-            if q_id in sample_counterfact_list:
-                continue 
-            del meta_ann['questions'][q_id]
-        data['meta_ann'] = meta_ann 
-        # loadding unseen events
-        if load_predict_flag  and (self.args.version=='v2' or self.args.version=='v2_1'):
-            scene_index = meta_ann['scene_index']
-            data['predictions'], data['img_future'] = self.load_predict_info(scene_index, frm_dict, padding_img= data['img'][-1])
-            _, c, tarH, tarW = img_tensor.shape
-            for key_id, tube_box_info in data['predictions'].items():
-                if not isinstance(key_id, int):
-                    continue
-                for box_id, box in enumerate(tube_box_info['boxes']):
-                    tmp_box = torch.tensor(box).float()
-                    tmp_box[0] = tmp_box[0]*tarW
-                    tmp_box[2] = tmp_box[2]*tarW
-                    tmp_box[1] = tmp_box[1]*tarH 
-                    tmp_box[3] = tmp_box[3]*tarH
-                    data['predictions'][key_id]['boxes'][box_id] = tmp_box
-        else:
-            # just padding for the dataloader
-            data['predictions'] = {}
-            data['img_future'] = torch.zeros(1, 1, 1, 1)
-        data['load_predict_flag'] =  load_predict_flag 
-
-
-        # loadding counterfact events
-        if load_counter_fact_flag and (self.args.version=='v2' or self.args.version=='v2_1'):
-            scene_index = meta_ann['scene_index']
-            data['counterfacts'], data['img_counterfacts'] = self.load_counterfacts_info(scene_index, frm_dict, padding_img=data['img'][0])
-        else:
-            # just padding for the dataloader
-            data['counterfacts'] = {}
-            data['img_counterfacts'] = torch.zeros(1, 1, 1, 1)
-
-        # adding scene supervision
-        if self.args.scene_supervision_flag:
-
-            vid_id_str = str(scene_idx) + '_' + str(st_frm_id) + '_' + str(ed_frm_id)
-            vid_anno_full_path = os.path.join(self.args.scene_gt_path, self.phase, vid_id_str +'.json')
-            gt_ann_info = jsonload(vid_anno_full_path)
-            for attri_group, attribute in gdef.all_concepts_clevrer.items():
-                if attri_group=='attribute':
-                    for attr, concept_group in attribute.items(): 
-                        if attr !='color':
-                            continue
-                        attr_list = []
-                        obj_num = len(data['tube_info']) -2 
-                        for t_id in range(obj_num):
-                            target_color = gt_ann_info['color_list'][t_id]
-                            concept_index = concept_group.index(target_color)
-                            attr_list.append(concept_index)
-                        attr_key = attri_group + '_' + attr 
-                        data[attr_key] = torch.tensor(attr_list)
-                
-                elif attri_group=='relation':
-                    for attr, concept_group in attribute.items(): 
-                        if attr=='event1':
-                            obj_num = len(data['tube_info']) -2 
-                            rela_coll = torch.zeros(obj_num, obj_num)
-                            rela_coll_frm = torch.zeros(obj_num, obj_num) -1
-                            for event_id, event in enumerate(gt_ann_info['collisions']):
-                                obj_id_pair = event['object']
-                                gt_id1 = obj_id_pair[0]; gt_id2 = obj_id_pair[1]
-                                prp_id1 = gt_id1 
-                                prp_id2 = gt_id2
-                                rela_coll[prp_id1, prp_id2] = 1
-                                rela_coll[prp_id2, prp_id1] = 1
-                                frm_id = event['frame']
-                                rela_coll_frm[prp_id1, prp_id2] = frm_id 
-                                rela_coll_frm[prp_id2, prp_id1] = frm_id
-
-                            attr_key = attri_group + '_' + 'collision'
-                            data[attr_key] = rela_coll
-                            attr_key = attri_group + '_' + 'collision_frame'
-                            data[attr_key] = rela_coll_frm 
-                    
-                elif attri_group=='temporal':
-                    for attr, concept_group in attribute.items(): 
-                        if attr=='status':
-                            obj_num = len(data['tube_info']) -2 
-                            moving_flag_list = []
-                            stationary_flag_list = []
-                            for obj_idx_ori in range(obj_num):
-                                obj_idx = obj_idx_ori
-                                moving_flag = gt_ann_info['moving_flag'][obj_idx] 
-                                if moving_flag:
-                                    moving_flag_list.append(1)
-                                    stationary_flag_list.append(0)
-                                else:
-                                    moving_flag_list.append(0)
-                                    stationary_flag_list.append(1)
-                            attr_key = attri_group + '_moving' 
-                            data[attr_key] = torch.tensor(moving_flag_list)
-                            attr_key = attri_group + '_stationary' 
-                            data[attr_key] = torch.tensor(stationary_flag_list)
-        return data 
-
-    def __len__(self):
-        if self.args.debug:
-            return len(self.question_ann)
-            #return 5
-        else:
-            return len(self.question_ann)
-
-    def make_dataloader(self, batch_size, shuffle, drop_last, nr_workers):
-        from jactorch.data.dataloader import JacDataLoader
-
-        def collate_dict(batch):
-            return batch
-
-        return JacDataLoader(
-            self, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last,
-            num_workers=nr_workers, pin_memory=False,
-            collate_fn=collate_dict)
 
 class blocks_dataset(Dataset):
     def __init__(self, args, phase, img_transform=None):
@@ -1812,7 +1486,6 @@ class blocks_dataset(Dataset):
 
     def __getitem__model_v1(self, index):
         data = {}
-        pdb.set_trace()
         if self.args.visualize_video_index >=0: 
             scene_idx = self.args.visualize_video_index
             index = -2

@@ -32,10 +32,8 @@ from jactorch.utils.meta import as_float
 from nscl.datasets import get_available_datasets, initialize_dataset, get_dataset_builder
 from clevrer.dataset_clevrer import build_clevrer_dataset  
 
-from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, build_constructor, keep_only_temporal_concept_learner   
+from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, keep_only_temporal_concept_learner   
 from opts import load_param_parser 
-
-set_debugger()
 
 logger = get_logger(__file__)
 
@@ -113,9 +111,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     elif args.version=='v2_1':
         model.make_relation_embedding_for_unseen_events(args) 
-
-    if args.reconstruct_flag:
-        model._decoder = build_constructor(args.rela_ftr_dim, args.nf_particle, args.bbox_size)    
 
     if args.use_gpu:
         model.cuda()

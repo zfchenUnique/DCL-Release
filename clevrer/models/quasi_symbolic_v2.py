@@ -32,8 +32,7 @@ import torch.nn.functional as F
 import copy
 from scipy import signal 
 import numpy as np
-from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5, visualize_scene_parser, visualize_scene_parser_block
-
+from clevrer.utils import predict_counterfact_features, predict_counterfact_features_v2, predict_counterfact_features_v5, visualize_scene_parser
 logger = get_logger(__file__)
 
 __all__ = ['ConceptQuantizationContext', 'ProgramExecutorContext', 'DifferentiableReasoning', 'set_apply_self_mask']
