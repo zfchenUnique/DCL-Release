@@ -65,11 +65,11 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
     ```
 ## Fast Evaluation
 - Download the extracted object trajectories from [google drive](https://drive.google.com/file/d/18NkK29Hnu3hMPaenveB5g4Lp9WRdiIA7/view?usp=sharing).
-- Git clone the dynamic model, download [the pretrained propNet models](https://drive.google.com/drive/folders/16FnmnZBb11ge_gJNWUMp8EACRZ5nKe-W?usp=sharing) and make dynamic prediction by 
+- Git clone the dynamic model, download [image proposals](http://clevrer.csail.mit.edu/#) and [the pretrained propNet models](https://drive.google.com/drive/folders/16FnmnZBb11ge_gJNWUMp8EACRZ5nKe-W?usp=sharing) and make dynamic prediction by 
 ```
     git clone https://github.com/zfchenUnique/clevrer_dynamic_propnet.git
     cd clevrer_dynamic_propnet
-    sh ./scripts/eval_fast_release.sh
+    sh ./scripts/eval_fast_release_v2.sh 0
 ```
 - Download [the pretrained DCL model](https://drive.google.com/file/d/11JwFcmC1wYR7L1kSfM3avCwnHqZ-nA7l/view?usp=sharing) and answer questions. 
 ```
@@ -78,7 +78,7 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 - Get the accuracy on [evalAI](https://eval.ai/web/challenges/challenge-page/667/overview).
 
 ## Step-by-step Training
-- Step 1: extract object trajectories for train and val set by
+- Step 1: download the [proposals](http://clevrer.csail.mit.edu/#) from the region proposal network and extract object trajectories for train and val set by
 ```
    sh scripts/script_gen_tubes.sh
 ```
@@ -93,8 +93,9 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 - Step 4: extract predictive and counterfactual scenes by
 ```
     cd clevrer_dynamic_propnet
-    sh ./scripts/extract_train_val.sh # train
-    sh ./scripts/eval_fast_release.sh # val
+    sh ./scripts/train_tube_box_only.sh # train
+    sh ./scripts/train_tube.sh # train
+    sh ./scripts/eval_fast_release_v2.sh 0 # val
 ```
 - Step 5: train DCL with all questions and the refined trajectories
 ```
