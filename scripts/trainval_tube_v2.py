@@ -35,7 +35,6 @@ from clevrer.dataset_clevrer import build_clevrer_dataset
 from clevrer.utils import set_debugger, prepare_data_for_testing, jsondump, build_constructor, keep_only_temporal_concept_learner   
 from opts import load_param_parser 
 
-
 set_debugger()
 
 logger = get_logger(__file__)
@@ -132,7 +131,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
             if args.reconstruct_flag:
                 parameters = list(model._model_pred.parameters())+list(model._decoder.parameters())
                 trainable_parameters = filter(lambda x: x.requires_grad, parameters)
-                #pdb.set_trace()
             elif args.version=='v4':
                 trainable_parameters = filter(lambda x: x.requires_grad, model._model_pred.parameters())
         else:
@@ -154,7 +152,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     elif args.load:
         if trainer.load_weights(args.load):
             logger.critical('Loaded weights from pretrained model: "{}".'.format(args.load))
-        #pdb.set_trace()
         if args.version=='v3':
             if args.pretrain_pred_model_path:
                 model._model_pred.load_state_dict(torch.load(args.pretrain_pred_model_path))
@@ -174,7 +171,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
             model.reasoning.embedding_relation_future.load_state_dict(model.reasoning.embedding_relation.state_dict())
             model.reasoning.embedding_relation_counterfact.load_state_dict(model.reasoning.embedding_relation.state_dict())
             logger.critical('Copy original relation weights into counterfact and future relation.')
-            #pdb.set_trace()
     if args.use_tb and not args.debug:
         from jactorch.train.tb import TBLogger, TBGroupMeters
         tb_logger = TBLogger(args.tb_dir)
@@ -202,7 +198,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
 
     if args.debug:
         shuffle_flag=False
-        #args.data_workers = 0
     else:
         shuffle_flag=True
 
@@ -214,7 +209,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
     if args.evaluate:
         meters.reset()
         model.eval()
-        #validate_epoch(0, trainer, validation_dataset, meters)
         validate_epoch(0, trainer, validation_dataloader, meters)
         if extra_dataset is not None:
             validate_epoch(0, trainer, extra_dataloader, meters, meter_prefix='validation_extra')
@@ -233,7 +227,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         for enum_id in range(args.enums_per_epoch):
             train_epoch(epoch, trainer, train_dataloader, meters)
 
-        #if epoch % args.validation_interval == 0 or epoch==1:
         if epoch % args.validation_interval == 0:
             model.eval()
             validate_epoch(epoch, trainer, validation_dataloader, meters)
@@ -248,7 +241,6 @@ def main_train(train_dataset, validation_dataset, extra_dataset=None):
         ))
 
         if epoch % args.save_interval == 0 and not args.debug:
-        #if epoch % args.save_interval == 0:
             fname = osp.join(args.ckpt_dir, 'epoch_{}.pth'.format(epoch))
             trainer.save_checkpoint(fname, dict(epoch=epoch, meta_file=args.meta_file))
 
@@ -281,20 +273,16 @@ def train_epoch(epoch, trainer, train_dataloader, meters):
     with tqdm_pbar(total=nr_iters) as pbar:
         for i in range(nr_iters):
             feed_dict = next(train_iter)
-            #pdb.set_trace()
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
             data_time = time.time() - end; end = time.time()
-            #if feed_dict[0]['meta_ann']['scene_index']!=7398:
-            #    continue 
             loss, monitors, output_dict, extra_info = trainer.step(feed_dict, cast_tensor=False)
             step_time = time.time() - end; end = time.time()
 
             n = len(feed_dict)
             meters.update(loss=loss, n=n)
 
-            # remove padding values
             for tmp_key, tmp_value in monitors.items(): 
                 if isinstance(tmp_value , list):
                     for sub_idx, sub_value in enumerate(tmp_value):
@@ -330,8 +318,6 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
     end = time.time()
     with tqdm_pbar(total=len(val_dataloader)*args.batch_size) as pbar:
         for feed_dict in val_dataloader:
-        #for i in range(len(val_dataloader)):
-            #feed_dict = val_dataloader.__getitem__(i+358)
             if args.use_gpu:
                 if not args.gpu_parallel:
                     feed_dict = async_copy_to(feed_dict, 0)
@@ -344,7 +330,6 @@ def validate_epoch(epoch, trainer, val_dataloader, meters, meter_prefix='validat
             step_time = time.time() - end; end = time.time()
             for idx, mon_dict  in enumerate(output_dict_list['monitors']): 
                 monitors = {meter_prefix + '/' + k: v for k, v in as_float(mon_dict).items()}
-
                 # remove padding values
                 for tmp_key, tmp_value in monitors.items(): 
                     if isinstance(tmp_value , list):
