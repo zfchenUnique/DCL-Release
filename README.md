@@ -71,7 +71,7 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
     cd clevrer_dynamic_propnet
     sh ./scripts/eval_fast_release_v2.sh 0
 ```
-- Download [the pretrained DCL model](https://drive.google.com/file/d/11JwFcmC1wYR7L1kSfM3avCwnHqZ-nA7l/view?usp=sharing) and answer questions. 
+- Download [the pretrained DCL model](https://drive.google.com/file/d/11JwFcmC1wYR7L1kSfM3avCwnHqZ-nA7l/view?usp=sharing) and [parsed programs](https://drive.google.com/drive/folders/1dydkLN1A9GWTaMK8QaxpWs6Pt4Eszsaw?usp=sharing). 
 ```
    sh scripts/script_test_prp_clevrer_qa.sh 0
 ```
@@ -86,7 +86,12 @@ from both Jacinle NS-CL. Most of the required packages have been included in the
 ```
    sh scripts/script_train_dcl_stage1.sh 0
 ```
-- Step 3: extract static attribute & refine object trajectories
+- Step 3: extract static attributes & refine object trajectories
+extract static attributes
+```
+   sh scripts/script_extract_attribute.sh
+```
+refine object trajectories
 ```
    sh scripts/script_gen_tubes_refine.sh
 ```
