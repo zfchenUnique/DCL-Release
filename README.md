@@ -132,6 +132,7 @@ refine object trajectories
     sh ./scripts/script_eval_blocks.sh 0
 ```
 ## Others
+- [Qualitative Results](https://dynamicconceptlearner.github.io)
 - [CLEVRER-Grounding training set Annotation](https://drive.google.com/drive/folders/1nvU5knMJO2lv8TgWPHw4nUnHqhf3_fB_?usp=sharing)
 - [CLEVRER-Retrieval training set Annotation](https://drive.google.com/drive/folders/1Krj9I6n-4mo_uAqPgSTVlpE1Zz3Bl_Xc?usp=sharing)
 
