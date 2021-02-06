@@ -247,7 +247,8 @@ class clevrerDataset(Dataset):
             mc_ques_info = mc_ques_info_dict[vid_id]
             for q_id, ques_info in enumerate(oe_ques_info['questions']):
                 tmp_dict = {'question': ques_info['question'], 'question_id': q_idx, 'question_type': 'descriptive'}
-                tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
+                #tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
+                tmp_dict['question_subtype'] = ques_info['program'][-1]
                 tmp_dict['program'] = ques_info['program']
                 if 'answer' in ques_info:
                     tmp_dict['answer'] = ques_info['answer']
@@ -255,8 +256,9 @@ class clevrerDataset(Dataset):
                 question_ann.append(tmp_dict)
             for q_id, ques_info in enumerate(mc_ques_info['questions']):
                 tmp_dict = {'question': ques_info['question'], 'question_id': q_idx, 'question_type': ques_info['question_type'].split('_')[0]}
-                tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
-                tmp_dict['program'] = ques_info['question_program']
+                tmp_dict['question_subtype'] = ques_info['question'][-1]
+                #tmp_dict['question_subtype'] = ques_info['program_gt'][-1]
+                tmp_dict['program'] = ques_info['program']
                 tmp_dict['choices'] = ques_info['choices']
                 question_ann.append(tmp_dict)
                 q_idx +=1
