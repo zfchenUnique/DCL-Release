@@ -32,7 +32,7 @@ export PATH=<path_to_jacinle>/bin:$PATH
 Clone this repository:
 
 ```
-git clone https://github.com/zfchenUnique/DCL-Release-Private.git --recursive
+git clone https://github.com/zfchenUnique/DCL-Release.git --recursive
 ```
 
 Create a conda environment for NS-CL, and install the requirements. This includes the required python packages
