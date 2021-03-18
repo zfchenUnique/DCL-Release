@@ -1,5 +1,5 @@
 # DCL-PyTorch
-Pytorch implementation for the Dynamic Concept Learner (DCL).
+Pytorch implementation for the Dynamic Concept Learner (DCL). More details can be found at the [project page](http://dcl.csail.mit.edu).
 
 ## Framework
 <div align="center">
