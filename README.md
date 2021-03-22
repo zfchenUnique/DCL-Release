@@ -136,7 +136,7 @@ refine object trajectories
 - [Qualitative Results](https://dynamicconceptlearner.github.io)
 - [CLEVRER-Grounding training set Annotation](https://drive.google.com/drive/folders/1nvU5knMJO2lv8TgWPHw4nUnHqhf3_fB_?usp=sharing)
 - [CLEVRER-Retrieval training set Annotation](https://drive.google.com/drive/folders/1Krj9I6n-4mo_uAqPgSTVlpE1Zz3Bl_Xc?usp=sharing)
-- [project page](http://dcl.csail.mit.edu)
+- [Project Page](http://dcl.csail.mit.edu)
 
 ## Citation
 If you find this repo useful in your research, please consider citing:
