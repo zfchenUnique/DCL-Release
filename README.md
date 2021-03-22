@@ -6,7 +6,7 @@ Pytorch implementation for the Dynamic Concept Learner (DCL). More details can b
   <img src="_assets/framework.png" width="100%">
 </div>
 
-**[Grounding Physical Object and Event Concepts Through Dynamic Visual Reasoning](https://openreview.net/forum?id=bhCDO_cEGCz)**
+**[Grounding Physical Concepts of Objects and Events Through Dynamic Visual Reasoning](https://openreview.net/forum?id=bhCDO_cEGCz)**
 <br />
 [Zhenfang Chen](https://zfchenunique.github.io/), 
 [Jiayuan Mao](http://jiayuanm.com), 
@@ -141,7 +141,7 @@ refine object trajectories
 If you find this repo useful in your research, please consider citing:
 ```
 @inproceedings{zfchen2021iclr,
-    title={Grounding Physical Object and Event Concepts Through Dynamic Visual Reasoning},
+    title={Grounding Physical Concepts of Objects and Events Through Dynamic Visual Reasoning},
     author={Chen, Zhenfang and Mao, Jiayuan and Wu, Jiajun and Wong, Kwan-Yee K and Tenenbaum, Joshua B. and Gan, Chuang},
     booktitle={International Conference on Learning Representations},
     year={2021}
