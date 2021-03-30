@@ -3,7 +3,7 @@ Pytorch implementation for the Dynamic Concept Learner (DCL). More details can b
 
 ## Framework
 <div align="center">
-  <img src="_assets/framework.png" width="100%">
+  <img src="_assets/framework_v1_4.png" width="100%">
 </div>
 
 **[Grounding Physical Concepts of Objects and Events Through Dynamic Visual Reasoning](https://openreview.net/forum?id=bhCDO_cEGCz)**
