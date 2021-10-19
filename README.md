@@ -123,7 +123,7 @@ refine object trajectories
     jac-crun 0 scripts/script_evaluate_retrieval.py
 ```
 ## Extension to Tower Blocks
-- Step 1: download [question annotation](https://drive.google.com/drive/folders/11ai3w-6kyLdgDdM3S3UjIeqGWPh0aILP?usp=sharing) and [videos](https://www.dropbox.com/sh/9n00jyzo0m2slxe/AAChn5uB5g4HHu2mZxbapgzsa?dl=0) from google drive
+- Step 1: download [question annotation](https://drive.google.com/drive/folders/11ai3w-6kyLdgDdM3S3UjIeqGWPh0aILP?usp=sharing) from google drive and [videos](https://github.com/facebookarchive/UETorch/issues/25#issuecomment-235688223) from dropbox under the UETorch repo.
 - Step 2: train on Tower block QA
 ```
     sh ./scripts/script_train_blocks.sh 0
