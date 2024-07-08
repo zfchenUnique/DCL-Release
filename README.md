@@ -143,7 +143,7 @@ If you find this repo useful in your research, please consider citing:
 ```
 @inproceedings{zfchen2021iclr,
     title={Grounding Physical Concepts of Objects and Events Through Dynamic Visual Reasoning},
-    author={Chen, Zhenfang and Mao, Jiayuan and Wu, Jiajun and Wong, Kwan-Yee K and Tenenbaum, Joshua B. and Gan, Chuang},
+    author={Chen, Zhenfang and Mao, Jiayuan and Wu, Jiajun and Wong, Kwan-Yee~K. and Tenenbaum, Joshua B. and Gan, Chuang},
     booktitle={International Conference on Learning Representations},
     year={2021}
     }
